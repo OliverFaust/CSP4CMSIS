@@ -10,8 +10,7 @@
 #include "time.h" 
 
 namespace csp {
-    // Forward declarations for Pipe Syntax support
-    template <typename T, typename ChanType> struct ChannelBinding;
+    // Forward declarations
     template <typename T> class Chanin;
     template <typename T> class Chanout;
 
@@ -59,6 +58,23 @@ namespace csp {
     } // namespace internal
 
     /**
+     * @brief Glue logic for Pipe Syntax (chan | msg).
+     * MOVED HERE: Now fully defined before being used in public_channel.h or Alternative.
+     */
+    template <typename T, typename ChanType>
+    struct ChannelBinding {
+        ChanType& channel;
+        T& data_ref;
+
+        ChannelBinding(ChanType& c, T& d) : channel(c), data_ref(d) {}
+
+        // Access the internal guard from the channel
+        internal::Guard* getInternalGuard() const {
+            return channel.getGuard(data_ref); 
+        }
+    };
+
+    /**
      * @brief Public Wrapper for Guards to resolve naming conflicts.
      */
     class Guard {
@@ -77,13 +93,7 @@ namespace csp {
             : Guard(&timer_storage), timer_storage(delay) {}
         ~RelTimeoutGuard() override = default;
     };
-} 
 
-// Include this AFTER the base Guard and Scheduler are defined
-// so ChannelBinding can see the internal::Guard definition.
-#include "alt_channel_sync.h"
-
-namespace csp {
     class Alternative {
     private:
         static const size_t MAX_GUARDS = 16;
@@ -97,14 +107,13 @@ namespace csp {
         ~Alternative() = default;
 
         /**
-         * @brief Variadic constructor to allow Alternative alt(in1, in2, timer);
+         * @brief Variadic constructor to allow Alternative alt(in1 | msg1, timer);
          */
         template <typename... Bindings>
         Alternative(Bindings... bindings) : num_guards(0) {
             (addBinding(bindings), ...);
         }
 
-        // Standard constructors for list initialization
         Alternative(std::initializer_list<internal::Guard*> guard_list);
         Alternative(std::initializer_list<csp::Guard*> guard_list);
 
@@ -112,11 +121,7 @@ namespace csp {
         int fairSelect(); 
 
     private:
-        /**
-         * @brief Binding helpers. 
-         * Definitions must remain in the header so the compiler can 
-         * generate code for specific types (e.g. Message) during compilation.
-         */
+        // Binding helper for Input Channels
         template <typename T>
         void addBinding(const ChannelBinding<T, Chanin<T>>& b) {
             if (num_guards < MAX_GUARDS) {
@@ -124,6 +129,7 @@ namespace csp {
             }
         }
 
+        // Binding helper for Output Channels
         template <typename T>
         void addBinding(const ChannelBinding<const T, Chanout<T>>& b) {
             if (num_guards < MAX_GUARDS) {
@@ -131,12 +137,20 @@ namespace csp {
             }
         }
 
+        // Binding helper for Timers
         void addBinding(RelTimeoutGuard& tg) {
             if (num_guards < MAX_GUARDS) {
                 internal_guards[num_guards++] = tg.internal_guard_ptr;
             }
         }
+        
+        // Handle direct internal guards if passed
+        void addBinding(internal::Guard* g) {
+            if (num_guards < MAX_GUARDS) {
+                internal_guards[num_guards++] = g;
+            }
+        }
     };
-}
+} 
 
 #endif // CSP4CMSIS_ALT_H

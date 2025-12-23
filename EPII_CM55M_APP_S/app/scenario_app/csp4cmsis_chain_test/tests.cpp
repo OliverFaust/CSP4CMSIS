@@ -27,6 +27,9 @@ public:
             out << i;
         }
         printf("[Sender] Stream complete.\r\n");
+        while (true) {
+            vTaskDelay(portMAX_DELAY); 
+        }
     }
 };
 
@@ -46,7 +49,7 @@ public:
 
     void run() override {
         int data;
-        for (int i = 0; i < TEST_ITERATIONS; ++i) {
+        while (true) {
             in >> data;
             out << data;
         }
@@ -81,13 +84,16 @@ public:
             printf("[Receiver] SUCCESS: All %d values verified through %d relays.\r\n", 
                    TEST_ITERATIONS, NUM_RELAYS);
         }
+        while (true) {
+            vTaskDelay(portMAX_DELAY); 
+        }
     }
 };
 
 // --- 2. Network Construction ---
 
 void MainApp_Task(void* params) {
-    vTaskDelay(pdMS_TO_TICKS(50)); 
+    vTaskDelay(pdMS_TO_TICKS(500)); 
     printf("\r\n--- Launching CSP Relay Chain (SPN Principle) ---\r\n");
 
     /**
