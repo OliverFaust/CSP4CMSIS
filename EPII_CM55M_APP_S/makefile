@@ -153,8 +153,9 @@ CUSTOMER ?= seeed
 # tflm_yolo11_od
 # tflm_yolov8_gender_cls
 ##
-APP_TYPE = hello_world_freertos_tz_s_only
- 
+#APP_TYPE = csp4cmsis_alt_test
+APP_TYPE = csp4cmsis_chain_test
+
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))
 include $(EPII_ROOT)/options/options.mk

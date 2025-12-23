@@ -1,0 +1,844 @@
+./drivers/inc/dev_common.h:#ifdef TRUSTZONE_SEC
+./drivers/inc/dev_common.h:#ifndef TRUSTZONE
+./drivers/inc/hx_drv_spi.h:#ifdef TRUSTZONE_NS
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE), y)
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/gcc/linker_script_gcc.mk:else#TRUSTZONE
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE), y)
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/gcc/linker_script_gcc.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/gcc/linker_script_gcc.mk:else#TRUSTZONE
+./linker_script/gcc/linker_script_gcc.mk:endif#TRUSTZONE
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE), y)
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE), y)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE), y)
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE), y)
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE_TYPE), security)
+./linker_script/arm/linker_script_arm.mk:else#ifeq ($(TRUSTZONE), y)
+./linker_script/arm/linker_script_arm.mk:endif#ifeq ($(TRUSTZONE), y)
+./os/freertos_10_5_1/NTZ/freertos_kernel/include/FreeRTOS.h:/* Set configENABLE_TRUSTZONE to 1 enable TrustZone support and 0 to disable it.
+./os/freertos_10_5_1/NTZ/freertos_kernel/include/FreeRTOS.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos_10_5_1/NTZ/freertos_kernel/include/FreeRTOS.h:    #define configENABLE_TRUSTZONE    1
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #ifndef configENABLE_TRUSTZONE
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:        #error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:            #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:            #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/NTZ/config/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                0
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:/* Set configENABLE_TRUSTZONE to 1 enable TrustZone support and 0 to disable it.
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:    #define configENABLE_TRUSTZONE    1
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #ifndef configENABLE_TRUSTZONE
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:        #error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if ( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:    #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:            #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:            #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/freertos_10_5_1/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/freertos_10_5_1/TZ_NonSec/config/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                1
+./os/rtos2_freertos/rtos2_freertos.mk:# TRUSTZONE support y or n
+./os/rtos2_freertos/rtos2_freertos.mk:# TRUSTZONE_TYPE security or non-security
+./os/rtos2_freertos/rtos2_freertos.mk:# TRUSTZONE_FW_TYPE 0(S and NS) or 1(S only)
+./os/rtos2_freertos/rtos2_freertos.mk:ifeq ($(TRUSTZONE),y)
+./os/rtos2_freertos/rtos2_freertos.mk:  ifeq ($(TRUSTZONE_FW_TYPE),0)
+./os/rtos2_freertos/rtos2_freertos.mk:    ifeq ($(TRUSTZONE_TYPE),security)
+./os/rtos2_freertos/rtos2_freertos.mk:ifeq ($(TRUSTZONE),y)
+./os/rtos2_freertos/rtos2_freertos.mk:  ifeq ($(TRUSTZONE_FW_TYPE),0) #TRUSTZONE_FW_TYPE 0(S and NS) or 1(S only)
+./os/rtos2_freertos/rtos2_freertos.mk:    ifeq ($(TRUSTZONE_TYPE),security)
+./os/rtos2_freertos/10.5.1/Config/ARMCM/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                1
+./os/rtos2_freertos/10.5.1/Source/include/FreeRTOS.h:/* Set configENABLE_TRUSTZONE to 1 enable TrustZone support and 0 to disable it.
+./os/rtos2_freertos/10.5.1/Source/include/FreeRTOS.h:#ifndef configENABLE_TRUSTZONE
+./os/rtos2_freertos/10.5.1/Source/include/FreeRTOS.h:    #define configENABLE_TRUSTZONE    1
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #ifndef configENABLE_TRUSTZONE
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:        #error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:#if ( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:            #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:            #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #ifndef configENABLE_TRUSTZONE
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:        #error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/portmacrocommon.h:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *    configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:    #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:    #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:            #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:            #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #if ( configENABLE_TRUSTZONE == 1 )
+./os/rtos2_freertos/10.5.1/Source/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:        #endif /* configENABLE_TRUSTZONE */
+./os/rtos2_freertos/10.5.1/CMSIS/RTOS2/FreeRTOS/Config/ARMCM/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                1
+./os/os.mk:ifeq ($(TRUSTZONE), y)
+./os/os.mk:override TRUSTZONE_TYPE := $(strip $(TRUSTZONE_TYPE))
+./os/os.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./os/os.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./os/os.mk:ifeq ($(TRUSTZONE), y)
+./os/os.mk:override TRUSTZONE_TYPE := $(strip $(TRUSTZONE_TYPE))
+./os/os.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./os/os.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./os/rtos2_rtx/rtos2_rtx.mk:ifeq ($(TRUSTZONE),y)
+./os/rtos2_rtx/rtos2_rtx.mk:  ifeq ($(TRUSTZONE_FW_TYPE),0) #TRUSTZONE_FW_TYPE 0(S and NS) or 1(S only)
+./os/rtos2_rtx/rtos2_rtx.mk:    ifeq ($(TRUSTZONE_TYPE),security)
+./os/freertos/NTZ/freertos_kernel/include/FreeRTOS.h:/* Set configENABLE_TRUSTZONE to 1 enable TrustZone support and 0 to disable it.
+./os/freertos/NTZ/freertos_kernel/include/FreeRTOS.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/NTZ/freertos_kernel/include/FreeRTOS.h:	#define configENABLE_TRUSTZONE 1
+./os/freertos/NTZ/freertos_kernel/include/freertos_tasks_c_additions.h:    configENABLE_TRUSTZONE,
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:			#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:			#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:	#error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/NTZ/freertos_kernel/portable/GCC/ARM_CM55_NTZ/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/NTZ/config/FreeRTOSConfig.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/NTZ/config/FreeRTOSConfig.h:  #define configENABLE_TRUSTZONE                  0
+./os/freertos/TZ_Sec/config/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                              1
+./os/freertos/TZ_Sec/config/FreeRTOSConfig.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/TZ_Sec/config/FreeRTOSConfig.h:  #define configENABLE_TRUSTZONE                  0
+./os/freertos/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:/* Set configENABLE_TRUSTZONE to 1 enable TrustZone support and 0 to disable it.
+./os/freertos/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/TZ_NonSec/freertos_kernel/include/FreeRTOS.h:	#define configENABLE_TRUSTZONE 1
+./os/freertos/TZ_NonSec/freertos_kernel/include/freertos_tasks_c_additions.h:    configENABLE_TRUSTZONE,
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 1 and configENABLE_TRUSTZONE = 0
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 1
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c: *		configRUN_FREERTOS_SECURE_ONLY = 0 and configENABLE_TRUSTZONE = 0
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if( ( configRUN_FREERTOS_SECURE_ONLY == 1 ) && ( configENABLE_TRUSTZONE == 1 ) )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:			#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:			#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/port.c:		#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:	#error configENABLE_TRUSTZONE must be defined in FreeRTOSConfig.h.  Set configENABLE_TRUSTZONE to 1 to enable TrustZone or 0 to disable TrustZone.
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#if( configENABLE_TRUSTZONE == 1 )
+./os/freertos/TZ_NonSec/freertos_kernel/portable/GCC/ARM_CM55/non_secure/portmacro.h:#endif /* configENABLE_TRUSTZONE */
+./os/freertos/TZ_NonSec/config/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                              1
+./os/freertos/TZ_NonSec/config/FreeRTOSConfig.h:#ifndef configENABLE_TRUSTZONE
+./os/freertos/TZ_NonSec/config/FreeRTOSConfig.h:  #define configENABLE_TRUSTZONE                  0
+./os/freertos/TZ_NonSec/config/FreeRTOSConfig.h:#define configENABLE_TRUSTZONE                1
+./app/scenario_app/tflm_yolov8_gender_cls/tflm_yolov8_gender_cls.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_yolov8_gender_cls/tflm_yolov8_gender_cls.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_yolov8_gender_cls/tflm_yolov8_gender_cls.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_yolov8_gender_cls/tflm_yolov8_gender_cls.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_gender_cls/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/allon_sensor_tflm.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/allon_sensor_tflm.mk:override TRUSTZONE := y
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/allon_sensor_tflm.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/allon_sensor_tflm_cmsis_nn/allon_sensor_tflm.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/edge_impulse_firmware/edge_impulse_firmware.mk:override TRUSTZONE := y
+./app/scenario_app/edge_impulse_firmware/edge_impulse_firmware.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/edge_impulse_firmware/edge_impulse_firmware.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/edge_impulse_firmware/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/fatfs_mmc_spi/fatfs_mmc_spi_test_tz_s_only.mk:override TRUSTZONE := y
+./app/scenario_app/fatfs_mmc_spi/fatfs_mmc_spi_test_tz_s_only.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/fatfs_mmc_spi/fatfs_mmc_spi_test_tz_s_only.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/allon_jpeg_encode/allon_jpeg_encode.mk:override TRUSTZONE := y
+./app/scenario_app/allon_jpeg_encode/allon_jpeg_encode.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/allon_jpeg_encode/allon_jpeg_encode.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/allon_jpeg_encode/allon_jpeg_encode.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_jpeg_encode/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_jpeg_encode/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_jpeg_encode/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_jpeg_encode/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/tflm_yolo11_od.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/tflm_yolo11_od.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_yolo11_od/tflm_yolo11_od.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_yolo11_od/tflm_yolo11_od.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolo11_od/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/tflm_peoplenet.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_peoplenet/tflm_peoplenet.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_peoplenet/tflm_peoplenet.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_peoplenet/tflm_peoplenet.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_peoplenet/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/event_handler/evt_cm55mmb/evt_cm55mmb.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/event_handler/evt_cm55mmb/evt_cm55mmb.c:#ifndef TRUSTZONE
+./app/scenario_app/pdm_record/pdm_record.mk:override TRUSTZONE := y
+./app/scenario_app/pdm_record/pdm_record.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/pdm_record/pdm_record.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/pdm_record/pdm_record.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/kws_pdm_record/kws_pdm_record.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/kws_pdm_record/kws_pdm_record.mk:override TRUSTZONE := y
+./app/scenario_app/kws_pdm_record/kws_pdm_record.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/kws_pdm_record/kws_pdm_record.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_fd_fm/tflm_fd_fm.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/tflm_fd_fm.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_fd_fm/tflm_fd_fm.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_fd_fm/tflm_fd_fm.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_fd_fm/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/tflm_yolov8_pose.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_yolov8_pose/tflm_yolov8_pose.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_yolov8_pose/tflm_yolov8_pose.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/tflm_yolov8_pose/tflm_yolov8_pose.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_pose/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/tflm_yolov8_od.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/tflm_yolov8_od/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/tflm_yolov8_od/tflm_yolov8_od.mk:override TRUSTZONE := y
+./app/scenario_app/tflm_yolov8_od/tflm_yolov8_od.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/tflm_yolov8_od/tflm_yolov8_od.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/allon_sensor_tflm/allon_sensor_tflm.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm/allon_sensor_tflm.mk:override TRUSTZONE := y
+./app/scenario_app/allon_sensor_tflm/allon_sensor_tflm.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/allon_sensor_tflm/allon_sensor_tflm.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/imu_read/imu_read_app.mk:override TRUSTZONE := y
+./app/scenario_app/imu_read/imu_read_app.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/imu_read/imu_read_app.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/imu_read/imu_read_app.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/allon_sensor_tflm_freertos.mk:override TRUSTZONE := y
+./app/scenario_app/allon_sensor_tflm_freertos/allon_sensor_tflm_freertos.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/allon_sensor_tflm_freertos/allon_sensor_tflm_freertos.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/allon_sensor_tflm_freertos/algo_task.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/algo_task.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/allon_sensor_tflm_freertos/allon_sensor_tflm.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/allon_sensor_tflm.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/allon_sensor_tflm_freertos/comm_task.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/comm_task.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/allon_sensor_tflm_freertos/dp_task.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/dp_task.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_freertos/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/allon_sensor_tflm_fatfs/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/allon_sensor_tflm_fatfs/allon_sensor_tflm_fatfs.mk:override TRUSTZONE := y
+./app/scenario_app/allon_sensor_tflm_fatfs/allon_sensor_tflm_fatfs.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/allon_sensor_tflm_fatfs/allon_sensor_tflm_fatfs.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/allon_sensor_tflm_fatfs/allon_sensor_tflm_fatfs.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/ei_standalone_inferencing_camera/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/ei_standalone_inferencing_camera/ei_standalone_inferencing_camera.mk:override TRUSTZONE := y
+./app/scenario_app/ei_standalone_inferencing_camera/ei_standalone_inferencing_camera.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/ei_standalone_inferencing_camera/ei_standalone_inferencing_camera.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/ei_standalone_inferencing/ei_standalone_inferencing.mk:override TRUSTZONE := y
+./app/scenario_app/ei_standalone_inferencing/ei_standalone_inferencing.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/ei_standalone_inferencing/ei_standalone_inferencing.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/hello_world_cmsis_cv/hello_world_cmsis_cv.mk:override TRUSTZONE := y
+./app/scenario_app/hello_world_cmsis_cv/hello_world_cmsis_cv.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/hello_world_cmsis_cv/hello_world_cmsis_cv.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/hello_world_cmsis_cv/hello_world_cmsis_cv.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx219/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx219/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx219/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx219/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx477/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx477/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx477/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx477/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_hm0360/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_hm0360/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx708/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx708/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx708/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_imx708/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_ov5647/cisdp_sensor.c:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_cmsis_cv/cis_sensor/cis_ov5647/cisdp_cfg.h:#ifndef TRUSTZONE
+./app/scenario_app/hello_world_cmsis_dsp/hello_world_cmsis_dsp.mk:override TRUSTZONE := y
+./app/scenario_app/hello_world_cmsis_dsp/hello_world_cmsis_dsp.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/hello_world_cmsis_dsp/hello_world_cmsis_dsp.mk:override TRUSTZONE_FW_TYPE := 1
+./app/scenario_app/hello_world_cmsis_dsp/hello_world_cmsis_dsp.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/csp4smsis_alt_test/csp4cmsis_alt_test.mk:override TRUSTZONE := n
+./app/scenario_app/csp4smsis_alt_test/csp4cmsis_alt_test.mk:override TRUSTZONE_TYPE := non-security
+./app/scenario_app/csp4smsis_alt_test/csp4cmsis_alt_test.mk:override TRUSTZONE_FW_TYPE := 0
+./app/scenario_app/csp4smsis_alt_test/csp4cmsis_alt_test.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/csp4smsis_alt_test/csp4cmsis_alt_test.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/hello_world_freertos_tz_s_only/hello_world_freertos_tz_s_only.c:#ifdef TRUSTZONE_SEC
+./app/scenario_app/hello_world_freertos_tz_s_only/hello_world_freertos_tz_s_only.c:#ifndef TRUSTZONE_SEC_ONLY
+./app/scenario_app/hello_world_freertos_tz_s_only/hello_world_freertos_tz_s_only.mk:override TRUSTZONE := n
+./app/scenario_app/hello_world_freertos_tz_s_only/hello_world_freertos_tz_s_only.mk:override TRUSTZONE_TYPE := security
+./app/scenario_app/hello_world_freertos_tz_s_only/hello_world_freertos_tz_s_only.mk:override TRUSTZONE_FW_TYPE := 0
+./interface/timer_interface.c:#ifdef TRUSTZONE_NS
+./interface/timer_interface.c:#endif//CM55M TRUSTZONE_NS
+./interface/timer_interface.c:#ifdef TRUSTZONE_NS
+./interface/timer_interface.c:#endif//CM55S TRUSTZONE_NS
+./interface/timer_interface.c:#ifdef TRUSTZONE_NS
+./interface/timer_interface.c:#ifdef TRUSTZONE_NS
+./board/epii_evb/platform_driver_init.c:#ifdef TRUSTZONE_SEC_ONLY
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/inc/WE2_device_addr.h:#ifdef TRUSTZONE_SEC
+./device/inc/WE2_device_addr.h:#ifndef TRUSTZONE
+./device/system_WE2_ARMCM55.c:#ifdef TRUSTZONE_SEC
+./device/system_WE2_ARMCM55.c:#ifndef TRUSTZONE_SEC_ONLY
+./device/system_WE2_ARMCM55.c:#ifdef TRUSTZONE_SEC
+./device/system_WE2_ARMCM55.c:#ifndef TRUSTZONE_SEC_ONLY
+./device/device.mk:ifeq ($(TRUSTZONE), n)
+./device/device.mk:ifeq ($(TRUSTZONE), y)
+./device/device.mk:ifeq ($(TRUSTZONE_FW_TYPE), 1)
+./device/device.mk:endif#ifeq ($(TRUSTZONE_FW_TYPE), 1)
+./device/device.mk:endif#ifeq ($(TRUSTZONE), y)
+./device/device.mk:ifeq ($(TRUSTZONE), n)
+./device/device.mk:ifeq ($(TRUSTZONE), y)
+./device/device.mk:ifeq ($(TRUSTZONE_FW_TYPE), 1)
+./device/device.mk:endif#ifeq ($(TRUSTZONE_FW_TYPE), 1)
+./device/device.mk:endif#ifeq ($(TRUSTZONE), y)
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./device/WE2_core.c:#ifdef TRUSTZONE_SEC
+./library/inference/tflmtag2412_u55tag2411/tflmtag2412_u55tag2411.mk:				$(TRUSTZONE_SEC_INC_DIR) $(TRUSTZONE_CFG_INC_DIR) $(NSC_INC_DIR) $(MID_INCDIR) $(LIB_INFERENCE_ENGINE_INCDIR) $(LIB_AUDIOALGO_INCDIR) $(HWACCAUTOTEST_INCDIR)\
+./library/inference/tflmtag2209_u55tag2205/tflmtag2209_u55tag2205.mk:				$(TRUSTZONE_SEC_INC_DIR) $(TRUSTZONE_CFG_INC_DIR) $(NSC_INC_DIR) $(MID_INCDIR) $(LIB_INFERENCE_ENGINE_INCDIR) $(LIB_AUDIOALGO_INCDIR) $(HWACCAUTOTEST_INCDIR)\
+./library/sensordp/inc/sensor_dp_config.h:#ifdef TRUSTZONE_SEC
+./library/sensordp/inc/sensor_dp_config.h:#ifndef TRUSTZONE
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c:#ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.c:#elif defined(TRUSTZONE_SEC)
+./trustzone/tz_cfg/trustzone_cfg.c: #ifdef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.h:#ifndef TRUSTZONE_TRUSTZONE_CFG_H_
+./trustzone/tz_cfg/trustzone_cfg.h:#define TRUSTZONE_TRUSTZONE_CFG_H_
+./trustzone/tz_cfg/trustzone_cfg.h:#ifdef TRUSTZONE
+./trustzone/tz_cfg/trustzone_cfg.h:#ifndef TRUSTZONE_SEC_ONLY
+./trustzone/tz_cfg/trustzone_cfg.h:#endif /* TRUSTZONE_TRUSTZONE_CFG_H_ */
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CSRC_DIR = $(EPII_ROOT)/trustzone/tz_cfg
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_ASMSRC_DIR = $(EPII_ROOT)/trustzone/tz_cfg
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_INC_DIR = $(EPII_ROOT)/trustzone/tz_cfg 
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CXXSRC_DIR = $(EPII_ROOT)/trustzone/tz_cfg
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CCSRC_DIR = $(EPII_ROOT)/trustzone/tz_cfg
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CSRCS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_ASMSRCS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CXXSRCS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CCSRCS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_COBJS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_ASMOBJS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CXXOBJS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CCOBJS =
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_OBJS = 
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CSRCS += $(call get_csrcs, $(TRUSTZONE_CFG_CSRC_DIR))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_ASMSRCS += $(call get_asmsrcs, $(TRUSTZONE_CFG_ASMSRC_DIR))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CXXSRCS += $(call get_cxxsrcs, $(TRUSTZONE_CFG_CXXSRC_DIR))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CCSRCS += $(call get_ccsrcs, $(TRUSTZONE_CFG_CCSRC_DIR))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_COBJS += $(call get_relobjs, $(TRUSTZONE_CFG_CSRCS))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_ASMOBJS += $(call get_relobjs, $(TRUSTZONE_CFG_ASMSRCS))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CXXOBJS += $(call get_relobjs, $(TRUSTZONE_CFG_CXXSRCS))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_CCOBJS += $(call get_relobjs, $(TRUSTZONE_CFG_CCSRCS))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_OBJS = $(TRUSTZONE_CFG_COBJS) $(TRUSTZONE_CFG_ASMOBJS) $(TRUSTZONE_CFG_CXXOBJS) $(TRUSTZONE_CFG_CCOBJS)
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_DEPS = $(call get_deps, $(TRUSTZONE_CFG_OBJS))
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_DEFINES = -DTRUSTZONE_CFG
+./trustzone/tz_cfg/tz_cfg.mk:override TRUSTZONE_CFG_OBJS:=
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_LIB_NAME = libtrustzone_cfg.a
+./trustzone/tz_cfg/tz_cfg.mk:TRUSTZONE_CFG_LIB_ARM := $(subst /,$(PS), $(strip $(OUT_DIR)/$(TRUSTZONE_CFG_LIB_NAME)))
+./trustzone/tz_cfg/tz_cfg.mk:$(TRUSTZONE_CFG_LIB_ARM): $(TRUSTZONE_CFG_OBJS)
+./trustzone/tz_cfg/tz_cfg.mk:ifeq "$(strip $(TRUSTZONE_CFG_OBJS))" ""
+./trustzone/tz_cfg/tz_cfg.mk:	$(CP) $(PREBUILT_LIB)$(TRUSTZONE_CFG_LIB_NAME) $(TRUSTZONE_CFG_LIB_ARM)
+./trustzone/tz_cfg/tz_cfg.mk:	$(Q)$(AR) $(AR_OPT) $@ $(TRUSTZONE_CFG_OBJS)
+./trustzone/tz_cfg/tz_cfg.mk:	$(CP) $(TRUSTZONE_CFG_LIB_ARM) $(PREBUILT_LIB)$(TRUSTZONE_CFG_LIB_NAME)
+./trustzone/tz_cfg/tz_cfg.mk:-include $(TRUSTZONE_CFG_DEPS)
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CSRC_DIR = $(EPII_ROOT)/trustzone
+./trustzone/trustzone.mk:TRUSTZONE_SEC_ASMSRC_DIR = $(EPII_ROOT)/trustzone
+./trustzone/trustzone.mk:TRUSTZONE_SEC_INC_DIR = $(EPII_ROOT)/trustzone 
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CXXSRC_DIR = $(EPII_ROOT)/trustzone
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CCSRC_DIR = $(EPII_ROOT)/trustzone
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CSRCS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_ASMSRCS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CXXSRCS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CCSRCS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_COBJS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_ASMOBJS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CXXOBJS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CCOBJS =
+./trustzone/trustzone.mk:TRUSTZONE_SEC_OBJS = 
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CSRCS += $(call get_csrcs, $(TRUSTZONE_SEC_CSRC_DIR))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_ASMSRCS += $(call get_asmsrcs, $(TRUSTZONE_SEC_ASMSRC_DIR))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CXXSRCS += $(call get_cxxsrcs, $(TRUSTZONE_SEC_CXXSRC_DIR))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CCSRCS += $(call get_ccsrcs, $(TRUSTZONE_SEC_CCSRC_DIR))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_COBJS += $(call get_relobjs, $(TRUSTZONE_SEC_CSRCS))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_ASMOBJS += $(call get_relobjs, $(TRUSTZONE_SEC_ASMSRCS))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CXXOBJS += $(call get_relobjs, $(TRUSTZONE_SEC_CXXSRCS))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_CCOBJS += $(call get_relobjs, $(TRUSTZONE_SEC_CCSRCS))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_OBJS = $(TRUSTZONE_SEC_COBJS) $(TRUSTZONE_SEC_ASMOBJS) $(TRUSTZONE_SEC_CXXOBJS) $(TRUSTZONE_SEC_CCOBJS)
+./trustzone/trustzone.mk:TRUSTZONE_SEC_DEPS = $(call get_deps, $(TRUSTZONE_SEC_OBJS))
+./trustzone/trustzone.mk:TRUSTZONE_SEC_DEFINES = -DTRUSTZONE_SEC
+./trustzone/trustzone.mk:TRUSTZONE_SEC_LIB_ARM = $(OUT_DIR)/libtrustzone_sec.a
+./trustzone/trustzone.mk:$(TRUSTZONE_SEC_LIB_ARM): $(TRUSTZONE_SEC_OBJS)
+./trustzone/trustzone.mk:	$(Q)$(AR) $(AR_OPT) $@ $(TRUSTZONE_SEC_OBJS)
+./trustzone/trustzone.mk:-include $(TRUSTZONE_SEC_DEPS)
+./trustzone/nsc_function/nsc_function.mk:ifeq ($(TRUSTZONE), y)
+./trustzone/nsc_function/nsc_function.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./trustzone/nsc_function/nsc_function.mk:ifeq "$(strip $(TRUSTZONE_CFG_OBJS))" ""
+./trustzone/nsc_function/nsc_inc/veneer_sys_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_VENEER_SYS_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_sys_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_VENEER_SYS_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_sys_ctrl.h:#endif /* TRUSTZONE_NSC_FUNCTION_VENEER_SYS_CTRL_H_ */
+./trustzone/nsc_function/nsc_inc/veneer_psram_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_PSRAM_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_psram_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_PSRAM_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_psram_ctrl.h:#endif /*TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_PSRAM_CTRL_H_*/
+./trustzone/nsc_function/nsc_inc/veneer_power_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_PMU_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_power_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_PMU_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_power_ctrl.h:#endif /* TRUSTZONE_NSC_FUNCTION_PMU_CTRL_H_ */
+./trustzone/nsc_function/nsc_inc/veneer_timer_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_TIMER_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_timer_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_TIMER_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_timer_ctrl.h:#endif /* TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_TIMER_CTRL_H_ */
+./trustzone/nsc_function/nsc_inc/veneer_eeprom_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_EEPROM_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_eeprom_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_EEPROM_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_eeprom_ctrl.h:#endif /*TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_EEPROM_CTRL_H_*/
+./trustzone/nsc_function/nsc_inc/veneer_clk_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_VENEER_CLK_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_clk_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_VENEER_CLK_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_clk_ctrl.h:#endif /* TRUSTZONE_NSC_FUNCTION_VENEER_CLK_CTRL_H_ */
+./trustzone/nsc_function/nsc_inc/veneer_u55_ctrl.h:#ifndef TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_U55_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_u55_ctrl.h:#define TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_U55_CTRL_H_
+./trustzone/nsc_function/nsc_inc/veneer_u55_ctrl.h:#endif /*TRUSTZONE_NSC_FUNCTION_NSC_INC_VENEER_U55_CTRL_H_*/
+./trustzone/nsc_function/nsc_customer/nsc_inc/seeed/nsc_seeed.h:#ifndef TRUSTZONE_NSC_FUNCTION_NSC_CUSTOMER_NSC_INC_SEEED_NSC_SEEED_H_
+./trustzone/nsc_function/nsc_customer/nsc_inc/seeed/nsc_seeed.h:#define TRUSTZONE_NSC_FUNCTION_NSC_CUSTOMER_NSC_INC_SEEED_NSC_SEEED_H_
+./trustzone/nsc_function/nsc_customer/nsc_inc/seeed/nsc_seeed.h:#endif /* TRUSTZONE_NSC_FUNCTION_NSC_CUSTOMER_NSC_INC_SEEED_NSC_SEEED_H_ */
+./options/options.mk:ifeq ($(TRUSTZONE), y)
+./options/options.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./options/options.mk:TRUSTZONE_SEC_LIB_NAME=CMSE_lib_$(strip $(TOOLCHAIN)).o
+./options/options.mk:TRUSTZONE_SEC_LIB=$(APPL_OUT_DIR)/$(TRUSTZONE_SEC_LIB_NAME)
+./options/options.mk:NSC_PREBUILT_LIB =$(PREBUILT_LIB)$(TRUSTZONE_SEC_LIB_NAME)
+./options/options.mk:TRUSTZONE_SEC_LIB_WILDCARD=$(subst /,\,$(TRUSTZONE_SEC_LIB))
+./options/options.mk:NONTRUSTZONE_SRC_DIR_WILDCARD = $(subst /,\,$(NONTRUSTZONE_SRC_DIR))
+./options/options.mk:NONTRUSTZONE_SRC_SEC_LIB_WILDCARD = "$(NONTRUSTZONE_SRC_DIR_WILDCARD)\prebuilt_libs\$(strip $(TOOLCHAIN))\"
+./options/options.mk:TRUSTZONE_SEC_LIB_WILDCARD=$(subst \,/,$(TRUSTZONE_SEC_LIB))
+./options/options.mk:NONTRUSTZONE_SRC_DIR_WILDCARD = $(subst \,/,$(NONTRUSTZONE_SRC_DIR))
+./options/options.mk:NONTRUSTZONE_SRC_SEC_LIB_WILDCARD = "$(NONTRUSTZONE_SRC_DIR_WILDCARD)\prebuilt_libs\$(strip $(TOOLCHAIN))\"
+./options/options.mk:ifeq ($(TRUSTZONE), y)
+./options/options.mk:ALL_DEFINES += -DTRUSTZONE
+./options/options.mk:override TRUSTZONE_TYPE := $(strip $(TRUSTZONE_TYPE))
+./options/options.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./options/options.mk:ALL_DEFINES += -DTRUSTZONE_SEC
+./options/options.mk:ifeq ($(TRUSTZONE_FW_TYPE), 1)
+./options/options.mk:ALL_DEFINES += -DTRUSTZONE_SEC_ONLY
+./options/options.mk:ALL_DEFINES += -DTRUSTZONE_NS
+./options/rules.mk:		$(TOOLCHAIN_DEFINES) $(APPL_DEFINES) $(TRUSTZONE_SEC_DEFINES) $(TRUSTZONE_CFG_DEFINES) $(NSC_DEFINES) $(INTERFACE_DEFINES) $(CUSTOMER_DEFINES)
+./options/rules.mk:$(APPL_FULL_NAME).$(ELF_FILENAME) : $(ALL_GENERATED_DIRS_TMPFILES) $(DEVICE_OBJS) $(BOARD_OBJS) $(INTEGRATE_OBJS) $(HWACCAUTOTEST_OBJS) $(SCENARIO_APP_OBJS) $(APPL_OBJS) $(TRUSTZONE_SEC_OBJS) $(NSC_OBJS) $(OS_ALLOBJS) $(OS_HAL_ALLOBJS) $(TFM_OBJS) $(INTERFACE_OBJS) $(HMX_BSP_LIBS) $(INFERENCE_ENGINE_LIB) $(TFM_LIBS) $(CV_LIB) $(AUDIOALGO_LIB) $(PRE_LINKER_SCRIPT_FILE) $$(COMMON_COMPILE_PREREQUISITES)
+./options/rules.mk:	$(foreach O,$(TRUSTZONE_SEC_OBJS),$(file >>objs.txt,$O))
+./options/rules.mk:	$(foreach O,$(TRUSTZONE_SEC_OBJS),$(file >>objs.in,$O))
+./options/rules.mk:ifeq ($(TRUSTZONE), y)
+./options/rules.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./options/rules.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./options/rules.mk:	$(CP) $(TRUSTZONE_SEC_LIB_WILDCARD) $(NONTRUSTZONE_SRC_SEC_LIB_WILDCARD)
+./options/rules.mk:	$(CP) $(TRUSTZONE_SEC_LIB_WILDCARD) $(NSC_PREBUILT_LIB)
+./options/files.mk:				$(TRUSTZONE_SEC_CSRC_DIR) $(NSC_CSRC_DIR) $(MID_CSRCDIR) $(LIB_CSRCDIR) $(LIB_INFERENCE_ENGINE_CSRCDIR) $(LIB_CV_CSRCDIR) $(LIB_AUDIOALGO_CSRCDIR) \
+./options/files.mk:				$(TRUSTZONE_SEC_CXXSRC_DIR) $(NSC_CXXSRC_DIR) $(MID_CXXSRCDIR) $(LIB_CXXSRCDIR) $(LIB_INFERENCE_ENGINE_CXXSRCSDIR) $(LIB_CV_CXXSRCSDIR) $(LIB_AUDIOALGO_CXXSRCSDIR) \
+./options/files.mk:				$(TRUSTZONE_SEC_CCSRC_DIR) $(NSC_CCSRC_DIR) $(MID_CCSRCDIR) $(LIB_CCSRCDIR) \
+./options/files.mk:				$(TRUSTZONE_SEC_ASMSRC_DIR) $(NSC_ASMSRC_DIR) $(MID_ASMSRCDIR) $(LIB_ASMSRCDIR) $(LIB_INFERENCE_ENGINE_ASMSRCDIR) $(LIB_CV_ASMSRCDIR) $(LIB_AUDIOALGO_ASMSRCDIR) \
+./options/files.mk:				$(TRUSTZONE_SEC_INC_DIR) $(TRUSTZONE_CFG_INC_DIR) $(NSC_INC_DIR) $(MID_INCDIR) $(LIB_INFERENCE_ENGINE_INCDIR) $(LIB_CV_INCDIR) $(LIB_AUDIOALGO_INCDIR) $(HWACCAUTOTEST_INCDIR)\
+./options/files.mk:ALL_CSRCS = $(sort $(BOARD_CSRCS) $(DEVICE_CSRCS) $(DRIVERS_CSRCS) $(EXTERNAL_CSRCS) $(LIB_INFERENCE_ENGINE_CSRCS) $(LIB_CV_CSRCS) $(LIB_AUDIOALGO_CSRCS) $(LIB_CSRCS) $(MID_CSRCS) $(OS_CSRCS) $(OS_HAL_CSRCS) $(INTEGRATE_CSRCS) $(HWACCAUTOTEST_CSRCS) $(SCENARIO_APP_CSRCS) $(APPL_CSRCS) $(TRUSTZONE_SEC_CSRCS) $(NSC_CSRCS) $(TFM_CSRCS) $(INTERFACE_CSRCS) $(CMSIS_DRIVERS_CSRCS) $(CUSTOMER_CSRCS))
+./options/files.mk:ALL_ASMSRCS = $(sort $(BOARD_ASMSRCS) $(DEVICE_ASMSRCS) $(DRIVERS_ASMSRCS) $(EXTERNAL_ASMSRCS) $(LIB_ASMSRCS) $(LIB_AUDIOALGO_ASMSRCS) $(LIB_INFERENCE_ENGINE_ASMSRCS) $(LIB_CV_ASMSRCS) $(MID_ASMSRCS) $(OS_ASMSRCS) $(OS_HAL_ASMSRCS) $(INTEGRATE_ASMSRCS) $(HWACCAUTOTEST_ASMSRCS) $(SCENARIO_APP_ASMSRCS) $(APPL_ASMSRCS) $(TRUSTZONE_SEC_ASMSRCS) $(NSC_ASMSRCS) $(TFM_ASMSRCS) $(INTERFACE_ASMSRCS) $(CMSIS_DRIVERS_ASMSRCS) $(CUSTOMER_ASMSRCS))
+./options/files.mk:ALL_CXXSRCS = $(sort $(BOARD_CXXSRCS) $(DEVICE_CXXSRCS) $(DRIVERS_CXXSRCS) $(EXTERNAL_CXXSRCS) $(LIB_INFERENCE_ENGINE_CXXSRCS) $(LIB_CV_CXXSRCS) $(LIB_AUDIOALGO_CXXSRCS) $(LIB_CXXSRCS) $(MID_CXXSRCS) $(OS_CXXSRCS) $(OS_HAL_CXXSRCS) $(INTEGRATE_CXXSRCS) $(HWACCAUTOTEST_CXXSRCS) $(SCENARIO_APP_CXXSRCS) $(APPL_CXXSRCS) $(TRUSTZONE_SEC_CXXSRCS) $(NSC_CXXSRCS) $(TFM_CXXSRCS) $(INTERFACE_CXXSRCS) $(CMSIS_DRIVERS_CXXSRCS) $(CUSTOMER_CXXSRCS))
+./options/files.mk:ALL_CCSRCS = $(sort $(BOARD_CCSRCS) $(DEVICE_CCSRCS) $(DRIVERS_CCSRCS) $(EXTERNAL_CCSRCS) $(LIB_CCSRCS) $(MID_CCSRCS) $(OS_CCSRCS) $(OS_HAL_CCSRCS) $(INTEGRATE_CCSRCS) $(SCENARIO_APP_CCSRCS) $(APPL_CCSRCS) $(TRUSTZONE_SEC_CCSRCS) $(NSC_CCSRCS) $(TFM_CCSRCS) $(INTERFACE_CCSRCS) $(CMSIS_DRIVERS_CCSRCS) $(CUSTOMER_CCSRCS))
+./options/files.mk:ALL_COBJS = $(sort $(BOARD_COBJS) $(DEVICE_COBJS) $(DRIVERS_COBJS) $(EXTERNAL_COBJS) $(LIB_INFERENCE_ENGINE_COBJS) $(LIB_CV_COBJS) $(LIB_AUDIOALGO_COBJS) $(LIB_COBJS) $(MID_COBJS) $(OS_COBJS) $(OS_HAL_COBJS) $(INTEGRATE_COBJS) $(HWACCAUTOTEST_COBJS) $(SCENARIO_APP_COBJS) $(APPL_COBJS) $(TRUSTZONE_SEC_COBJS) $(TRUSTZONE_CFG_COBJS) $(NSC_COBJS) $(TFM_COBJS) $(INTERFACE_COBJS) $(CMSIS_DRIVERS_COBJS) $(CUSTOMER_COBJS))
+./options/files.mk:ALL_ASMOBJS = $(sort $(BOARD_ASMOBJS) $(DEVICE_ASMOBJS) $(DRIVERS_ASMOBJS) $(EXTERNAL_ASMOBJS) $(LIB_INFERENCE_ENGINE_ASMOBJS) $(LIB_CV_ASMOBJS) $(LIB_AUDIOALGO_ASMOBJS) $(LIB_ASMOBJS) $(MID_ASMOBJS) $(OS_ASMOBJS) $(OS_HAL_ASMOBJS) $(INTEGRATE_ASMOBJS) $(HWACCAUTOTEST_ASMOBJS) $(SCENARIO_APP_ASMOBJS) $(APPL_ASMOBJS) $(TRUSTZONE_SEC_ASMOBJS) $(TRUSTZONE_CFG_ASMOBJS) $(TRUSTZONE_CFG_CXXOBJS) $(NSC_ASMOBJS) $(TFM_ASMOBJS) $(INTERFACE_ASMOBJS) $(CMSIS_DRIVERS_ASMOBJS) $(CUSTOMER_ASMOBJS))
+./options/files.mk:ALL_CXXOBJS = $(sort $(BOARD_CXXOBJS) $(DEVICE_CXXOBJS) $(DRIVERS_CXXOBJS) $(EXTERNAL_CXXOBJS) $(LIB_INFERENCE_ENGINE_CXXOBJS) $(LIB_CV_CXXOBJS) $(LIB_AUDIOALGO_CXXOBJS) $(LIB_CXXOBJS) $(MID_CXXOBJS) $(OS_CXXOBJS) $(OS_HAL_CXXOBJS) $(INTEGRATE_CXXOBJS) $(HWACCAUTOTEST_CXXOBJS) $(SCENARIO_APP_CXXOBJS) $(APPL_CXXOBJS) $(TRUSTZONE_SEC_CXXOBJS) $(TRUSTZONE_CFG_CCOBJS) $(NSC_CXXOBJS) $(TFM_CXXOBJS) $(INTERFACE_CXXOBJS) $(CMSIS_DRIVERS_CXXOBJS) $(CUSTOMER_CXXOBJS))
+./options/files.mk:ALL_CCOBJS = $(sort $(BOARD_CCOBJS) $(DEVICE_CCOBJS) $(DRIVERS_CCOBJS) $(EXTERNAL_CCOBJS) $(LIB_CCOBJS) $(MID_CCOBJS) $(OS_CCOBJS) $(OS_HAL_CCOBJS) $(INTEGRATE_CCOBJS) $(SCENARIO_APP_CCOBJS) $(APPL_CCOBJS) $(TRUSTZONE_SEC_CCOBJS) $(NSC_CCOBJS) $(TFM_CCOBJS) $(INTERFACE_CCOBJS) $(CMSIS_DRIVERS_CCOBJS) $(CUSTOMER_CCOBJS))
+./options/files.mk:HMX_BSP_LIBS = $(TRUSTZONE_CFG_LIB_ARM) $(DRIVERS_LIB) $(LIB_LIBS) $(EXTERNAL_LIB) $(MID_LIBS) $(CMSIS_DRIVERS_LIB) $(CUSTOMER_LIB)
+./options/toolchain/toolchain_arm.mk:ifeq ($(TRUSTZONE), y)
+./options/toolchain/toolchain_arm.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./options/toolchain/toolchain_arm.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./options/toolchain/toolchain_arm.mk:LCORE_OPT_ARM += --import-cmse-lib-out=$(TRUSTZONE_SEC_LIB)
+./options/toolchain/toolchain_gnu.mk:ifeq ($(TRUSTZONE), y)
+./options/toolchain/toolchain_gnu.mk:ifeq ($(TRUSTZONE_TYPE), security)
+./options/toolchain/toolchain_gnu.mk:ifeq ($(TRUSTZONE_FW_TYPE), 0)
+./options/toolchain/toolchain_gnu.mk:LCORE_OPT_GNU += -Xlinker --out-implib=$(TRUSTZONE_SEC_LIB)

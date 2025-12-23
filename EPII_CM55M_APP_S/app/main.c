@@ -113,6 +113,29 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_ALT_TEST
+#include "csp4cmsis_alt_test.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
+#ifdef CSP4CMSIS_CHAIN_TEST
+#include "csp4cmsis_chain_test.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
 
 #ifdef TFLM_FD_FM
 #include "tflm_fd_fm.h"
