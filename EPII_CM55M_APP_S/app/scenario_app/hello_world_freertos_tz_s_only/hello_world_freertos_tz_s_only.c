@@ -34,11 +34,13 @@
 
 #include "xprintf.h"
 
+extern void csp_app_main_init(void);
+
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-static void hello_task1(void *pvParameters);
-static void hello_task2(void *pvParameters);
+//static void hello_task1(void *pvParameters);
+//static void hello_task2(void *pvParameters);
 
 /*******************************************************************************
  * Prototypes
@@ -47,50 +49,16 @@ static void hello_task2(void *pvParameters);
 /*******************************************************************************
  * Code
  ******************************************************************************/
-/*!
- * @brief Main function
- */
 int app_main(void)
 {
-    printf("Task creation Hello world. No MPU\r\n");
+    printf("Task creation C++ CSP wrapper test.\r\n");
 
-    if ( xTaskCreate(hello_task1, "Hello_task1", 512, NULL, hello_task1_PRIORITY, NULL) != pdPASS )
-    {
-        printf("Hello_task1 creation failed!.\r\n");
-        while (1)
-        	;
-    }
-
-    if ( xTaskCreate(hello_task2, "Hello_task2", 512, NULL, hello_task2_PRIORITY, NULL) != pdPASS )
-    {
-        printf("Hello_task2 creation failed!.\r\n");
-        while (1)
-            ;
-    }
+    // CALL THE C++ INITIALIZATION FUNCTION
+    csp_app_main_init();
 
     vTaskStartScheduler();
 
-    for (;;);
-}
-
-/*!
- * @brief Task responsible for printing of "Hello world." message.
- */
-static void hello_task1(void *pvParameters)
-{
-    for (;;)
-    {
-    	printf("Hello world freertos task1.\r\n");
-        vTaskDelay(pdMS_TO_TICKS(300));
-    }
-}
-
-static void hello_task2(void *pvParameters)
-{
-    for (;;)
-    {
-    	printf("Hello world freertos task2.\r\n");
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
+    // Should never return
+    //for (;;);
 }
 
