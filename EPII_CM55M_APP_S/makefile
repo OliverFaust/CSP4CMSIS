@@ -154,7 +154,8 @@ CUSTOMER ?= seeed
 # tflm_yolov8_gender_cls
 ##
 #APP_TYPE = csp4cmsis_alt_test
-APP_TYPE = csp4cmsis_chain_test
+#APP_TYPE = csp4cmsis_chain_test
+APP_TYPE = csp4cmsis_sieve
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))

@@ -125,8 +125,20 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_SIEVE
+#include "csp4cmsis_sieve.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_CHAIN_TEST
-#include "csp4cmsis_chain_test.h"
+#include "csp4cmsis_sieve.h"
 
 /** main entry */
 int main(void)
