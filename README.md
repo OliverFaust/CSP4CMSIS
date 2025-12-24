@@ -1,3 +1,6 @@
+# CSP4CMSIS
+This repository is a fork (clone and extension) of the original HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2 base repository. We extend our thanks to the original authors for their excellent work and foundation.
+
 # Himax examples for Seeed Grove Vision AI Module V2
 This is a repository which step by step teaches you how to build your own examples and run on Seeed Grove Vision AI Module V2.
 Finally, teach you how to restore to the original factory settings and run [SenseCraft AI](https://wiki.seeedstudio.com/grove_vision_ai_v2_software_support/#-no-code-getting-started-with-sensecraft-ai-) from [Seeed Studio](https://wiki.seeedstudio.com/grove_vision_ai_v2/).
