@@ -4,7 +4,7 @@
 override SCENARIO_APP_SUPPORT_LIST := $(APP_TYPE)
 
 # Use the actual folder name (matching the rename to 'cmsis')
-CURR_PROJ_DIR := ./app/scenario_app/csp4cmsis_alt_test
+CURR_PROJ_DIR := ./app/scenario_app/csp4cmsis_comstime
 
 # -------------------------------------------------------------------------
 # 2. SYSTEM & ARCHITECTURE OVERRIDES (The "Linker Fixes")
@@ -34,7 +34,7 @@ override INCDIR += $(CURR_PROJ_DIR) \
 # -------------------------------------------------------------------------
 # 4. COMPILER DEFINES
 # -------------------------------------------------------------------------
-override APPL_DEFINES += -DCSP4CMSIS_ALT_TEST
+override APPL_DEFINES += -DCSP4CMSIS_COMSTIME
 override APPL_DEFINES += -DconfigENABLE_MPU=0
 override APPL_DEFINES += -DconfigENABLE_TRUSTZONE=0
 
@@ -62,7 +62,7 @@ APPL_CSRCS += $(RTOS_PATH)/tasks.c \
 APPL_LIBS += -lm -lstdc++ -lc
 
 ifeq ($(strip $(TOOLCHAIN)), arm)
-override LINKER_SCRIPT_FILE := $(CURR_PROJ_DIR)/csp4cmsis_alt_test.sct
+override LINKER_SCRIPT_FILE := $(CURR_PROJ_DIR)/csp4cmsis_comstime.sct
 else
-override LINKER_SCRIPT_FILE := $(CURR_PROJ_DIR)/csp4cmsis_alt_test.ld
+override LINKER_SCRIPT_FILE := $(CURR_PROJ_DIR)/csp4cmsis_comstime.ld
 endif

@@ -3,7 +3,6 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "event_groups.h"
 #include "queue.h"
 #include "channel_base.h" 
 #include "alt.h"         
@@ -11,28 +10,22 @@
 
 namespace csp::internal {
 
-    // Forward declarations of updated Guard classes
     template <typename T> class BufferedInputGuard;
     template <typename T> class BufferedOutputGuard;
 
-    // =============================================================
-    // CLASS 1: BufferedChannel<T> (Resident Guard version)
-    // =============================================================
     template <typename T>
     class BufferedChannel : public internal::BaseAltChan<T>
     {
     private:
         QueueHandle_t queue_handle; 
         
-        EventGroupHandle_t alt_read_group = NULL;
-        EventBits_t alt_read_bit = 0;
-        bool reader_is_alting = false;
+        // Use AltScheduler pointers to remain consistent with your Alt system
+        AltScheduler* alt_reader = nullptr;
+        EventBits_t   read_bit = 0;
+        
+        AltScheduler* alt_writer = nullptr;
+        EventBits_t   write_bit = 0;
 
-        EventGroupHandle_t alt_write_group = NULL;
-        EventBits_t alt_write_bit = 0;
-        bool writer_is_alting = false;
-
-        // RESIDENT GUARDS: Allocated statically as members of the channel
         BufferedInputGuard<T>  res_in_guard;
         BufferedOutputGuard<T> res_out_guard;
         
@@ -48,19 +41,31 @@ namespace csp::internal {
             if (queue_handle) vQueueDelete(queue_handle);
         }
 
+        // --- Required by BaseAltChan ---
+        // Matches the signature: virtual bool pending() = 0;
+        bool pending() override { 
+            return uxQueueMessagesWaiting(queue_handle) > 0; 
+        } 
+
+        bool space_available() { 
+            return uxQueueSpacesAvailable(queue_handle) > 0; 
+        }
+
         // --- Core I/O ---
         void input(T* const dest) override {
             if (xQueueReceive(queue_handle, dest, portMAX_DELAY) == pdPASS) {
+                // If a sender was ALTed waiting for space, wake them
                 taskENTER_CRITICAL();
-                if (writer_is_alting) xEventGroupSetBits(alt_write_group, alt_write_bit);
+                if (alt_writer) alt_writer->wakeUp(write_bit);
                 taskEXIT_CRITICAL();
             }
         }
 
         void output(const T* const source) override {
             if (xQueueSend(queue_handle, source, portMAX_DELAY) == pdPASS) {
+                // If a receiver was ALTed waiting for data, wake them
                 taskENTER_CRITICAL();
-                if (reader_is_alting) xEventGroupSetBits(alt_read_group, alt_read_bit);
+                if (alt_reader) alt_reader->wakeUp(read_bit);
                 taskEXIT_CRITICAL();
             }
         }
@@ -68,7 +73,6 @@ namespace csp::internal {
         void beginExtInput(T* const dest) override { this->input(dest); }
         void endExtInput() override { }
         
-        // --- Updated Resident Guard Accessors ---
         Guard* getInputGuard(T& dest) override {
             res_in_guard.setTarget(&dest);
             return &res_in_guard;
@@ -79,28 +83,25 @@ namespace csp::internal {
             return &res_out_guard;
         }
         
-        // --- Internal Helpers ---
-        bool pending() const { return uxQueueMessagesWaiting(queue_handle) > 0; } 
-        bool space_available() const { return uxQueueSpacesAvailable(queue_handle) > 0; }
-        
-        void registerInputAlt(EventGroupHandle_t g, EventBits_t b) {
-            taskENTER_CRITICAL(); reader_is_alting = true; alt_read_group = g; alt_read_bit = b; taskEXIT_CRITICAL();
+        // Registration Helpers
+        void registerInputAlt(AltScheduler* alt, EventBits_t b) {
+            taskENTER_CRITICAL(); alt_reader = alt; read_bit = b; taskEXIT_CRITICAL();
         }
         void unregisterInputAlt() {
-            taskENTER_CRITICAL(); reader_is_alting = false; taskEXIT_CRITICAL();
+            taskENTER_CRITICAL(); alt_reader = nullptr; taskEXIT_CRITICAL();
         }
-        void registerOutputAlt(EventGroupHandle_t g, EventBits_t b) {
-            taskENTER_CRITICAL(); writer_is_alting = true; alt_write_group = g; alt_write_bit = b; taskEXIT_CRITICAL();
+        void registerOutputAlt(AltScheduler* alt, EventBits_t b) {
+            taskENTER_CRITICAL(); alt_writer = alt; write_bit = b; taskEXIT_CRITICAL();
         }
         void unregisterOutputAlt() {
-            taskENTER_CRITICAL(); writer_is_alting = false; taskEXIT_CRITICAL();
+            taskENTER_CRITICAL(); alt_writer = nullptr; taskEXIT_CRITICAL();
         }
 
         QueueHandle_t getQueueHandle() const { return queue_handle; }
     };
     
     // =============================================================
-    // CLASS 2: BufferedInputGuard (Late Binding)
+    // Guards (Updated to use AltScheduler* pointer directly)
     // =============================================================
     template <typename T>
     class BufferedInputGuard : public Guard {
@@ -109,28 +110,22 @@ namespace csp::internal {
         T* dest_ptr = nullptr; 
     public:
         BufferedInputGuard(BufferedChannel<T>* chan) : channel(chan) {}
-
         void setTarget(T* dest) { dest_ptr = dest; }
 
         bool enable(AltScheduler* alt, EventBits_t bit) override {
             if (channel->pending()) return true;
-            channel->registerInputAlt(alt->getEventGroupHandle(), bit);
+            channel->registerInputAlt(alt, bit);
             return false;
         }
-
         bool disable() override {
             channel->unregisterInputAlt();
             return channel->pending();
         }
-
         void activate() override {
             xQueueReceive(channel->getQueueHandle(), dest_ptr, 0);
         }
     };
     
-    // =============================================================
-    // CLASS 3: BufferedOutputGuard (Late Binding)
-    // =============================================================
     template <typename T>
     class BufferedOutputGuard : public Guard {
     private:
@@ -138,20 +133,17 @@ namespace csp::internal {
         const T* source_ptr = nullptr;
     public:
         BufferedOutputGuard(BufferedChannel<T>* chan) : channel(chan) {}
-
         void setTarget(const T* source) { source_ptr = source; }
 
         bool enable(AltScheduler* alt, EventBits_t bit) override {
             if (channel->space_available()) return true;
-            channel->registerOutputAlt(alt->getEventGroupHandle(), bit);
+            channel->registerOutputAlt(alt, bit);
             return false;
         }
-
         bool disable() override {
             channel->unregisterOutputAlt();
             return channel->space_available();
         }
-
         void activate() override {
             xQueueSend(channel->getQueueHandle(), source_ptr, 0);
         }

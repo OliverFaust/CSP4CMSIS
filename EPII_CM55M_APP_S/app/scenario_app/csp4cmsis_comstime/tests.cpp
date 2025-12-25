@@ -1,124 +1,141 @@
-#include "csp/csp4cmsis.h" 
+#include "csp/csp4cmsis.h"
 #include <cstdio>
-
-// --- Configuration ---
-#define TOTAL_MESSAGES_PER_SENDER 10000 // Reduced for clarity in terminal output
-#define CHECK_INTERVAL 1000           
-#define MAX_TOTAL_MESSAGES (TOTAL_MESSAGES_PER_SENDER * 2)
 
 using namespace csp;
 
-struct Message {
-    int source_id; 
-    int sequence_num;
+// --- 1. Basic Ring Components ---
+
+class Buffer : public CSProcess {
+    Chanin<int> in; Chanout<int> out;
+public:
+    Buffer(Chanin<int> r, Chanout<int> w) : in(r), out(w) {}
+    void run() override {
+        int x;
+        while (true) { in >> x; out << x; }
+    }
 };
 
-// --- 1. Define Channels ---
-// 'Channel' or 'One2OneChannel' now represents a Rendezvous (capacity 0) sync point.
-using AltChannel = Channel<Message>;
-
-// --- 2. Define Processes ---
-class Sender : public CSProcess {
-private:
-    Chanout<Message> out;
-    int id; 
+class Prefix : public CSProcess {
+    Chanin<int> in; Chanout<int> out; int initial_val;
 public:
-    Sender(Chanout<Message> w, int sender_id) : out(w), id(sender_id) {}
-
+    Prefix(Chanin<int> r, Chanout<int> w, int init) : in(r), out(w), initial_val(init) {}
     void run() override {
-        printf("[Sender %d] Starting sequence.\r\n", id);
-        for (int i = 0; i < TOTAL_MESSAGES_PER_SENDER; ++i) {
-            Message msg = {id, i};
-            out << msg; 
-        }
-        printf("[Sender %d] Finished.\r\n", id);
+        out << initial_val; 
+        int x;
+        while (true) { in >> x; out << x; }
+    }
+};
+
+class Successor : public CSProcess {
+    Chanin<int> in; Chanout<int> out;
+public:
+    Successor(Chanin<int> r, Chanout<int> w) : in(r), out(w) {}
+    void run() override {
+        int x;
+        while (true) { in >> x; out << (x + 1); }
+    }
+};
+
+class Delta : public CSProcess {
+    Chanin<int> in; Chanout<int> outA, outB;
+public:
+    Delta(Chanin<int> r, Chanout<int> wA, Chanout<int> wB) : in(r), outA(wA), outB(wB) {}
+    void run() override {
+        int x;
         while (true) {
-            vTaskDelay(portMAX_DELAY); 
+            in >> x;
+            outB << x; // Branch to Consumer
+            outA << x; // Branch to Ring
         }
     }
 };
 
-class Receiver : public CSProcess {
-private:
-    Chanin<Message> inA;
-    Chanin<Message> inB;
+// --- 2. The Consumer using ALT ---
+
+class ComstimeConsumer : public CSProcess {
+    Chanin<int> data_in;
+    Chanin<bool> trigger_in;
 public:
-    Receiver(Chanin<Message> rA, Chanin<Message> rB) : inA(rA), inB(rB) {}
+    ComstimeConsumer(Chanin<int> data, Chanin<bool> trigger) 
+        : data_in(data), trigger_in(trigger) {}
 
     void run() override {
-        vTaskDelay(pdMS_TO_TICKS(10)); 
-        printf("[Receiver] Task running. Using Resident-Guard ALT.\r\n");
+        int val = 0;
+        bool signal = false;
+        uint32_t count = 0;
+        const uint32_t benchmark_limit = 10000;
 
-        Message msgA, msgB; 
-        int count = 0;
-        int next_seqA = 0;
-        int next_seqB = 0;
-        bool error_found = false;
+        Alternative alt(data_in | val, trigger_in | signal);
 
-        // The Alternative object is on the stack.
-        // It borrows pointers to guards that live inside chan_A and chan_B.
-        Alternative alt(inA | msgA, inB | msgB);
+        printf("[Comstime] Benchmark starting. Measuring %lu cycles...\n", benchmark_limit);
+        
+        TickType_t start_time = xTaskGetTickCount();
 
-        while(count < MAX_TOTAL_MESSAGES) {
-            // fairSelect is now heap-free.
+        while (true) {
             int selected = alt.fairSelect();
-            
-            if (selected == 0) {
-                if (msgA.source_id != 1 || msgA.sequence_num != next_seqA) {
-                    printf("!! DATA ERROR Chan A: Expected ID 1 Seq %d, Got ID %d Seq %d\r\n", 
-                            next_seqA, msgA.source_id, msgA.sequence_num);
-                    error_found = true;
-                }
-                next_seqA++;
-            } 
-            else if (selected == 1) {
-                if (msgB.source_id != 2 || msgB.sequence_num != next_seqB) {
-                    printf("!! DATA ERROR Chan B: Expected ID 2 Seq %d, Got ID %d Seq %d\r\n", 
-                            next_seqB, msgB.source_id, msgB.sequence_num);
-                    error_found = true;
-                }
-                next_seqB++;
-            }
 
-            count++;
-            if (count % CHECK_INTERVAL == 0) {
-                printf("[Receiver] Verified %d messages...\r\n", count);
-                if (error_found) break;
+            if (selected == 0) { 
+                if (++count >= benchmark_limit) {
+                    TickType_t end_time = xTaskGetTickCount();
+                    float total_ms = (float)(end_time - start_time) * portTICK_PERIOD_MS;
+                    float micro_per_loop = (total_ms * 1000.0f) / (float)benchmark_limit;
+                    
+                    printf("--- Comstime Results ---\r\n");
+                    printf("Iterations: %lu\r\n", count);
+                    printf("Total Time: %.2f ms\r\n", total_ms);
+                    printf("Avg Latency: %.2f us/cycle\r\n", micro_per_loop);
+                    printf("Last Value: %d\r\n", val);
+                    printf("------------------------\r\n");
+                    
+                    count = 0;
+                    start_time = xTaskGetTickCount();
+                }
+            } else if (selected == 1) {
+                printf(">>> [ALT] External Trigger Event Latency Check <<<\r\n");
             }
-        }
-
-        if (!error_found) {
-            printf("[Receiver] SUCCESS: %d messages verified heap-free.\r\n", count);
-        }
-        while (true) {
-            vTaskDelay(portMAX_DELAY); 
         }
     }
 };
 
-// --- 3. The Main Application Task ---
+// --- 3. External Trigger ---
+
+class Trigger : public CSProcess {
+    Chanout<bool> out;
+public:
+    Trigger(Chanout<bool> w) : out(w) {}
+    void run() override {
+        while (true) {
+            vTaskDelay(pdMS_TO_TICKS(5000)); 
+            bool dummy = true;
+            out << dummy;
+        }
+    }
+};
+
+// --- 4. Main App Task ---
+
 void MainApp_Task(void* params) {
-    vTaskDelay(pdMS_TO_TICKS(500)); 
-
-    printf("\r\n--- BOli2 Launching CSP Static Network (Zero-Heap) ---\r\n");
+    vTaskDelay(pdMS_TO_TICKS(500));
     
-    // NEW: No constructor arguments needed for Rendezvous.
-    // These are placed in static memory (.data segment).
-    static AltChannel chan_A; 
-    static AltChannel chan_B; 
+    // Channels
+    static Channel<int> c1, c2, c3, c4, cb1, cb2;
+    static Channel<bool> c_trigger;
 
-    static Sender sA(chan_A.writer(), 1);
-    static Sender sB(chan_B.writer(), 2);
-    static Receiver r1(chan_A.reader(), chan_B.reader());
+    // Process Instances
+    static Successor proc_succ(c3.reader(), cb1.writer());
+    static Buffer    proc_buf1(cb1.reader(), cb2.writer());
+    static Buffer    proc_buf2(cb2.reader(),  c1.writer());
+    static Prefix    proc_pref( c1.reader(),  c2.writer(), 0);
+    static Delta     proc_delt( c2.reader(),  c3.writer(), c4.writer());
+    static ComstimeConsumer proc_cons(c4.reader(), c_trigger.reader());
+    static Trigger   proc_trig(c_trigger.writer());
 
-    // Run parallel processes using static execution
-    Run( 
-        InParallel(sA, sB, r1), 
+    Run(
+        InParallel(proc_succ, proc_buf1, proc_buf2, proc_pref, proc_delt, proc_cons, proc_trig),
         ExecutionMode::StaticNetwork
-    ); 
+    );
 }
 
-void RunProcessingChainTest(void) {
-    // Note: Task creation is the only 'dynamic' part remaining, standard for FreeRTOS
-    xTaskCreate(MainApp_Task, "MainApp", 4096, NULL, tskIDLE_PRIORITY + 3, NULL);
+extern "C" void RunProcessingChainTest(void) {
+    xTaskCreate(MainApp_Task, "ComsMain", 2048, NULL, tskIDLE_PRIORITY + 3, NULL);
 }

@@ -3,10 +3,8 @@
 #define CSP4CMSIS_CHANNEL_BASE_H
 
 #include <stddef.h> 
-// Note: TickType_t is no longer strictly required here, but harmless.
 
 namespace csp {
-    // These forward declarations are REQUIRED for friend class declarations below.
     template <typename T> class Chanin;
     template <typename T> class Chanout;
     class Alternative; 
@@ -14,18 +12,15 @@ namespace csp {
 
 namespace csp::internal {
 
-    // FORWARD DECLARATION for the ALT Guard object
     class Guard; 
 
     /**
-     * @brief The core contract for a CSP communication channel in the SPN model.
-     * It defines the pure virtual methods for BLOCKING I/O ONLY.
+     * @brief The core contract for a CSP communication channel.
      */
     template <typename DATA_TYPE>
     class BaseChan 
     {
     public:
-        // Friend declarations allow the user-facing wrappers access to protected I/O.
         template <typename U>
         friend class csp::Chanin; 
 
@@ -35,54 +30,42 @@ namespace csp::internal {
     protected:
         inline virtual ~BaseChan() = default;
 
-        // Core Blocking I/O (The only required I/O contract)
         virtual void input(DATA_TYPE* const dest) = 0;
         virtual void output(const DATA_TYPE* const source) = 0;
         
-        // Extended I/O (Required stubs, e.g., for direct DMA/Buffer access)
         virtual void beginExtInput(DATA_TYPE* const dest) = 0;
         virtual void endExtInput() = 0;
-        
-    // --- TIMED I/O REMOVED ---
-    /*
-    public:
-        virtual bool output_with_timeout(const DATA_TYPE* const source, TickType_t timeout) = 0;
-        virtual bool input_with_timeout(DATA_TYPE* const dest, TickType_t timeout) = 0;
-    */
     }; 
     
     /**
-     * @brief Extends BaseChan with methods required for the Alternative (ALT) primitive.
+     * @brief Extends BaseChan with methods required for ALT and Polling.
      */
     template <typename DATA_TYPE>
     class BaseAltChan : public BaseChan<DATA_TYPE>
     {
     public:
         /**
-         * @brief Configures and returns the resident Input Guard.
-         * Instead of 'new', this returns a pointer to a member variable inside the channel.
+         * @brief Polling method to check if a communication partner is ready.
+         * Added to resolve 'override' errors in derived channel implementations.
          */
+        virtual bool pending() = 0;
+
         virtual internal::Guard* getInputGuard(DATA_TYPE& dest) = 0;
-        
-        /**
-         * @brief Configures and returns the resident Output Guard.
-         */
         virtual internal::Guard* getOutputGuard(const DATA_TYPE& source) = 0;
         
     public:
         inline virtual ~BaseAltChan() = default;
 
-        // Alternative needs access to call these to set up the selection process.
         friend class ::csp::Alternative; 
     };
 
     // =============================================================
-    // BaseAltChan (FULL SPECIALIZATION for void - Synchronization Only)
+    // BaseAltChan (FULL SPECIALIZATION for void)
     // =============================================================
     template <>
     class BaseAltChan<void> : public BaseChan<void> {
     public:
-        // No data destination needed for void/sync signals.
+        virtual bool pending() = 0;
         virtual Guard* getInputGuard() = 0;
         virtual Guard* getOutputGuard() = 0;
     };

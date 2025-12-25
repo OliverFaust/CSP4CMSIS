@@ -20,19 +20,11 @@ void AltScheduler::initForCurrentTask() {
     event_group = xEventGroupCreate();
 }
 
-void AltScheduler::wakeUp(EventBits_t bit) {
-    if(!event_group) return;
-    if (xPortIsInsideInterrupt()) {
-        BaseType_t woken = pdFALSE;
-        xEventGroupSetBitsFromISR(event_group, bit, &woken);
-        portYIELD_FROM_ISR(woken);
-    } else {
-        xEventGroupSetBits(event_group, bit);
-    }
-}
-
 unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offset) {
     if (amount == 0) return 0;
+
+    const char* tname = pcTaskGetName(NULL);
+    // printf("[%s] ALT: select start (guards: %u, offset: %u)\r\n", tname, amount, offset);
 
     EventBits_t wait_mask = 0;
     for(size_t i = 0; i < amount; ++i) wait_mask |= (1 << i);
@@ -40,10 +32,13 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
     xEventGroupClearBits(event_group, wait_mask); 
 
     int ready_idx = -1;
-    // Phase 1: Enable (Polling with offset for fairness)
+    // Phase 1: Enable
     for(size_t i = 0; i < amount; ++i) {
-        size_t idx = (i + offset) % amount; // Start from offset
+        size_t idx = (i + offset) % amount; 
+        // printf("[%s] ALT: Enabling guard %u...\r\n", tname, idx);
+        
         if(guardArray[idx]->enable(this, (1 << idx))) { 
+            // printf("[%s] ALT: Guard %u was ALREADY ready.\r\n", tname, idx);
             ready_idx = (int)idx; 
             break; 
         }
@@ -54,10 +49,12 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
     if (ready_idx != -1) {
         fired = (1 << ready_idx);
     } else {
+        // printf("[%s] ALT: No guard ready. Sleeping on event group...\r\n", tname);
         fired = xEventGroupWaitBits(event_group, wait_mask, pdTRUE, pdFALSE, portMAX_DELAY);
+        // printf("[%s] ALT: Woke up! Fired bits: 0x%lx\r\n", tname, fired);
     }
 
-    // Identify which guard fired (must check all bits)
+    // Identify which guard fired
     size_t selected = 0;
     for(size_t i = 0; i < amount; ++i) {
         if (fired & (1 << i)) { 
@@ -66,17 +63,30 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         }
     }
 
-    // Phase 3: Disable (Cleanup using original indices)
+    // Phase 3: Disable
+    // printf("[%s] ALT: Disabling all guards.\r\n", tname);
     for(size_t i = 0; i < amount; ++i) {
         guardArray[i]->disable();
     }
 
     // Phase 4: Activate
+    // printf("[%s] ALT: Activating guard %u.\r\n", tname, selected);
     guardArray[selected]->activate();
     
     return (unsigned int)selected;
 }
 
+void AltScheduler::wakeUp(EventBits_t bit) {
+    if(!event_group) return;
+    // printf("[%s] ALT: wakeUp called for bit 0x%lx\r\n", pcTaskGetName(NULL), bit);
+    if (xPortIsInsideInterrupt()) {
+        BaseType_t woken = pdFALSE;
+        xEventGroupSetBitsFromISR(event_group, bit, &woken);
+        portYIELD_FROM_ISR(woken);
+    } else {
+        xEventGroupSetBits(event_group, bit);
+    }
+}
 // =============================================================
 // TimerGuard Implementation
 // =============================================================

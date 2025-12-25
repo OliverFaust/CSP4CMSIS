@@ -113,6 +113,18 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_COMSTIME
+#include "csp4cmsis_comstime.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_MATRIX_MULTIPLICATION
 #include "csp4cmsis_matrix_multiplication.h"
 
@@ -124,7 +136,6 @@ int main(void)
 	return 0;
 }
 #endif
-
 
 #ifdef CSP4CMSIS_ALT_TEST
 #include "csp4cmsis_alt_test.h"

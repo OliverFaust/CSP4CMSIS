@@ -156,7 +156,8 @@ CUSTOMER ?= seeed
 #APP_TYPE = csp4cmsis_alt_test
 #APP_TYPE = csp4cmsis_chain_test
 #APP_TYPE = csp4cmsis_sieve
-APP_TYPE = csp4cmsis_matrix_multiplication
+#APP_TYPE = csp4cmsis_matrix_multiplication
+APP_TYPE = csp4cmsis_comstime
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))

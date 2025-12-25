@@ -3,7 +3,7 @@
 #include "csp/csp4cmsis.h" // Includes the declaration
 
 // Declare the test function defined in tests.cpp
-extern void RunProcessingChainTest(void); 
+extern "C" void RunProcessingChainTest(void); 
 
 // Define the required function with C linkage
 extern "C" void csp_app_main_init(void) {
