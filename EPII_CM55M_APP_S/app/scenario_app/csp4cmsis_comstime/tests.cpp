@@ -5,16 +5,6 @@ using namespace csp;
 
 // --- 1. Basic Ring Components ---
 
-class Buffer : public CSProcess {
-    Chanin<int> in; Chanout<int> out;
-public:
-    Buffer(Chanin<int> r, Chanout<int> w) : in(r), out(w) {}
-    void run() override {
-        int x;
-        while (true) { in >> x; out << x; }
-    }
-};
-
 class Prefix : public CSProcess {
     Chanin<int> in; Chanout<int> out; int initial_val;
 public:
@@ -105,7 +95,7 @@ public:
     Trigger(Chanout<bool> w) : out(w) {}
     void run() override {
         while (true) {
-            vTaskDelay(pdMS_TO_TICKS(5000)); 
+            vTaskDelay(pdMS_TO_TICKS(1000)); 
             bool dummy = true;
             out << dummy;
         }
@@ -118,20 +108,18 @@ void MainApp_Task(void* params) {
     vTaskDelay(pdMS_TO_TICKS(500));
     
     // Channels
-    static Channel<int> c1, c2, c3, c4, cb1, cb2;
+    static Channel<int> c1, c2, c3, c4;
     static Channel<bool> c_trigger;
 
     // Process Instances
-    static Successor proc_succ(c3.reader(), cb1.writer());
-    static Buffer    proc_buf1(cb1.reader(), cb2.writer());
-    static Buffer    proc_buf2(cb2.reader(),  c1.writer());
+    static Successor proc_succ(c3.reader(), c1.writer());
     static Prefix    proc_pref( c1.reader(),  c2.writer(), 0);
     static Delta     proc_delt( c2.reader(),  c3.writer(), c4.writer());
     static ComstimeConsumer proc_cons(c4.reader(), c_trigger.reader());
     static Trigger   proc_trig(c_trigger.writer());
 
     Run(
-        InParallel(proc_succ, proc_buf1, proc_buf2, proc_pref, proc_delt, proc_cons, proc_trig),
+        InParallel(proc_succ, proc_pref, proc_delt, proc_cons, proc_trig),
         ExecutionMode::StaticNetwork
     );
 }
