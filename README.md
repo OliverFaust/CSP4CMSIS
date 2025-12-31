@@ -73,10 +73,10 @@ Note: The following has been tested to work on Ubuntu 20.04 PC
     #this is just the example, you can not just copy and paste !!
     export PATH="$HOME/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin/:$PATH"
     ```
-- Step 5: Clone the following repository and go into Seeed_Grove_Vision_AI_Module_V2 folder
+- Step 5: Clone the following repository and go into CSP4CMSIS folder
     ```
-    git clone --recursive https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2.git
-    cd Seeed_Grove_Vision_AI_Module_V2
+    git clone --recursive https://github.com/OliverFaust/CSP4CMSIS.git
+    cd CSP4CMSIS
     ```
 - Step 6: Compile the firmware
     ```
