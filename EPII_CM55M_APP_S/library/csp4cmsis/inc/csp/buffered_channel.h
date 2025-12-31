@@ -41,6 +41,26 @@ namespace csp::internal {
             if (queue_handle) vQueueDelete(queue_handle);
         }
 
+        bool putFromISR(const T& data) override {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            bool success = false;
+
+            // 1. Attempt to send to queue without blocking
+            if (xQueueSendFromISR(queue_handle, &data, &xHigherPriorityTaskWoken) == pdPASS) {
+                success = true;
+                
+                // 2. If a receiver is waiting in an ALT, wake them up
+                // Note: AltScheduler::wakeUp already contains internal ISR-safe logic
+                if (alt_reader != nullptr) {
+                    alt_reader->wakeUp(read_bit);
+                }
+            }
+
+            // 3. Request context switch if a higher priority task was unblocked
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+            return success;
+        }
+
         // --- Required by BaseAltChan ---
         // Matches the signature: virtual bool pending() = 0;
         bool pending() override { 

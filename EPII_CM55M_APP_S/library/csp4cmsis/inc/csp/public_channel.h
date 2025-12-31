@@ -42,6 +42,14 @@ public:
     void write(const T& data) { internal_ptr->output(&data); }
     
     /**
+     * @brief Non-blocking write from an Interrupt Service Routine.
+     * @return true if data was delivered or buffered, false otherwise.
+     */
+    bool putFromISR(const T& data) { 
+        return internal_ptr->putFromISR(data); 
+    }
+    
+    /**
      * @brief Unified Guard accessor for ChannelBinding.
      */
     internal::Guard* getGuard(const T& source) { 

@@ -49,7 +49,7 @@ namespace csp::internal {
          * Added to resolve 'override' errors in derived channel implementations.
          */
         virtual bool pending() = 0;
-
+        virtual bool putFromISR(const DATA_TYPE& data) = 0;
         virtual internal::Guard* getInputGuard(DATA_TYPE& dest) = 0;
         virtual internal::Guard* getOutputGuard(const DATA_TYPE& source) = 0;
         

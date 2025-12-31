@@ -106,6 +106,39 @@ public:
         return has_partner;
     }
     
+    virtual bool putFromISR(const T& data) override {
+        bool success = false;
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        // Use a critical section instead of a Mutex (ISRs cannot take Mutexes)
+        UBaseType_t uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+
+        // 1. Check if a standard blocking reader is waiting
+        if (sync_base.getWaitingInTask() != nullptr) {
+            // Copy data directly to reader's buffer
+            std::memcpy(sync_base.getNonAltInDataPtr(), &data, sizeof(T));
+            
+            TaskHandle_t toWake = sync_base.getWaitingInTask();
+            sync_base.clearWaitingIn(); // Clear internal pointers
+            
+            // Wake the reader
+            vTaskNotifyGiveFromISR(toWake, &xHigherPriorityTaskWoken);
+            success = true;
+        } 
+        // 2. Check if a reader is waiting in an ALT
+        else if (sync_base.getAltInScheduler() != nullptr) {
+            // Signal the AltScheduler (it will handle data copy during activate())
+            sync_base.getAltInScheduler()->wakeUp(sync_base.getAltInBit());
+            success = true; 
+        }
+
+        taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+
+        // Request context switch
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        return success;
+    }
+
     virtual void beginExtInput(T* const dest) override {}
     virtual void endExtInput() override {}
 };

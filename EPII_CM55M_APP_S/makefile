@@ -159,7 +159,8 @@ CUSTOMER ?= seeed
 #APP_TYPE = csp4cmsis_matrix_multiplication
 #APP_TYPE = csp4cmsis_comstime
 #APP_TYPE = csp4cmsis_dining_philosophers
-APP_TYPE = csp4cmsis_asymmetric_philosophers
+#APP_TYPE = csp4cmsis_asymmetric_philosophers
+APP_TYPE = csp4cmsis_irq
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))
