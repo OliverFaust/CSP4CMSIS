@@ -38,6 +38,17 @@ public:
     }
 };
 
+class LogicProcess : public CSProcess {
+public:
+    void run() override {
+        while(true) {
+            // Do some background AI or Logic
+            vTaskDelay(pdMS_TO_TICKS(500));
+            printf("Logic Heartbeat...\n");
+        }
+    }
+};
+
 void MainApp_Task(void* params) {
     vTaskDelay(pdMS_TO_TICKS(2000));
     printf("\r\n--- CSP4CMSIS Manual Channel Test ---\r\n");
@@ -51,8 +62,9 @@ void MainApp_Task(void* params) {
 
     // Manual Execution: Just call the run method. 
     // The FreeRTOS task provides the 'life' for the process.
-    static TimerProcess myProc;
-    myProc.run(); 
+    static TimerProcess p1;
+    static LogicProcess  p2;
+    Run(InParallel(p1, p2), ExecutionMode::StaticNetwork);
 }
 
 extern "C" void RunProcessingChainTest(void) {
