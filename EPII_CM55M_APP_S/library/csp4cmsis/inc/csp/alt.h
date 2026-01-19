@@ -120,7 +120,7 @@ namespace csp {
         int priSelect();  
         int fairSelect(); 
 
-    private:
+    
         // Binding helper for Input Channels
         template <typename T>
         void addBinding(const ChannelBinding<T, Chanin<T>>& b) {
@@ -137,6 +137,7 @@ namespace csp {
             }
         }
 
+        private:
         // Binding helper for Timers
         void addBinding(RelTimeoutGuard& tg) {
             if (num_guards < MAX_GUARDS) {
