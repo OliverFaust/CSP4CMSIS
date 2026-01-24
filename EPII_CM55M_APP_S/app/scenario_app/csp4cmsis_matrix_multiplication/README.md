@@ -48,7 +48,7 @@ To align the correct row and column elements, the `Feeder` processes can "stagge
 ### Prerequisites
 * **Hardware:** Himax WE2 (Cortex-M55).
 * **Configuration:** FreeRTOS task limit must support at least 22 tasks (Main + 21 CSP tasks).
-* * **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile` set `APP_TYPE = csp4cmsis_matrix_multiplication`.
+* **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile` set `APP_TYPE = csp4cmsis_matrix_multiplication`.
 
 ### Expected UART Output
 The test multiplies a 3x3 matrix $A$ by an Identity Matrix $I$, meaning the final accumulators in each PE should match the original values of Matrix $A$.
