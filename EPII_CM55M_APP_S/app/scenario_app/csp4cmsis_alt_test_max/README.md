@@ -47,7 +47,7 @@ Despite the scale, the **Zero-Heap** philosophy remains intact. The `Alternative
 ### Prerequisites
 * **Hardware:** Himax WE2 (Cortex-M55). 
 * **RTOS Configuration:** Ensure the FreeRTOS heap is sufficient to spawn 17 tasks (16 Senders + 1 Receiver), though the CSP primitives themselves remain static.
-* **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile` set `APP_TYPE = csp4cmsis_irq`.
+* **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile` set `APP_TYPE = csp4cmsis_alt_test_max`.
 
 ### Expected UART Output
 The receiver will log progress every 2,000 messages. Total verification of 1,600,000 messages indicates a successful test.
