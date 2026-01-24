@@ -29,4 +29,38 @@ This library enables embedded developers to move away from complex mutex/semapho
 
 ### `src/` (Implementation)
 * **`kernel.cpp`**: The glue between CSP logic and the underlying RTOS scheduler.
-* **`alternative.cpp
+* **`alternative.cpp`**: Logic for fair selection and bit-masking for multi-channel monitoring.
+* **`sync_channel.cpp`**: Core implementation of the synchronous rendezvous logic.
+* **`glue.cpp`**: Internal adapters for CMSIS-compliant RTOS calls.
+
+---
+
+## 🛠 Basic Usage
+
+### 1. Define your Processes
+Inherit from `CSProcess` and implement the `run()` method.
+
+```cpp
+class Producer : public CSProcess {
+    Chanout<int> out;
+public:
+    Producer(Chanout<int> o) : out(o) {}
+    void run() override {
+        for(int i = 0; i < 10; ++i) {
+            out << i; // Blocks until receiver is ready
+        }
+    }
+};
+
+class Consumer : public CSProcess {
+    Chanin<int> in;
+public:
+    Consumer(Chanin<int> i) : in(i) {}
+    void run() override {
+        int val;
+        while(true) {
+            in >> val; // Blocks until sender is ready
+            printf("Received: %d\n", val);
+        }
+    }
+};
