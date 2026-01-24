@@ -22,7 +22,7 @@ Finally, teach you how to restore to the original factory settings and run [Sens
 
 | scenario_app  | project name |
 | ----- | -------- |
-| CSP: Interrupt to Channel | [csp4cmsis_irq](https://github.com/OliverFaust/CSP4CMSIS/blob/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_alt_test/README.md) | 
+| CSP: Interrupt to Channel | [csp4cmsis_irq](https://github.com/OliverFaust/CSP4CMSIS/blob/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_alt_test) | 
 | CSP: Comstime Benchmark | [csp4cmsis_comstime] | 
 | CSP: Resident-Guard ALT Test | [csp4cmsis_alt_test] | 
 | CSP: 16-Sender ALT Stress Test | [csp4cmsis_alt_test_max] | 
