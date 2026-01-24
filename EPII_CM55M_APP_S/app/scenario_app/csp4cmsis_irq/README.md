@@ -45,6 +45,7 @@ While the `TimerProcess` is waiting for hardware, the `LogicProcess` continues t
 * **Hardware:** Himax WE2 (Cortex-M55) evaluation board.
 * **Toolchain:** Arm GNU Toolchain (eabi).
 * **Dependencies:** `hx_drv_timer` and `hx_drv_scu` libraries.
+* **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile' set `APP_TYPE = csp4cmsis_irq'
 
 ### Expected UART Output
 Upon successful execution, the UART console will display the background heartbeat interspersed with the data received from the hardware timer:
