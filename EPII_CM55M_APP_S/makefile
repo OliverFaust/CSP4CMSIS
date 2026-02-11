@@ -161,7 +161,8 @@ CUSTOMER ?= seeed
 #APP_TYPE = csp4cmsis_dining_philosophers
 #APP_TYPE = csp4cmsis_asymmetric_philosophers
 #APP_TYPE = csp4cmsis_irq
-APP_TYPE = csp4cmsis_alt_test_max
+#APP_TYPE = csp4cmsis_alt_test_max
+APP_TYPE = csp4cmsis_AI_testbench
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))

@@ -113,6 +113,18 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_AI_TESTBENCH
+#include "csp4cmsis_AI_testbench.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_COMSTIME
 #include "csp4cmsis_comstime.h"
 
