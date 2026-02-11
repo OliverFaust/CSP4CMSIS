@@ -17,12 +17,13 @@ Finally, teach you how to restore to the original factory settings and run [Sens
     - [Flash Image Update at Windows Environment](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2?tab=readme-ov-file#flash-image-update-at-windows-environment)
     - [Flash using Edge Impulse CLI tools](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2?tab=readme-ov-file#flash-using-edge-impulse-cli-tools)
 - How to restore to the original factory settings?
-    - [Linux Environment](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2?tab=readme-ov-file#linux-environment)
+    - [Linux Environment](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2?tab=readme-ov-file#linux-environment) 
     - [Windows Environment](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2?tab=readme-ov-file#windows-environment)
 
 | scenario_app  | project name |
 | ----- | -------- |
 | CSP: Library | [csp4cmsis](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/library/csp4cmsis) | 
+| CSP: AI testbench | [csp4cmsis_AI_testbench](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_AI_testbench) |
 | CSP: Interrupt to Channel | [csp4cmsis_irq](https://github.com/OliverFaust/CSP4CMSIS/blob/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_irq) | 
 | CSP: Comstime Benchmark | [csp4cmsis_comstime](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_comstime) | 
 | CSP: Resident-Guard ALT Test | [csp4cmsis_alt_test](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_alt_test) | 
