@@ -162,7 +162,9 @@ CUSTOMER ?= seeed
 #APP_TYPE = csp4cmsis_asymmetric_philosophers
 #APP_TYPE = csp4cmsis_irq
 #APP_TYPE = csp4cmsis_alt_test_max
-APP_TYPE = csp4cmsis_AI_testbench
+#APP_TYPE = csp4cmsis_AI_testbench
+#APP_TYPE = allon_sensor_tflm_freertos
+APP_TYPE = csp4cmsis_allon_sensor_tflm
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))

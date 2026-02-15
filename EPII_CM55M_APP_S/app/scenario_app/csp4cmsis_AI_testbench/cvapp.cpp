@@ -117,7 +117,7 @@ void MainApp_Task(void* params) {
     
     /**
      * Pipeline Topology:
-     * SD -> [c1] -> Inference -> [c2] -> Saver
+     * SD -> [c1] -> Inference -> [c2] -> SD
      */
     static BufferedOne2OneChannel<work_packet_t, 16> c1;  // Buffer size of 16
     static BufferedOne2OneChannel<result_packet_t, 16> c2; // Buffer size of 16

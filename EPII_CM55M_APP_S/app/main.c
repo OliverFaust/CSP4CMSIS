@@ -125,6 +125,20 @@ int main(void)
 }
 #endif
 
+
+
+#ifdef CSP4CMSIS_ALLON_SENSOR_TFLM
+#include "csp4cmsis_allon_sensor_tflm.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_COMSTIME
 #include "csp4cmsis_comstime.h"
 
