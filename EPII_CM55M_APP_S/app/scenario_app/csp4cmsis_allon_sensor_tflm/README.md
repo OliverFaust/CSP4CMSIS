@@ -1,123 +1,83 @@
-# AI Vision Application using CSP4CMSIS
+# CSP-based Person Detection on Himax WE2
 
-## 📌 Overview
+This project implements a robust, lossless image processing pipeline using **Communicating Sequential Processes (CSP)** patterns on the Himax WE2 (Grove Vision AI V2) hardware. It leverages FreeRTOS and the Ethos-U55 NPU to perform real-time person detection.
 
-This project implements a complete AI inference pipeline on the Himax WE2 (Cortex‑M55) using the **CSP4CMSIS** library.  
-It captures frames from an IMX219 sensor, runs a TensorFlow Lite Micro (TFLM) person‑detection model, and prints the prediction score to the UART console.
 
-The application is structured as a network of lightweight CSP processes, providing clean decoupling, automatic back‑pressure, and maintainability.
+
+## 🏗 Architecture Overview
+
+The system is designed as a **Static Network** of independent processes communicating via synchronous, zero-copy channels.
+
+### 1. Camera Handshake (ISR to Task)
+To ensure no frames are dropped or partially read, the system uses a private trigger channel:
+* **The ISR:** `os_app_dplib_cb` signals the arrival of a new frame using the non-blocking `putFromISR()`.
+* **The Process:** The Camera process blocks on this trigger, ensuring a lossless, synchronized handshake between hardware and software.
+
+### 2. Frame Re-triggering
+To prevent buffer overruns and keep the pipeline in lockstep, the Camera process explicitly calls `sensordplib_retrigger_capture()` only **after** the current frame has been successfully passed to the inference stage. This creates natural back-pressure.
+
+### 3. Model Inference
+The inference process utilizes the `cvapp` module from the Himax SDK:
+* **NPU:** Initialises the Ethos‑U55.
+* **Model:** Loads a specialized person‑detection TFLM model.
+* **Data Path:** Runs inference on raw YUV frames (accessed via `app_get_raw_addr()`).
+
+### 4. Memory & Performance
+* **Zero Heap:** All CSP channels and processes are statically allocated at compile time.
+* **Concurrency:** The entire network runs inside a single high-priority FreeRTOS task using the CSP cooperative scheduler.
 
 ---
 
-## 🏗 Architecture
+## 🔧 Key Code Snippets
 
-The pipeline is triggered by hardware interrupts from the sensor and flows through three processes connected by synchronous channels:
-
-[IMX219 Sensor] --(IRQ)--> [g_trigger_chan] --trigger--> [Camera] --frame_t--> [Inference] --result_t--> [Console]
-
-
-| Component | Responsibility |
-|:---|:---|
-| **`g_trigger_chan`** | A synchronous `Channel<trigger_t>` written from the sensor ISR (via `putFromISR()`) to signal a new frame. |
-| **`Camera` process** | Initialises the sensor and data path. Waits on the trigger channel, retrieves JPEG info, and sends a `frame_t`. It then re‑triggers the hardware for the next frame. |
-| **`frame_chan`** | Synchronous `Channel<frame_t>` connecting `Camera` → `Inference`. Carries JPEG buffer address and size. |
-| **`Inference` process** | Initialises the TFLM model. Receives frames, runs inference, and outputs a `result_t` (frame index + prediction score). |
-| **`result_chan`** | Synchronous `Channel<result_t>` connecting `Inference` → `Console`. |
-| **`Console` process** | Prints the result to the console. |
-
-All channels are **unbuffered** (`Channel<T>`), enforcing rendezvous synchronisation. This ensures that the pipeline automatically stalls if any stage is slower than its predecessor – a built‑in flow control.
-
----
-
-## 🛠 Technical Details
-
-### 1. Interrupt‑to‑CSP Bridge
-The sensor driver calls `os_app_dplib_cb` from interrupt context. To safely handshake with the CSP network, the callback uses the ISR‑safe `putFromISR()` method:
-
+### Camera Process (`camera_process.cpp`)
 ```cpp
-extern "C" void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
-    if (event == SENSORDPLIB_STATUS_XDMA_FRAME_READY) {
-        g_trigger_chan.writer().putFromISR(trigger_t{});
-    }
-}
-
-The camera process waits on the reader side, ensuring a lossless handshake.
-
-### 2. Frame Re‑triggering
-After sending a frame, the camera process explicitly calls sensordplib_retrigger_capture() to start capturing the next frame. This prevents buffer overrun and keeps the pipeline in lockstep.
-
-# Model Inference
-The inference process reuses the existing cvapp module from the Himax SDK:
-
-Initialises the Ethos‑U55 NPU.
-
-Loads the person‑detection model.
-
-Runs inference on the raw YUV frame (the JPEG buffer is not used directly; the model reads the raw buffer via app_get_raw_addr()).
-
-4. Memory & Performance
-All channels are statically allocated – no heap usage inside CSP.
-
-The entire network runs inside a single FreeRTOS task (cooperative multitasking).
-
-Debug prints can be enabled/disabled by toggling DBG_MORE_INFO macros.
-
-# 🔧 Key Code Snippets
-camera_process.cpp (excerpt)
-cpp
 static Channel<trigger_t> g_trigger_chan;
 
 extern "C" void os_app_dplib_cb(SENSORDPLIB_STATUS_E event) {
     if (event == SENSORDPLIB_STATUS_XDMA_FRAME_READY) {
+        // Signal the task from the ISR context safely
         g_trigger_chan.writer().putFromISR(trigger_t{});
     }
 }
 
 void Camera::run() {
     auto trigger_reader = g_trigger_chan.reader();
-    // ... initialisation ...
+    // ... sensor initialisation ...
 
     while (true) {
         trigger_t t;
-        trigger_reader.read(t);                     // wait for frame ready
+        trigger_reader.read(t);                      // Block until ISR fires
 
         uint32_t jpeg_addr, jpeg_sz;
         cisdp_get_jpginfo(&jpeg_sz, &jpeg_addr);
 
         frame_t f = { m_frame_counter++, jpeg_addr, jpeg_sz };
-        m_frame_out.write(f);                        // send to inference
+        m_frame_out.write(f);                        // Send to inference (blocks if busy)
 
-        sensordplib_retrigger_capture();              // start next capture
+        sensordplib_retrigger_capture();             // Acknowledge and allow next capture
     }
 }
-inference_process.cpp (excerpt)
-cpp
-void Inference::run() {
-    if (cv_init(true, true) < 0) return;   // initialise model
+```
+### Inference Process (`inference_process.cpp`)
+```cpp
+C++void Inference::run() {
+    if (cv_init(true, true) < 0) return;             // Initialise NPU
 
     while (true) {
         frame_t f;
-        m_frame_in.read(f);                  // wait for a frame
+        m_frame_in.read(f);                          // Wait for frame from Camera
 
-        // (optional cache invalidation)
-
-        int8_t score = cv_run();              // run inference
+        int8_t score = cv_run();                     // Run NPU inference
+        
         result_t res = { f.index, score };
-        m_result_out.write(res);              // send to console
+        m_result_out.write(res);                     // Send result to Console
     }
 }
-console_process.cpp
-cpp
-void Console::run() {
-    while (true) {
-        result_t res;
-        m_result_in.read(res);
-        xprintf("Frame %lu: prediction = %d\n", res.frame_index, res.prediction);
-    }
-}
-Network Construction (csp4cmsis_spn.cpp)
-cpp
-void MainApp_Task(void* params) {
+```
+### Network Construction (`csp4cmsis_spn.cpp`)
+```cpp
+C++void MainApp_Task(void* params) {
     static Channel<frame_t>  frame_chan;
     static Channel<result_t> result_chan;
 
@@ -125,39 +85,37 @@ void MainApp_Task(void* params) {
     static Inference inference(frame_chan.reader(), result_chan.writer());
     static Console   console(result_chan.reader());
 
+    // Execute the parallel network
     Run(InParallel(camera, inference, console), ExecutionMode::StaticNetwork);
 }
+```
 
-extern "C" void RunProcessingChainTest(void) {
-    xTaskCreate(MainApp_Task, "CSP_Main", 8192, NULL, tskIDLE_PRIORITY + 3, NULL);
-}
+## 🚀 How to Run
+### Prerequisites
 
-# 🚀 How to Run
-Prerequisites
-Hardware: Himax WE2‑based board (e.g., Seeed Grove Vision AI Module V2) with an IMX219 sensor.
+* **Hardware:** Himax WE2‑based board (Grove Vision AI Module V2).
+* **Sensor:** IMX219 Camera Module.
+* **Toolchain:** ARM GNU Toolchain (13.2.Rel1 or later).
+* **Build system:** Himax WE2 SDK.
 
-Toolchain: ARM GNU toolchain (13.2.Rel1 or later).
-
-Build system: Himax SDK Makefile environment.
-
-Build Instructions
-Navigate to the application directory:
-
-bash
-cd CSP4CMSIS/EPII_CM55M_APP_S
-Set the application type:
-
-bash
-export APP_TYPE=csp4cmsis_allon_sensor_tflm
-Clean and build:
-
-bash
-make clean
+### Build Instructions
+1. Navigate to the application directory:
+```
+CSP4CMSIS/EPII_CM55M_APP_S
+```
+2. Set the application type in the `makefile`:
+```
+APP_TYPE=csp4cmsis_allon_sensor_tflm
+```
+3. Build the project:
+```
+make clean 
 make
-Flash the generated .elf file to the board (using J‑Link, X‑modem, or your preferred method).
+```
+4. Flash the generated `.elf` file using J-Link or your preferred programmer.
 
-Expected UART Output
-text
+### Expected UART Output
+```text
 Camera: initializing sensor
 Ethos-U55 device initialised
 model's schema version 3
@@ -168,29 +126,27 @@ Camera: retrigger hardware for next frame
 Frame 0: prediction = -128
 Frame 1: prediction = -127
 ...
-Prediction values range from -128 to 127; higher values indicate person detected.
+```
 
-# 📁 File Structure
-text
+## 📁 File Structure
+```text
 app/scenario_app/csp4cmsis_allon_sensor_tflm/
-├── camera_process.h                // Camera process declaration
-├── camera_process.cpp              // Camera implementation + ISR
-├── inference_process.h             // Inference process declaration
-├── inference_process.cpp           // Inference implementation
-├── console_process.h               // Console process declaration
-├── console_process.cpp             // Console implementation
-├── common_types.h                  // Shared data types (frame_t, result_t, trigger_t)
-├── csp4cmsis_spn.cpp               // CSP network construction & main task
-└── csp4cmsis_allon_sensor_tflm.mk  // Build configuration (source list)
+├── camera_process.h        // Camera process declaration
+├── camera_process.cpp      // Camera implementation + ISR handling
+├── inference_process.h     // Inference process declaration
+├── inference_process.cpp   // Inference implementation (Ethos-U55)
+├── console_process.h       // Console process declaration
+├── console_process.cpp     // Console implementation (UART output)
+├── common_types.h          // Shared structs (frame_t, result_t)
+├── csp4cmsis_spn.cpp       // Network construction & Main task
+└── app.mk                  // Makefile source list
+```
 
-# 🐛 Troubleshooting
-No "Frame ready IRQ" printed – check sensor power, connections, and that cisdp_sensor_start() is called successfully.
+## 🐛 Troubleshooting
+* No "Frame ready IRQ"Hardware InitVerify cisdp_sensor_start() returns 0 and check sensor cables.
+* Crash after first IRQISR BlockingEnsure you use putFromISR(), not write() inside the callback.
+* Pipeline stallsMissing RetriggerEnsure sensordplib_retrigger_capture() is called at the end of the camera loop.
+* Memory OverrunBuffer sizeIf using BufferedChannel, ensure the size is sufficient for your FPS.
 
-Crash after first IRQ – verify that putFromISR() is used, not write(). If you used a BufferedOne2OneChannel, switch to Channel.
-
-Pipeline stalls after a few frames – ensure sensordplib_retrigger_capture() is called after each frame.
-
-Linker errors (undefined symbols) – confirm all .cpp files are included in the build and that common_types.h defines the required structs.
-
-# 📝 License
+## 📝 License
 This example is provided under the standard Himax SDK license terms. Refer to the top‑level license file in the SDK for details.
