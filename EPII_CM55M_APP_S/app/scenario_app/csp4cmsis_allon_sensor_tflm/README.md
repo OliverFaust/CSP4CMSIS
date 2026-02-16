@@ -59,9 +59,10 @@ void Camera::run() {
     }
 }
 ```
+
 ### Inference Process (`inference_process.cpp`)
 ```cpp
-C++void Inference::run() {
+void Inference::run() {
     if (cv_init(true, true) < 0) return;             // Initialise NPU
 
     while (true) {
@@ -77,7 +78,7 @@ C++void Inference::run() {
 ```
 ### Network Construction (`csp4cmsis_spn.cpp`)
 ```cpp
-C++void MainApp_Task(void* params) {
+void MainApp_Task(void* params) {
     static Channel<frame_t>  frame_chan;
     static Channel<result_t> result_chan;
 
