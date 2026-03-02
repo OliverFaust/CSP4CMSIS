@@ -34,6 +34,7 @@ Finally, teach you how to restore to the original factory settings and run [Sens
 | CSP: Sieve of Eratosthenes | [csp4cmsis_sieve](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_sieve) | 
 | CSP: Dining Philosophers (Deadlock) | [csp4cmsis_dining_philosophers](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_dining_philosophers) | 
 | CSP: Asymmetric Philosophers (Liveness) | [csp4cmsis_asymmetric_philosophers](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_asymmetric_philosophers) | 
+| CSP: Lossy Policy Validation (Newest vs. Oldest) | [csp4cmsis_lossy_policy_test](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_lossy_policy_test) | 
 | Himax examples for Seeed Grove Vision AI Module V2 |  |
 | face mesh | [tflm_fd_fm](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2/blob/main/EPII_CM55M_APP_S/app/scenario_app/tflm_fd_fm/README.md) |
 | yolov8n object detection | [tflm_yolov8_od](https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2/blob/main/EPII_CM55M_APP_S/app/scenario_app/tflm_yolov8_od/README.md) |
