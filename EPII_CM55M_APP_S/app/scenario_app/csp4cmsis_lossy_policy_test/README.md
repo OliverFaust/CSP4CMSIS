@@ -1,62 +1,51 @@
-# Test Scenario: Comstime (Communication Time Benchmark)
-
+# Test Scenario: Lossy Policy Validation (Newest vs. Oldest)
 ## 📌 Overview
-The `csp4cmsis_comstime` scenario is a classic CSP benchmark used to measure the communication overhead and scheduling latency of the framework. It implements a cyclic process network—a "feedback loop"—where data is constantly transformed and passed between concurrent processes.
+The `csp4cmsis_lossy_policy_test` is a validation suite designed to demonstrate and verify Non-Blocking Buffer Policies. In real-time embedded systems, producers often generate data faster than consumers can process it (e.g., high-frequency sensor sampling).
 
-This test is critical for establishing the **performance baseline** of `csp4cmsis` on the **Cortex-M55**, specifically measuring how many microseconds it takes for a single data token to undergo a full context-switch and synchronization cycle.
-
-
-
----
+This test proves that `csp4cmsis` can handle these "overrun" conditions gracefully by either preserving the original context (KeepOldest) or ensuring data freshness (KeepNewest), all while preventing the Producer from being throttled.
 
 ## 🏗 Architecture
+The test creates a "Race Condition" by design, pairing a high-speed Burst Sender (the "Rabbit") with a Slow Receiver (the "Tortoise").
 
-The benchmark consists of five processes operating in parallel, forming a self-sustaining feedback loop with an external trigger:
-
-| Process | Responsibility |
-| :--- | :--- |
-| **Prefix** | Bootstraps the loop by sending an initial value (0), then acts as a buffer. |
-| **Successor** | Performs a simple arithmetic transformation (`x + 1`) on incoming data. |
-| **Delta** | Duplicates incoming data, sending one copy back into the ring and one to the consumer. |
-| **Consumer** | Uses the `Alternative` mechanism to monitor data and an external trigger simultaneously. |
-| **Trigger** | Periodically injects a signal to verify that the `Alternative` selection remains responsive during high-throughput. |
-
-
-
----
+ProcessResponsibilityPolicySenderRapidly injects 1,000,000 messages into two separate channels as fast as the CPU allows.PolicyReceiverDeliberately waits for the bursts to finish, then drains the buffers to inspect which data survived the "lossy" transition.Channel ConfigurationsWe utilize two BufferedOne2OneChannel instances, each with a capacity of 10 slots:Newest Channel: Configured with BufferPolicy::KeepNewest.Oldest Channel: Configured with BufferPolicy::KeepOldest.
 
 ## 🛠 Technical Details
-
-### 1. The Feedback Loop Logic
-The "Ring" is formed by the path: `Prefix -> Delta -> Successor -> Prefix`. Because these are synchronous rendezvous channels, the speed of the loop is limited strictly by the efficiency of the `csp4cmsis` scheduler and the underlying FreeRTOS context switching.
-
-### 2. High-Performance `Alternative` Usage
-The `ComstimeConsumer` utilizes the `fairSelect()` method. This ensures that even though the loop is pushing data as fast as the CPU allows, the `Trigger` process is never starved of service. 
-
-### 3. Latency Measurement
-The test calculates the average latency per communication cycle by:
-1. Recording the start tick count.
-2. Running **10,000 iterations** of the loop.
-3. Calculating the delta time in microseconds ($\mu s$) per cycle.
-
----
+### 1. The Hypothesis
+   In a system where 1,000,000 items are pushed into a 10-slot buffer:
+* KeepOldest should act as a "First-In-First-Out" gate that locks after the first 10 items.
+* KeepNewest should act as a "Sliding Window" that always contains the most recent 10 items.
+### 2. Implementation Logic
+  The test uses the << operator for high-speed transmission. Because the channels are configured with non-blocking policies, the PolicySender does not perform a context switch to the receiver until the entire burst is completed or the time-slice expires.
+### 3. Accumulation Verification
+The receiver calculates the sum of the `seq_num` for the remaining 10 items in each buffer.
+* KeepOldest Sum: $\sum_{i=0}^{9} i = 45$
+* KeepNewest Sum: $\sum_{i=999,990}^{999,999} i = 9,999,945$
 
 ## 🚀 How to Run
-
 ### Prerequisites
-* **Hardware:** Himax WE2 (Cortex-M55).
-* **Environment:** FreeRTOS environment with high-resolution tick configuration.
-* **Make environment** in `CSP4CMSIS/EPII_CM55M_APP_S/makefile` set `APP_TYPE = csp4cmsis_comstime`.
+* Hardware: Himax WE2 (Cortex-M55).
+* Toolchain: Arm GNU Toolchain (GCC 13.2.1+).
+* Build Config: In `EPII_CM55M_APP_S/makefile`, set:`APP_TYPE = csp4cmsis_lossy_policy_test`
 
 ### Expected UART Output
-The console will display the results of the 10,000-cycle stress test. The "Avg Latency" value represents the cost of a rendezvous on your specific hardware configuration.
+The test confirms the policy by comparing the final accumulation values. A success indicates that the internal circular buffer pointers are correctly wrapping and evicting data based on the chosen policy.
 
-```text
-[Comstime] Benchmark starting. Measuring 10000 cycles...
---- Comstime Results ---
-Iterations: 10000
-Total Time: 420.00 ms
-Avg Latency: 42.00 us/cycle
-Last Value: 9999
-------------------------
->>> [ALT] External Trigger Event Latency Check <<<
+```Plaintext
+--- Launching Policy Comparison Test -
+[Sender] Bursting 1000000 messages to KeepNewest...
+[Sender] Bursting 1000000 messages to KeepOldest...
+[Sender] Finished sending. Suspending.
+[Receiver] Draining KeepNewest buffer...
+  Newest[0]: 999990
+  ...
+  Newest[9]: 999999
+[Receiver] Draining KeepOldest buffer...
+  Oldest[0]: 0
+  ...
+  Oldest[9]: 9
+
+--- FINAL RESULTS ---
+KeepNewest Total Accumulation: 9999945
+KeepOldest Total Accumulation: 45
+HYPOTHESIS CONFIRMED: KeepNewest kept the high-sequence values.
+```
