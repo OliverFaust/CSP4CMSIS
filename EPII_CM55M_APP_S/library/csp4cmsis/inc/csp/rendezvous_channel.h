@@ -6,11 +6,14 @@
 #include "FreeRTOS.h"
 #include "task.h"               
 #include <cstring>    
-#include <cstdio>  
 
 namespace csp::internal {
 
-template <typename T>
+/**
+ * @brief Zero-capacity Synchronous Channel (Rendezvous).
+ * Updated to support KeepNewest/KeepOldest (Non-blocking handshake).
+ */
+template <typename T, csp::BufferPolicy P = csp::BufferPolicy::Block>
 class RendezvousChannel : public BaseAltChan<T> {
 private:
     AltChanSyncBase sync_base;
@@ -24,79 +27,28 @@ public:
 
     virtual ~RendezvousChannel() override = default;
 
-    // --- Blocking Input (Receiver) ---
-    virtual void input(T* const dest) override {
-        xTaskNotifyStateClear(NULL);
+    // --- Core Contract Overrides ---
 
-        if (xSemaphoreTake(sync_base.getMutex(), portMAX_DELAY) == pdTRUE) {
-            // 1. Check if a standard sender is already waiting
-            if (sync_base.tryHandshake((void*)dest, sizeof(T), false)) {
-                xSemaphoreGive(sync_base.getMutex());
-                return; 
-            }
-
-            // 2. NEW: Check if a sender is currently in an ALT on this channel
-            if (sync_base.getAltOutScheduler() != nullptr) {
-                // Wake up the ALTed sender
-                sync_base.getAltOutScheduler()->wakeUp(sync_base.getAltOutBit());
-            }
-
-            // 3. No partner ready yet: Register and block
-            sync_base.registerWaitingTask((void*)dest, false);
+    /**
+     * @brief In Rendezvous, space is available only if a receiver is waiting.
+     * UNLESS the policy is non-blocking, in which case we are "always ready" 
+     * because we'll just drop the data if no one is there.
+     */
+    bool space_available() override {
+        if constexpr (P != csp::BufferPolicy::Block) return true;
+        
+        bool ready = false;
+        if (xSemaphoreTake(sync_base.getMutex(), 0) == pdTRUE) {
+            ready = (sync_base.getWaitingInTask() != nullptr) || 
+                    (sync_base.getAltInScheduler() != nullptr);
             xSemaphoreGive(sync_base.getMutex());
         }
-
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        return ready;
     }
 
-    // --- Blocking Output (Sender) ---
-    virtual void output(const T* const source) override {
-        xTaskNotifyStateClear(NULL);
-        // printf("[Producer] Channel %p: Entering output()\n", (void*)this);
-
-        if (xSemaphoreTake(sync_base.getMutex(), portMAX_DELAY) == pdTRUE) {
-            // 1. Check for standard waiter
-            if (sync_base.getWaitingInTask() != nullptr) {
-                // printf("[Producer] Channel %p: Found standard blocking receiver.\r\n", (void*)this);
-                sync_base.tryHandshake((void*)const_cast<T*>(source), sizeof(T), true);
-                xSemaphoreGive(sync_base.getMutex());
-                return; 
-            }
-
-            // 2. Check for ALT waiter (The Critical Path)
-            if (sync_base.getAltInScheduler() != nullptr) {
-                // printf("[Producer] Channel %p: FOUND ALTed receiver! Waking bit %lu\r\n", (void*)this, (unsigned long)sync_base.getAltInBit());
-                
-                sync_base.getAltInScheduler()->wakeUp(sync_base.getAltInBit());
-                
-                // Note: In Rendezvous, we must still block until the receiver calls activate()
-                // printf("[Producer] Channel %p: Partner signaled. Registering to block...\r\n", (void*)this);
-            } else {
-                // printf("[Producer] Channel %p: No receiver found. Registering and blocking.\r\n", (void*)this);
-            }
-
-            sync_base.registerWaitingTask((void*)const_cast<T*>(source), true);
-            xSemaphoreGive(sync_base.getMutex());
-        }
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        // printf("[Producer] Channel %p: Output complete.\n", (void*)this);
-    }
-
-    // --- Resident Guard Implementation ---
-    virtual internal::Guard* getInputGuard(T& dest) override {
-        res_in_guard.updateBuffer(&dest); 
-        return &res_in_guard;
-    }
-    
-    virtual internal::Guard* getOutputGuard(const T& source) override { 
-        res_out_guard.updateBuffer(const_cast<void*>(static_cast<const void*>(&source)));
-        return &res_out_guard; 
-    }
-    
-    virtual bool pending() override {
+    bool pending() override {
         bool has_partner = false;
         if (xSemaphoreTake(sync_base.getMutex(), 0) == pdTRUE) {
-            // Pending is true if someone is waiting to block OR someone is ALTing
             has_partner = (sync_base.getWaitingInTask() != nullptr) || 
                           (sync_base.getWaitingOutTask() != nullptr) ||
                           (sync_base.getAltInScheduler() != nullptr) ||
@@ -105,42 +57,98 @@ public:
         }
         return has_partner;
     }
-    
-    virtual bool putFromISR(const T& data) override {
+
+    // --- Blocking Input (Receiver) ---
+    // Receiver always blocks in Rendezvous, regardless of policy.
+    void input(T* const dest) override {
+        xTaskNotifyStateClear(NULL);
+
+        if (xSemaphoreTake(sync_base.getMutex(), portMAX_DELAY) == pdTRUE) {
+            if (sync_base.tryHandshake((void*)dest, sizeof(T), false)) {
+                xSemaphoreGive(sync_base.getMutex());
+                return; 
+            }
+
+            if (sync_base.getAltOutScheduler() != nullptr) {
+                sync_base.getAltOutScheduler()->wakeUp(sync_base.getAltOutBit());
+            }
+
+            sync_base.registerWaitingTask((void*)dest, false);
+            xSemaphoreGive(sync_base.getMutex());
+        }
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    }
+
+    // --- Policy-Aware Output (Sender) ---
+    void output(const T* const source) override {
+        xTaskNotifyStateClear(NULL);
+
+        if (xSemaphoreTake(sync_base.getMutex(), portMAX_DELAY) == pdTRUE) {
+            // 1. Try immediate handshake (Standard or ALT reader)
+            if (sync_base.getWaitingInTask() != nullptr) {
+                sync_base.tryHandshake((void*)const_cast<T*>(source), sizeof(T), true);
+                xSemaphoreGive(sync_base.getMutex());
+                return; 
+            }
+
+            if (sync_base.getAltInScheduler() != nullptr) {
+                sync_base.getAltInScheduler()->wakeUp(sync_base.getAltInBit());
+                // In Rendezvous, we still block until they 'activate' the ALT
+            } 
+
+            // 2. Policy Check: If we reach here, no receiver was immediately ready.
+            if constexpr (P != csp::BufferPolicy::Block) {
+                // Non-blocking policy: Drop the data and exit.
+                xSemaphoreGive(sync_base.getMutex());
+                return; 
+            }
+
+            // 3. Blocking Path: Register and wait
+            sync_base.registerWaitingTask((void*)const_cast<T*>(source), true);
+            xSemaphoreGive(sync_base.getMutex());
+        }
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    }
+
+    // --- ISR Output ---
+    bool putFromISR(const T& data) override {
         bool success = false;
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-        // Use a critical section instead of a Mutex (ISRs cannot take Mutexes)
         UBaseType_t uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
 
-        // 1. Check if a standard blocking reader is waiting
         if (sync_base.getWaitingInTask() != nullptr) {
-            // Copy data directly to reader's buffer
             std::memcpy(sync_base.getNonAltInDataPtr(), &data, sizeof(T));
-            
             TaskHandle_t toWake = sync_base.getWaitingInTask();
-            sync_base.clearWaitingIn(); // Clear internal pointers
-            
-            // Wake the reader
+            sync_base.clearWaitingIn();
             vTaskNotifyGiveFromISR(toWake, &xHigherPriorityTaskWoken);
             success = true;
         } 
-        // 2. Check if a reader is waiting in an ALT
         else if (sync_base.getAltInScheduler() != nullptr) {
-            // Signal the AltScheduler (it will handle data copy during activate())
             sync_base.getAltInScheduler()->wakeUp(sync_base.getAltInBit());
             success = true; 
         }
+        else if constexpr (P != csp::BufferPolicy::Block) {
+            // Non-blocking ISR: Treat "dropped" as "handled successfully"
+            success = true;
+        }
 
         taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
-
-        // Request context switch
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         return success;
     }
 
-    virtual void beginExtInput(T* const dest) override {}
-    virtual void endExtInput() override {}
+    virtual internal::Guard* getInputGuard(T& dest) override {
+        res_in_guard.updateBuffer(&dest); 
+        return &res_in_guard;
+    }
+    
+    virtual internal::Guard* getOutputGuard(const T& source) override { 
+        res_out_guard.updateBuffer(const_cast<T*>(&source));
+        return &res_out_guard; 
+    }
+
+    void beginExtInput(T* const dest) override {}
+    void endExtInput() override {}
 };
 
 } // namespace csp::internal

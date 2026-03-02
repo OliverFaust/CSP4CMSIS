@@ -10,24 +10,44 @@
 
 namespace csp::internal {
 
-    template <typename T> class BufferedInputGuard;
-    template <typename T> class BufferedOutputGuard;
+    template <typename T, csp::BufferPolicy P> class BufferedInputGuard;
+    template <typename T, csp::BufferPolicy P> class BufferedOutputGuard;
 
-    template <typename T>
+    /**
+     * @brief A policy-based buffered channel implementation using FreeRTOS Queues.
+     */
+    template <typename T, csp::BufferPolicy P = csp::BufferPolicy::Block>
     class BufferedChannel : public internal::BaseAltChan<T>
     {
     private:
         QueueHandle_t queue_handle; 
         
-        // Use AltScheduler pointers to remain consistent with your Alt system
         AltScheduler* alt_reader = nullptr;
         EventBits_t   read_bit = 0;
         
         AltScheduler* alt_writer = nullptr;
         EventBits_t   write_bit = 0;
 
-        BufferedInputGuard<T>  res_in_guard;
-        BufferedOutputGuard<T> res_out_guard;
+        BufferedInputGuard<T, P>  res_in_guard;
+        BufferedOutputGuard<T, P> res_out_guard;
+
+        /** @brief Internal helper to notify an ALTed reader that data is available. */
+        void _notifyReader() {
+            taskENTER_CRITICAL();
+            if (alt_reader != nullptr) {
+                alt_reader->wakeUp(read_bit);
+            }
+            taskEXIT_CRITICAL();
+        }
+
+        /** @brief Internal helper to notify an ALTed writer that space is available. */
+        void _notifyWriter() {
+            taskENTER_CRITICAL();
+            if (alt_writer != nullptr) {
+                alt_writer->wakeUp(write_bit);
+            }
+            taskEXIT_CRITICAL();
+        }
         
     public:
         BufferedChannel(size_t capacity) 
@@ -41,69 +61,96 @@ namespace csp::internal {
             if (queue_handle) vQueueDelete(queue_handle);
         }
 
-        bool putFromISR(const T& data) override {
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            bool success = false;
+        // --- BaseAltChan Overrides ---
 
-            // 1. Attempt to send to queue without blocking
-            if (xQueueSendFromISR(queue_handle, &data, &xHigherPriorityTaskWoken) == pdPASS) {
-                success = true;
-                
-                // 2. If a receiver is waiting in an ALT, wake them up
-                // Note: AltScheduler::wakeUp already contains internal ISR-safe logic
-                if (alt_reader != nullptr) {
-                    alt_reader->wakeUp(read_bit);
-                }
-            }
-
-            // 3. Request context switch if a higher priority task was unblocked
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-            return success;
-        }
-
-        // --- Required by BaseAltChan ---
-        // Matches the signature: virtual bool pending() = 0;
         bool pending() override { 
             return uxQueueMessagesWaiting(queue_handle) > 0; 
         } 
 
-        bool space_available() { 
-            return uxQueueSpacesAvailable(queue_handle) > 0; 
+        /**
+         * @brief Checks if a write operation will block.
+         * For KeepNewest/KeepOldest, this always returns true as they are non-blocking.
+         */
+        bool space_available() override { 
+            if constexpr (P == csp::BufferPolicy::Block) {
+                return uxQueueSpacesAvailable(queue_handle) > 0; 
+            }
+            return true; 
+        }
+
+        /**
+         * @brief Policy-aware ISR output. 
+         * Useful for high-speed peripherals like the STM32N6 DCMIPP (Camera).
+         */
+        bool putFromISR(const T& data) override {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            bool result = false;
+
+            if (xQueueSendFromISR(queue_handle, &data, &xHigherPriorityTaskWoken) == pdPASS) {
+                result = true;
+            } else {
+                if constexpr (P == csp::BufferPolicy::KeepNewest) {
+                    T dummy;
+                    xQueueReceiveFromISR(queue_handle, &dummy, &xHigherPriorityTaskWoken);
+                    xQueueSendFromISR(queue_handle, &data, &xHigherPriorityTaskWoken);
+                    result = true;
+                } else if constexpr (P == csp::BufferPolicy::KeepOldest) {
+                    result = true; // Handled by discarding
+                }
+            }
+
+            if (result && alt_reader != nullptr) {
+                alt_reader->wakeUp(read_bit);
+            }
+
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+            return result;
         }
 
         // --- Core I/O ---
+
         void input(T* const dest) override {
             if (xQueueReceive(queue_handle, dest, portMAX_DELAY) == pdPASS) {
-                // If a sender was ALTed waiting for space, wake them
-                taskENTER_CRITICAL();
-                if (alt_writer) alt_writer->wakeUp(write_bit);
-                taskEXIT_CRITICAL();
+                _notifyWriter();
             }
         }
 
         void output(const T* const source) override {
-            if (xQueueSend(queue_handle, source, portMAX_DELAY) == pdPASS) {
-                // If a receiver was ALTed waiting for data, wake them
-                taskENTER_CRITICAL();
-                if (alt_reader) alt_reader->wakeUp(read_bit);
-                taskEXIT_CRITICAL();
+            if constexpr (P == csp::BufferPolicy::Block) {
+                if (xQueueSend(queue_handle, source, portMAX_DELAY) == pdPASS) {
+                    _notifyReader();
+                }
+            } else {
+                // Non-blocking branch: 0 timeout
+                if (xQueueSend(queue_handle, source, 0) == errQUEUE_FULL) {
+                    if constexpr (P == csp::BufferPolicy::KeepNewest) {
+                        T dummy;
+                        xQueueReceive(queue_handle, &dummy, 0); // Drop oldest
+                        xQueueSend(queue_handle, source, 0);    // Push newest
+                    }
+                    // KeepOldest does nothing
+                }
+                _notifyReader();
             }
         }
 
         void beginExtInput(T* const dest) override { this->input(dest); }
         void endExtInput() override { }
         
-        Guard* getInputGuard(T& dest) override {
+        // --- Guard Factories ---
+
+        internal::Guard* getInputGuard(T& dest) override {
             res_in_guard.setTarget(&dest);
             return &res_in_guard;
         }
 
-        Guard* getOutputGuard(const T& source) override {
+        internal::Guard* getOutputGuard(const T& source) override {
             res_out_guard.setTarget(&source);
             return &res_out_guard;
         }
         
-        // Registration Helpers
+        // --- ALT Registration ---
+
         void registerInputAlt(AltScheduler* alt, EventBits_t b) {
             taskENTER_CRITICAL(); alt_reader = alt; read_bit = b; taskEXIT_CRITICAL();
         }
@@ -121,15 +168,16 @@ namespace csp::internal {
     };
     
     // =============================================================
-    // Guards (Updated to use AltScheduler* pointer directly)
+    // Guards
     // =============================================================
-    template <typename T>
+
+    template <typename T, csp::BufferPolicy P>
     class BufferedInputGuard : public Guard {
     private:
-        BufferedChannel<T>* channel;
+        BufferedChannel<T, P>* channel;
         T* dest_ptr = nullptr; 
     public:
-        BufferedInputGuard(BufferedChannel<T>* chan) : channel(chan) {}
+        BufferedInputGuard(BufferedChannel<T, P>* chan) : channel(chan) {}
         void setTarget(T* dest) { dest_ptr = dest; }
 
         bool enable(AltScheduler* alt, EventBits_t bit) override {
@@ -146,29 +194,32 @@ namespace csp::internal {
         }
     };
     
-    template <typename T>
+    template <typename T, csp::BufferPolicy P>
     class BufferedOutputGuard : public Guard {
     private:
-        BufferedChannel<T>* channel;
+        BufferedChannel<T, P>* channel;
         const T* source_ptr = nullptr;
     public:
-        BufferedOutputGuard(BufferedChannel<T>* chan) : channel(chan) {}
+        BufferedOutputGuard(BufferedChannel<T, P>* chan) : channel(chan) {}
         void setTarget(const T* source) { source_ptr = source; }
 
         bool enable(AltScheduler* alt, EventBits_t bit) override {
+            // KeepNewest/KeepOldest are always ready to accept output
             if (channel->space_available()) return true;
+            
             channel->registerOutputAlt(alt, bit);
             return false;
         }
         bool disable() override {
+            if constexpr (P != csp::BufferPolicy::Block) return true;
             channel->unregisterOutputAlt();
             return channel->space_available();
         }
         void activate() override {
-            xQueueSend(channel->getQueueHandle(), source_ptr, 0);
+            channel->output(source_ptr);
         }
     };
 
 } // namespace csp::internal
 
-#endif
+#endif // CSP4CMSIS_BUFFERED_CHANNEL_H

@@ -139,6 +139,18 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_LOSSY_POLICY_TEST
+#include "csp4cmsis_lossy_policy_test.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_COMSTIME
 #include "csp4cmsis_comstime.h"
 
