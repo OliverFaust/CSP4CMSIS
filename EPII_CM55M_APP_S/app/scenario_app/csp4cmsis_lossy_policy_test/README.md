@@ -7,7 +7,10 @@ This test proves that `csp4cmsis` can handle these "overrun" conditions graceful
 ## 🏗 Architecture
 The test creates a "Race Condition" by design, pairing a high-speed Burst Sender (the "Rabbit") with a Slow Receiver (the "Tortoise").
 
-ProcessResponsibilityPolicySenderRapidly injects 1,000,000 messages into two separate channels as fast as the CPU allows.PolicyReceiverDeliberately waits for the bursts to finish, then drains the buffers to inspect which data survived the "lossy" transition.Channel ConfigurationsWe utilize two BufferedOne2OneChannel instances, each with a capacity of 10 slots:Newest Channel: Configured with BufferPolicy::KeepNewest.Oldest Channel: Configured with BufferPolicy::KeepOldest.
+| Process | Responsibility |
+| :--- | :--- |
+| **PolicySender** | Rapidly injects 1,000,000 messages into two separate channels as fast as the CPU allows. |
+| **PolicyReceiver** | Deliberately waits for the bursts to finish, then drains the buffers to inspect which data survived the "lossy" transition. |
 
 ## 🛠 Technical Details
 ### 1. The Hypothesis
