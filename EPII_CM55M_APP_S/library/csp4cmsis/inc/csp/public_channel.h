@@ -3,7 +3,7 @@
 
 #include "rendezvous_channel.h"
 #include "buffered_channel.h"
-#include "sync_channel.h" // Added for Signal support
+#include "sync_channel.h"
 
 namespace csp {
 
@@ -35,13 +35,9 @@ private:
 public:
     Chanout(internal::BaseAltChan<T>* ptr) : internal_ptr(ptr) {}
     
-    // Write (Blocks if policy is Block, Samples if policy is KeepNewest/Oldest)
     void operator<<(const T& data) { internal_ptr->output(&data); }
     void write(const T& data) { internal_ptr->output(&data); }
     
-    /**
-     * @brief Non-blocking write from an Interrupt Service Routine.
-     */
     bool putFromISR(const T& data) { 
         return internal_ptr->putFromISR(data); 
     }
@@ -58,7 +54,6 @@ private:
 public:
     Chanin(internal::BaseAltChan<T>* ptr) : internal_ptr(ptr) {}
     
-    // Read (Always blocks until data is available)
     void operator>>(T& dest) { internal_ptr->input(&dest); }
     void read(T& dest) { internal_ptr->input(&dest); }
     
@@ -68,40 +63,34 @@ public:
 };
 
 // =============================================================
-// Static Channel Containers
+// Static Channel Containers (v1.1 Sampling API)
 // =============================================================
 
 /**
- * @brief Zero-capacity Rendezvous Channel.
- * Defaults to Blocking for backward compatibility.
+ * @brief Zero-capacity Synchronization Primitive.
+ * In KeepNewest/Oldest modes, it behaves as a pure sampling port.
  */
 template <typename T, BufferPolicy P = BufferPolicy::Block>
-class One2OneChannel {
+class SamplingChannel {
 private:
     internal::RendezvousChannel<T, P> internal_chan;
 public:
-    One2OneChannel() = default;
+    SamplingChannel() = default;
     
     Chanout<T> writer() { return Chanout<T>(&internal_chan); }
     Chanin<T> reader() { return Chanin<T>(&internal_chan); }
 };
 
 /**
- * @brief Default Alias. One2OneChannel<int> will block by default.
- */
-template <typename T>
-using Channel = One2OneChannel<T, BufferPolicy::Block>;
-
-/**
- * @brief Buffered Channel with Static Capacity.
- * Defaults to Blocking (standard FIFO behavior).
+ * @brief Buffered Asynchronous Primitive.
+ * Decouples timing. Supports Lossy policies (KeepNewest/Oldest).
  */
 template <typename T, size_t SIZE, BufferPolicy P = BufferPolicy::Block>
-class BufferedOne2OneChannel {
+class SamplingBufferedChannel {
 private:
     internal::BufferedChannel<T, P> internal_chan;
 public:
-    BufferedOne2OneChannel() : internal_chan(SIZE) {}
+    SamplingBufferedChannel() : internal_chan(SIZE) {}
     
     Chanout<T> writer() { return Chanout<T>(&internal_chan); }
     Chanin<T> reader() { return Chanin<T>(&internal_chan); }
@@ -116,16 +105,42 @@ private:
     internal::SyncChannel<P> internal_chan;
 public:
     SignalChannel() = default;
-    // Signal channels use specialized wrappers or direct internal access
     internal::SyncChannel<P>* getInternal() { return &internal_chan; }
 };
 
-// --- Standard CSP Aliases ---
+// =============================================================
+// Public Aliases & Legacy Support
+// =============================================================
+
+/**
+ * @brief Standard CSP rendezvous channel (Blocking).
+ */
+template <typename T>
+using Channel = SamplingChannel<T, BufferPolicy::Block>;
+
+/**
+ * @brief Standard CSP buffered channel (Blocking).
+ */
+template <typename T, size_t SIZE>
+using BufferedChannel = SamplingBufferedChannel<T, SIZE, BufferPolicy::Block>;
+
+/**
+ * @brief Semantic alias for shared input ports.
+ */
 template <typename T, BufferPolicy P = BufferPolicy::Block> 
-using Any2OneChannel = One2OneChannel<T, P>;
+using Any2OneChannel = SamplingChannel<T, P>;
 
 template <typename T, size_t S, BufferPolicy P = BufferPolicy::Block> 
-using BufferedAny2OneChannel = BufferedOne2OneChannel<T, S, P>;
+using BufferedAny2OneChannel = SamplingBufferedChannel<T, S, P>;
+
+/**
+ * @brief Legacy API 1.0 Compatibility Aliases.
+ */
+template <typename T, BufferPolicy P = BufferPolicy::Block>
+using One2OneChannel = SamplingChannel<T, P>;
+
+template <typename T, size_t S, BufferPolicy P = BufferPolicy::Block>
+using BufferedOne2OneChannel = SamplingBufferedChannel<T, S, P>;
 
 } // namespace csp
 
