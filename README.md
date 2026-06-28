@@ -102,7 +102,8 @@ Note: The following has been tested to work on Ubuntu 20.04 PC
     ![alt text](images/output_elf_file.png)
 - Step 7: Generate firmware image file
     ```
-    cd ../we2_image_gen_local/_s.elf input_case1_secboot/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
+    cd ../we2_image_gen_local/
+    cp ../EPII_CM55M_APP_S/obj_epii_evb_icv30_bdv10/gnu_epii_evb_WLCSP65/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf input_case1_secboot/EPII_CM55M_gnu_epii_evb_WLCSP65_s.elf
     ./we2_local_image_gen project_case1_blp_wlcsp.json
     ```
 - Output firmware image: `./output_case1_sec_wlcsp/output.img`
