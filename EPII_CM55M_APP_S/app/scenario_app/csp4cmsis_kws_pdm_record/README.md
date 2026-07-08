@@ -197,9 +197,33 @@ void MainApp_Task(void* params) {
     [Prep] Processed 20 | ms: mfcc=61 chan_send_wait=4080 | elapsed=5063 ms | rt=0.98x
     [Inf]  Processed 20 | ms: copy=0 invoke=4800 post=0 | elapsed=5830 ms | rt=0.85x
     ```
-
-![KWS Running](./images/kws_running.png)
-
+Console output with inference:
+```text
+...
+None 
+Label: up Score: 90 % Label Index: 4 
+Label: up Score: 90 % Label Index: 4 
+[Acq]  Missed 0/409860 | ms: dma_wait=5120 buf_asm=0 chan_send_wait=0 | elapsed=5120 ms | rt=0.97x
+Label: up Score: 90 % Label Index: 4 
+[Prep] Processed 409860 | ms: mfcc=61 chan_send_wait=4800 | elapsed=5120 ms | rt=0.97x
+None 
+Label: down Score: 87 % Label Index: 5 
+Label: down Score: 86 % Label Index: 5 
+[Inf]  Processed 409860 | ms: copy=0 invoke=4800 post=0 | elapsed=5120 ms | rt=0.97x
+None 
+Label: left Score: 88 % Label Index: 6 
+Label: left Score: 90 % Label Index: 6 
+Label: left Score: 88 % Label Index: 6 
+Label: right Score: 84 % Label Index: 7 
+Label: right Score: 79 % Label Index: 7 
+Label: right Score: 87 % Label Index: 7 
+Label: _unknown_ Score: 76 % Label Index: 1 
+Label: left Score: 72 % Label Index: 6 
+Label: up Score: 76 % Label Index: 4 
+Label: up Score: 76 % Label Index: 4 
+None 
+...
+```
 ---
 
 ## 📁 File Structure
