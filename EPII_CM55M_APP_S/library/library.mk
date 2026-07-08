@@ -5,7 +5,7 @@ ifeq ($(APP_TYPE), EPII_SIMULATOR)
 LIB_REQUIRED = 
 else
 # Core libraries required for the system and CSP framework
-LIB_REQUIRED = common csp4cmsis
+LIB_REQUIRED = common 
 endif
 
 ifeq ($(LIB_CMSIS_NN_ENALBE), 1)

@@ -247,6 +247,18 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_KWS_PDM_RECORD
+#include "csp4cmsis_kws_pdm_record.h"
+
+/* main entry */
+int main(void)
+{
+	board_init();
+	kws_pdm_record_app();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_CHAIN_TEST
 #include "csp4cmsis_sieve.h"
 

@@ -8,7 +8,7 @@
 #include <cstdio>
 
 #ifndef TEST_STACK_SIZE_WORDS
-#define TEST_STACK_SIZE_WORDS 256
+#define TEST_STACK_SIZE_WORDS 8*256
 #endif
 
 // Define a default priority for user processes
