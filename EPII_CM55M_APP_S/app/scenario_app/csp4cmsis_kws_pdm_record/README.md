@@ -158,7 +158,7 @@ void MainApp_Task(void* params) {
 
 - To ensure all submodules are cloned, use the `--recursive` flag:
     ```bash
-    git clone --recursive https://github.com/HimaxWiseEyePlus/Seeed_Grove_Vision_AI_Module_V2.git
+    git clone --recursive https://github.com/OliverFaust/CSP4CMSIS.git
     ```
 
 ## Building the `csp4cmsis_kws_pdm_record` Scenario App and Running it on WE2
