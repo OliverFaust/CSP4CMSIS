@@ -1,4 +1,4 @@
-# KeyWord Spotting using Transformers
+# CSP4CMSIS based KeyWord Spotting using Transformers
 
 KeyWord Spotting (KWS) is a technique used to detect specific words within a stream of audio data, typically in low-power, always-on settings. This `scenario_app` utilizes ARM's [KeyWord Transformer](https://www.isca-archive.org/interspeech_2021/berg21_interspeech.pdf) model to perform KWS on the Grove Vision AI v2 board.
 
