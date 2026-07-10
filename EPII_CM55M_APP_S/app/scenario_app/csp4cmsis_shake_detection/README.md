@@ -17,7 +17,7 @@ The system isolates hardware interaction from application logic using a producer
 +------------+      EXTI (PA1)      +-----------------+
 |            | -------------------> |    EXTI1_IRQn   |
 |  L3G4200D  |                      +-----------------+
-|  Gyroscope |                                | (Binary Semaphore)
+|  Gyroscope |                                | (ISR Channel <i2c_isr_chan>)
 |            |      SPI3 Read       +-----------------+
 |            | <------------------- |  SensorReader   | (Producer Process)
 +------------+                      +-----------------+
