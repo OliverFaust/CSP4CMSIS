@@ -61,6 +61,7 @@ APPL_LIBS += -lm -lstdc++ -lc
 # -------------------------------------------------------------------------
 # 5. SYSTEM OVERRIDES
 # -------------------------------------------------------------------------
+LIB_SEL = csp4cmsis
 override OS_SEL := freertos
 override OS_HAL := n
 override MPU := n
