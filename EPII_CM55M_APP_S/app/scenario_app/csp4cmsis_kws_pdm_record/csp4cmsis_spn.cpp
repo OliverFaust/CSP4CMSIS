@@ -248,6 +248,13 @@ class InferenceProcess : public CSProcess {
 public:
     explicit InferenceProcess(Chanin<FeatureTensorMsg> r) : in(r) {}
 
+    // API 1.2: explicit requirements, reproducing the values this process
+    // used to receive implicitly by being first in InParallel(...) and
+    // running inline on MainApp_Task's stack/priority. Now correct
+    // regardless of its position in the InParallel(...) argument list.
+    size_t stackWords() const override { return 4 * 2048; }
+    UBaseType_t taskPriority() const override { return tskIDLE_PRIORITY + 3; }
+
     void run() override {
         int32_t processed = 0;
         uint32_t copy_ms_accum = 0;
@@ -435,21 +442,42 @@ void MainApp_Task(void* params) {
         return;
     }
 
-    // InferenceProcess MUST be first: see the file-level priority/stack note
-    // above for why.
-    static InferenceProcess inference(g_featureChan.reader());
-    static PreprocessingProcess preprocessing(g_audioChan.reader(), g_featureChan.writer());
+    // API 1.2: argument order is no longer priority/stack-significant --
+    // each process declares its own requirements (see InferenceProcess
+    // above). Listed here in physical pipeline order for readability.
     static AcquisitionProcess acquisition(g_audioChan.writer());
+    static PreprocessingProcess preprocessing(g_audioChan.reader(), g_featureChan.writer());
+    static InferenceProcess inference(g_featureChan.reader());
     static ReporterProcess reporter(g_reportChan.reader());
 
     Run(
-        InParallel(inference, preprocessing, acquisition, reporter),
+        InParallel(acquisition, preprocessing, inference, reporter),
         ExecutionMode::StaticNetwork
     );
+
+    // API 1.2: MainApp_Task no longer executes any CSP process inline --
+    // Run() above spawns all four as their own tasks and returns
+    // immediately (StaticNetwork mode). There is nothing further for this
+    // task to do, so it deletes itself, reclaiming its stack allocation.
+    // (heap_4 is confirmed as this project's allocator, so the memory is
+    // genuinely returned to the pool, not just descheduled -- see the
+    // heap-scheme discussion above.)
+    vTaskDelete(NULL);
 }
 
 extern "C" void RunProcessingChainTest(void)
 {
+    // NOTE (API 1.2): this task's stack no longer needs to accommodate
+    // any CSP process's call depth -- that requirement now lives on
+    // InferenceProcess itself (see its stackWords() override) and is
+    // honored regardless of its position in InParallel(...) above. This
+    // 4*2048 figure predates that change and is very likely oversized for
+    // what MainApp_Task itself now does (spawn calls + cv_kws_preprocess_init()
+    // + a couple of xprintf calls). It has been left unchanged here rather
+    // than guessed at, since cv_kws_preprocess_init()'s own stack depth is
+    // opaque to this analysis -- a good first experiment for the API 1.2
+    // test project is to measure MainApp_Task's actual high-water mark via
+    // uxTaskGetStackHighWaterMark() and right-size this literal down.
     BaseType_t status = xTaskCreate(MainApp_Task, "MainApp", 4*2048, NULL, tskIDLE_PRIORITY + 3, NULL);
     if (status != pdPASS) {
         xprintf("ERROR: MainApp_Task creation failed!\r\n");

@@ -12,13 +12,6 @@ extern "C" {
 
 using namespace csp;
 
-// --- Hardware Synchronization Setup ---
-static volatile bool i2c_transact_done = false;
-
-extern "C" void i2c_callback(void) {
-    i2c_transact_done = true;
-}
-
 // --- Data Structures ---
 struct AccelData {
     int16_t x;
@@ -26,34 +19,48 @@ struct AccelData {
     int16_t z;
 };
 
+// --- Hardware Synchronization Setup ---
+// Create a channel specifically for the I2C interrupt to signal completion
+static Channel<bool> i2c_isr_chan;
+
+// The hardware interrupt callback simply pushes a token into the channel
+extern "C" void i2c_callback(void) {
+    i2c_isr_chan.writer().putFromISR(true);
+}
+
 // --- 1. ADXL345 Reader Process ---
 class Adxl345Reader : public CSProcess {
-    Chanout<AccelData> out;
+    Chanin<bool> i2c_sync;     // Reads from the ISR
+    Chanout<AccelData> out;    // Writes to the ShakeLogic
     const uint8_t slave_addr = 0x53;
+
+    // Blocks the process until the hardware ISR fires
+    void wait_for_i2c_isr() {
+        bool dummy;
+        i2c_sync >> dummy; // This naturally blocks the FreeRTOS task
+    }
 
     // Helper method to write to a single register
     void write_register(uint8_t reg, uint8_t val) {
         uint8_t data[2] = {reg, val};
-        i2c_transact_done = false;
         hx_drv_i2cm_interrupt_write(USE_DW_IIC_0, slave_addr, data, 2, (void *)i2c_callback);
-        while (!i2c_transact_done) { vTaskDelay(pdMS_TO_TICKS(1)); }
+        wait_for_i2c_isr();
     }
 
     // Helper method to read multiple contiguous bytes
     void read_registers(uint8_t reg, uint8_t* buffer, uint8_t len) {
         // Step 1: Write pointer
-        i2c_transact_done = false;
         hx_drv_i2cm_interrupt_write(USE_DW_IIC_0, slave_addr, &reg, 1, (void *)i2c_callback);
-        while (!i2c_transact_done) { vTaskDelay(pdMS_TO_TICKS(1)); }
+        wait_for_i2c_isr();
 
         // Step 2: Read sequence
-        i2c_transact_done = false;
         hx_drv_i2cm_interrupt_read(USE_DW_IIC_0, slave_addr, buffer, len, (void *)i2c_callback);
-        while (!i2c_transact_done) { vTaskDelay(pdMS_TO_TICKS(1)); }
+        wait_for_i2c_isr();
     }
 
 public:
-    Adxl345Reader(Chanout<AccelData> w) : out(w) {}
+    // Constructor now takes the ISR synchronization channel as an input
+    Adxl345Reader(Chanin<bool> sync_in, Chanout<AccelData> w) : i2c_sync(sync_in), out(w) {}
     
     void run() override {
         printf("[Reader] Initializing ADXL345...\r\n");
@@ -98,25 +105,19 @@ public:
         AccelData previous = {0, 0, 0};
         bool is_first_reading = true;
         
-        // The higher this number, the harder the shake required to trigger.
-        // Needs tuning based on your specific physical setup.
         const int SHAKE_THRESHOLD = 300; 
 
         while (true) {
-            // Block until new sensor data arrives
             in >> current;
 
             if (!is_first_reading) {
-                // Calculate the absolute delta (change) on each axis
                 int delta_x = abs(current.x - previous.x);
                 int delta_y = abs(current.y - previous.y);
                 int delta_z = abs(current.z - previous.z);
                 
-                // Sum the deltas to get total movement magnitude approximation
                 int total_movement = delta_x + delta_y + delta_z;
 
                 if (total_movement > SHAKE_THRESHOLD) {
-                    // Send an event flag down the line!
                     out << true; 
                 }
             } else {
@@ -129,7 +130,6 @@ public:
 };
 
 // --- 3. Shake Event Consumer Process ---
-// A CSP channel requires a receiver. This process simply listens for shake events.
 class ShakeEventConsumer : public CSProcess {
     Chanin<bool> in;
 
@@ -139,7 +139,6 @@ public:
     void run() override {
         bool shake_flag;
         while (true) {
-            // Block until a shake event is emitted
             in >> shake_flag;
             
             if (shake_flag) {
@@ -160,7 +159,8 @@ void MainApp_Task(void* params) {
     static Channel<bool> c_shake_events;
 
     // Instantiate the processes, wiring them together
-    static Adxl345Reader      proc_reader(c_accel_data.writer());
+    // Pass the global ISR channel's reader into the ADXL345 reader
+    static Adxl345Reader      proc_reader(i2c_isr_chan.reader(), c_accel_data.writer());
     static ShakeLogic         proc_logic(c_accel_data.reader(), c_shake_events.writer());
     static ShakeEventConsumer proc_consumer(c_shake_events.reader());
 
@@ -172,6 +172,5 @@ void MainApp_Task(void* params) {
 }
 
 void RunProcessingChainTest(void) {
-    // Note: Task creation is the only 'dynamic' part remaining, standard for FreeRTOS
     xTaskCreate(MainApp_Task, "MainApp", 4096, NULL, tskIDLE_PRIORITY + 3, NULL);
 }

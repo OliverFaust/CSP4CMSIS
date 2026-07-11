@@ -12,10 +12,9 @@
 namespace csp {
     class CSProcess; // Defined in process.h
     
-    // *** NEW: Execution Mode for Run Overload ***
     enum class ExecutionMode {
-        TerminatingNetwork, // Blocking: Executes first process, waits for the others. (Original 'Run')
-        StaticNetwork       // Non-blocking: Spawns ALL processes as new tasks, returns immediately. (New requirement)
+        TerminatingNetwork, // Blocking: spawns all processes, waits for all to finish.
+        StaticNetwork        // Non-blocking: spawns all processes, returns immediately.
     };
     
     // --- Internal Task Context DEFINITION ---
@@ -34,89 +33,79 @@ extern "C" {
 // --- 3. Continue CSP Namespace (For Template Logic) ---
 namespace csp { 
 
+// API 1.2: historical literal used by the pre-1.2 parallel spawner for
+// every process except index 0. Preserved here as the fallback for any
+// process that doesn't override stackWords() -- see process.h.
+#ifndef CSP_LEGACY_PARALLEL_STACK_WORDS
+#define CSP_LEGACY_PARALLEL_STACK_WORDS 256
+#endif
+
+// Historical composition-wide default priority (unchanged from pre-1.2).
+#ifndef CSP_LEGACY_PARALLEL_PRIORITY
+#define CSP_LEGACY_PARALLEL_PRIORITY (tskIDLE_PRIORITY + 2)
+#endif
+
 // --- Parallel Helper ---
 template <typename... Processes>
 class ParallelHelper {
 private:
     std::tuple<Processes&...> procs;
 
-    // Helper to spawn a task for a specific process index
+    // API 1.2: spawns process I with ITS OWN declared stack/priority
+    // (falling back to the historical literals if unspecified). Used
+    // uniformly for every index, including 0 -- no process is special.
     template <std::size_t I>
-    void spawn_task(SemaphoreHandle_t sem, UBaseType_t priority) {
-        // Uses the now-defined TaskCtx
+    void spawn_task(SemaphoreHandle_t sem, UBaseType_t composition_priority) {
         TaskCtx* ctx = new TaskCtx{ &std::get<I>(procs), sem };
-        
+
+        size_t stack = resolveStackWords(std::get<I>(procs), CSP_LEGACY_PARALLEL_STACK_WORDS);
+        UBaseType_t priority = resolveTaskPriority(std::get<I>(procs), composition_priority);
+
         xTaskCreate(
             (TaskFunction_t)ThreadFuncWrapper, 
             std::get<I>(procs).name(),
-            256, 
+            stack, 
             ctx,
             priority,
             NULL
         );
     }
 
-    // Recursive spawner: Spawns tasks for indices 1 to N (skipping 0)
+    // Spawns ALL processes, indices 0..N-1.
     template <std::size_t I>
-    void spawn_others(SemaphoreHandle_t sem, UBaseType_t priority) {
+    void spawn_all(SemaphoreHandle_t sem, UBaseType_t composition_priority) {
         if constexpr (I < sizeof...(Processes)) {
-            spawn_task<I>(sem, priority);
-            spawn_others<I + 1>(sem, priority);
-        }
-    }
-    
-    // *** Spawns ALL processes (for non-blocking SPN launch) ***
-    template <std::size_t I>
-    void spawn_all(SemaphoreHandle_t sem, UBaseType_t priority) {
-        if constexpr (I < sizeof...(Processes)) {
-            spawn_task<I>(sem, priority);
-            spawn_all<I + 1>(sem, priority);
+            spawn_task<I>(sem, composition_priority);
+            spawn_all<I + 1>(sem, composition_priority);
         }
     }
 
 public:
     explicit ParallelHelper(Processes&... p) : procs(p...) {}
 
-    // 1. *** Renamed/Modified: Standard Blocking Run (ExecutionMode::TerminatingNetwork) ***
-    void execute_terminating(UBaseType_t priority) {
+    // 1. Blocking Run (ExecutionMode::TerminatingNetwork).
+    // API 1.2: spawns ALL N processes (including index 0) as their own
+    // tasks and blocks the CALLING task until all N have completed.
+    // Previously, index 0 ran inline on the caller's stack; the caller
+    // now does no CSP work of its own and can safely self-delete once
+    // this returns, if it has nothing further to do.
+    void execute_terminating(UBaseType_t composition_priority) {
         constexpr size_t num_procs = sizeof...(Processes);
-        
-        SemaphoreHandle_t done_sem = NULL;
-        if constexpr (num_procs > 1) {
-             done_sem = xSemaphoreCreateCounting(num_procs - 1, 0);
-             spawn_others<1>(done_sem, priority);
-        }
 
-        // Run the first process on the current stack
-        std::get<0>(procs).run(); 
+        SemaphoreHandle_t done_sem = xSemaphoreCreateCounting(num_procs, 0);
+        spawn_all<0>(done_sem, composition_priority);
 
-        if (done_sem) {
-            for (size_t i = 1; i < num_procs; ++i) {
-                xSemaphoreTake(done_sem, portMAX_DELAY);
-            }
-            vSemaphoreDelete(done_sem);
+        for (size_t i = 0; i < num_procs; ++i) {
+            xSemaphoreTake(done_sem, portMAX_DELAY);
         }
+        vSemaphoreDelete(done_sem);
     }
 
-    // 2. *** MODIFIED: Non-Blocking Run (ExecutionMode::StaticNetwork) ***
-    void execute_static(UBaseType_t priority) {
-        constexpr size_t num_procs = sizeof...(Processes);
-        
-        // 1. Spawn all processes *except* the first one (the intended orchestrator)
-        if constexpr (num_procs > 1) {
-             // Use spawn_others to launch w1, w2, w3, c1. 
-             // Pass NULL for the semaphore since these tasks are perpetual and won't signal completion.
-             spawn_others<1>(NULL, priority); 
-        }
-
-        // 2. Run the first process (f1) on the current stack. 
-        // This thread (MainApp_Task) will be BLOCKED until f1.run() returns.
-        std::get<0>(procs).run(); 
-        
-        // 3. The current thread (MainApp_Task) unblocks here when f1 finishes.
-        
-        // NOTE: There is no blocking wait for the spawned tasks (w1, w2, w3, c1) 
-        // because they are perpetual SPN elements.
+    // 2. Non-Blocking Run (ExecutionMode::StaticNetwork).
+    // API 1.2: spawns ALL N processes (including index 0) and returns
+    // immediately. No process runs on the calling task's stack.
+    void execute_static(UBaseType_t composition_priority) {
+        spawn_all<0>(NULL, composition_priority);
     }
 };
 
@@ -127,20 +116,23 @@ ParallelHelper<Processes...> InParallel(Processes&... procs) {
     return ParallelHelper<Processes...>(procs...);
 }
 
-// 1. Overloaded Run for Terminating Networks (Original behavior, implicitly uses TerminatingNetwork mode)
+// 1. Terminating-network Run(). 'priority' is the COMPOSITION-WIDE
+// default: it applies to any process that hasn't overridden
+// taskPriority(). The default value matches pre-1.2 behavior exactly.
 template <typename... Processes>
-void Run(ParallelHelper<Processes...> helper) {
-    helper.execute_terminating(tskIDLE_PRIORITY + 2);
+void Run(ParallelHelper<Processes...> helper,
+         UBaseType_t priority = CSP_LEGACY_PARALLEL_PRIORITY) {
+    helper.execute_terminating(priority);
 }
 
-// 2. *** NEW Overloaded Run (The requested change) ***
+// 2. Explicit ExecutionMode selection. Same priority semantics as (1).
 template <typename... Processes>
-void Run(ParallelHelper<Processes...> helper, ExecutionMode mode) {
+void Run(ParallelHelper<Processes...> helper, ExecutionMode mode,
+         UBaseType_t priority = CSP_LEGACY_PARALLEL_PRIORITY) {
     if (mode == ExecutionMode::StaticNetwork) {
-        helper.execute_static(tskIDLE_PRIORITY + 2);
+        helper.execute_static(priority);
     } else {
-        // Fallback or explicit selection of TerminatingNetwork
-        helper.execute_terminating(tskIDLE_PRIORITY + 2);
+        helper.execute_terminating(priority);
     }
 }
 

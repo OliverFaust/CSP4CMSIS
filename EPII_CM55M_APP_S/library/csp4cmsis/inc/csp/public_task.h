@@ -28,25 +28,23 @@ namespace csp {
  */
 inline void Run(CSProcess& process, UBaseType_t priority = CSP_DEFAULT_TASK_PRIORITY) {
     
-    // CRITICAL SPN CHANGE: Changed signature from (CSProcess* process) to (CSProcess& process)
-    // to enforce static ownership and remove the possibility of passing nullptr.
-    
-    // NOTE TO IMPLEMENTER: In a true SPN, the implementation of xTaskCreate should 
-    // be replaced by xTaskCreateStatic (or equivalent) in the final project setup.
+    // API 1.2: process.stackWords()/taskPriority() override the call-site
+    // defaults below when the process has an opinion; otherwise behavior
+    // is byte-for-byte identical to pre-1.2.
+    size_t stack = resolveStackWords(process, TEST_STACK_SIZE_WORDS);
+    UBaseType_t effective_priority = resolveTaskPriority(process, priority);
 
     BaseType_t result = xTaskCreate(
-        ThreadFuncWrapper,      // The common entry function
-        "CSP_PROC",             // Default name (should be unique in SPN)
-        TEST_STACK_SIZE_WORDS,  // Stack size 
-        (void*)&process,        // Parameter (the address of the static CSProcess object)
-        priority,               // Priority
-        NULL                    // Task Handle (optional)
+        ThreadFuncWrapper,
+        "CSP_PROC",
+        stack,
+        (void*)&process,
+        effective_priority,
+        NULL
     );
 
     if (result != pdPASS) {
         printf("FATAL ERROR: Failed to create FreeRTOS task for CSProcess. Check stack/heap/config.\r\n");
-        // CRITICAL SPN CHANGE: Removed 'delete process' as the object is static.
-        // The system must be designed to halt or enter a recovery state here.
     }
 }
 
