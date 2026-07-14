@@ -166,9 +166,10 @@ CUSTOMER ?= seeed
 #APP_TYPE = allon_sensor_tflm_freertos
 # APP_TYPE = csp4cmsis_allon_sensor_tflm
 # APP_TYPE = csp4cmsis_lossy_policy_test
-APP_TYPE = csp4cmsis_kws_pdm_record
+# APP_TYPE = csp4cmsis_kws_pdm_record
 # APP_TYPE = hello_world_freertos_tz_s_only
 # APP_TYPE = csp4cmsis_shake_detection
+APP_TYPE = csp4cmsis_kws_iic
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))
