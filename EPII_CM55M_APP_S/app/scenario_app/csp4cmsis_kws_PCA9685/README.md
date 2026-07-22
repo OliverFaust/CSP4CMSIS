@@ -216,7 +216,7 @@ app/scenario_app/csp4cmsis_kws_iic/
   * **I2C address**: the code assumes `0x40` (all address pads open); a bridged A0–A5 pad changes the effective address and every write would silently NACK.
 * **Build fails or asserts inside `fully_connected_common.cc`** — this app compiles with `-DCSP4CMSIS_KWS_IIC`. Extend the existing symmetric-quantization guard in `library/inference/<tflm_tag>/tensorflow/lite/micro/kernels/fully_connected_common.cc` to include it:
     ```cpp
-    #if defined(KWS_PDM_RECORD) || defined(CSP4CMSIS_KWS_IIC)
+     #if ((defined(KWS_PDM_RECORD) || defined(CSP4CMSIS_KWS_PDM_RECORD)) || defined(CSP4CMSIS_KWS_IIC)) || defined(CSP4CMSIS_KWS_PCA9685)
     #else
       TFLITE_DCHECK(filter->params.zero_point == 0);
     #endif
