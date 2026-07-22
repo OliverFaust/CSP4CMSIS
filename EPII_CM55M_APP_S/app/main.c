@@ -259,6 +259,18 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_KWS_PCA9685
+#include "csp4cmsis_kws_PCA9685.h"
+
+/* main entry */
+int main(void)
+{
+	board_init();
+	kws_pdm_record_app();
+	return 0;
+}
+#endif
+
 #ifdef CSP4CMSIS_KWS_IIC
 #include "csp4cmsis_kws_iic.h"
 

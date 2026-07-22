@@ -169,7 +169,8 @@ CUSTOMER ?= seeed
 # APP_TYPE = csp4cmsis_kws_pdm_record
 # APP_TYPE = hello_world_freertos_tz_s_only
 # APP_TYPE = csp4cmsis_shake_detection
-APP_TYPE = csp4cmsis_kws_iic
+# APP_TYPE = csp4cmsis_kws_iic
+APP_TYPE = csp4cmsis_kws_PCA9685
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))
