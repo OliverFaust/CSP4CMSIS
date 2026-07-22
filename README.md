@@ -22,7 +22,6 @@ Finally, teach you how to restore to the original factory settings and run [Sens
 
 | scenario_app  | project name |
 | ----- | -------- |
-
 | CSP: Library | [csp4cmsis](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/library/csp4cmsis) | 
 | CSP: Keyword detection with servo actuation |[csp4cmsis_kws_PCA9685](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_kws_PCA9685) |
 | CSP: Keyword detection with actuation |[csp4cmsis_kws_iic](https://github.com/OliverFaust/CSP4CMSIS/tree/main/EPII_CM55M_APP_S/app/scenario_app/csp4cmsis_kws_iic) |
