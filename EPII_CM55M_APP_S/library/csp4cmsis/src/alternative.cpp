@@ -1,6 +1,8 @@
 #include "csp/alt.h"
 #include <cstdio>
-// Ensure the CMSIS compiler intrinsics are available (often included via device headers)
+// CMSIS compiler intrinsics (__CLZ, etc.) -- typically pulled in via the
+// device header, but included explicitly here since this file depends on
+// __CLZ directly.
 extern "C" {
     #include <cmsis_compiler.h>
 }
@@ -20,7 +22,12 @@ AltScheduler::~AltScheduler() {
 
 void AltScheduler::initForCurrentTask() {
     waiting_task_handle = xTaskGetCurrentTaskHandle();
-    event_group = xEventGroupCreate();
+    // Static allocation: event_group_buffer is a StaticEventGroup_t member
+    // of AltScheduler (see alt.h). This keeps AltScheduler -- and therefore
+    // every Alternative, since it owns one AltScheduler -- free of heap
+    // allocation, consistent with the zero-heap guarantee documented
+    // throughout this library.
+    event_group = xEventGroupCreateStatic(&event_group_buffer);
 }
 
 unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offset) {
@@ -55,22 +62,27 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         fired = xEventGroupWaitBits(event_group, wait_mask, pdTRUE, pdFALSE, portMAX_DELAY);
     }
 
-    // Phase 2.5: Identify which guard fired using GCC intrinsic for O(1) selection
+    // Phase 2.5: Identify which guard fired.
+    //
+    // Priority follows bit order (bit 0 = highest), but fairSelect()
+    // rotates the starting priority via 'offset' each call to avoid
+    // starvation. We therefore look first at bits >= offset, and only
+    // wrap around to bits < offset if nothing fired there. Within
+    // whichever half is chosen, the lowest set bit is isolated with the
+    // standard two's-complement trick (x & -x), and __CLZ resolves its
+    // index in O(1) -- a single cycle on any Cortex-M core with a
+    // hardware CLZ instruction (Cortex-M3/M4/M7 and Armv8-M Mainline),
+    // and a short bounded software emulation on cores without one
+    // (Cortex-M0/M0+/M1/M23), since __CLZ is a CMSIS intrinsic rather
+    // than raw inline assembly.
     size_t selected = 0;
     if (fired != 0) {
-        // Create a mask to only look at bits from 'offset' up to 31
         uint32_t offset_mask = 0xFFFFFFFFU << offset;
         uint32_t masked_fired = fired & offset_mask;
-        
-        if (masked_fired != 0) {
-            // A guard at or above the fairness offset fired.
-            uint32_t lowest_set_bit = masked_fired & -(int32_t)masked_fired;
-            selected = 31 - __builtin_clz(lowest_set_bit);
-        } else {
-            // Wrap-around: only guards strictly below the offset fired.
-            uint32_t lowest_set_bit = fired & -(int32_t)fired;
-            selected = 31 - __builtin_clz(lowest_set_bit);
-        }
+
+        uint32_t candidate = (masked_fired != 0) ? masked_fired : fired;
+        uint32_t lowest_set_bit = candidate & (uint32_t)(-(int32_t)candidate);
+        selected = 31 - __CLZ(lowest_set_bit);
     }
     
     // Phase 3: Disable
