@@ -1,5 +1,5 @@
 // --- glue.cpp ---
-#include "process.h" // For csp::internal::Process, ThreadFuncWrapper usage
+#include "csp/process.h" // For csp::internal::Process, ThreadFuncWrapper usage
 #include "time.h"    // For csp::Time, CurrentTime, SleepFor, SleepUntil
 #include "FreeRTOS.h"
 #include "task.h"
@@ -27,7 +27,7 @@ void operator delete(void* ptr) noexcept {
 // =============================================================
 //  Global Time Functions (Defined in csp namespace)
 // =============================================================
-
+/*
 csp::Time CurrentTime() {
     return csp::Time(xTaskGetTickCount());
 }
@@ -59,3 +59,4 @@ void SleepUntil(const csp::Time time) {
 }
 
 // --- End of glue.cpp ---
+*/

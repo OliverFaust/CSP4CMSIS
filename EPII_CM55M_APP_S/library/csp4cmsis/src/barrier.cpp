@@ -1,6 +1,6 @@
 // --- barrier.cpp ---
 
-#include "barrier.h" // Barrier definition
+#include "csp/barrier.h" // Barrier definition
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include <cstdio>

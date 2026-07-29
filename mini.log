@@ -1,0 +1,2489 @@
+[!p[?3;4l[4l>[0m(B[37;40m[?1h=[H[2J[0m(B[37;41m[49;1H[K[?12l[?25h[?25l                                                                                                                                                                                             [?12l[?25h[?12l[?25h[?25lCTRL-A Z for help | 921600 8N1 | NOR | Minicom 2.10 | VT102 | Offline | ttyACM0                                                                                                              [49;160H[?12l[?25h[1;1H
+[0m(B[37;40mWelcome to minicom 2.10
+
+OPTIONS: I18n 
+Port /dev/ttyACM0, 23:46:46 [U]
+
+Press CTRL-A Z for help on special keys
+
+1st BL Modem Build DATE=Nov 30 2023, 0x0002000b
+Please input any key to enter X-Modem mode in 100 ms 
+waiting input key...
+slot flash_offset 0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+bl_status = 0x800000, HX_DSP_FLAG 1
+bl_status = 0x800000
+jump_addr=0x10000000
+Compiler Version: ARM GNU, 13.2.1 20231009
+freertos rtos_app
+BOli
+*** MainApp_Task: Run() returned, entering report loop ***
+Camera: initializing sensor
+
+thos-U55 device initialised
+model's schema version 3
+initial done
+cis_IMX219_init 
+mclk DIV3, xshutdown_pin=82
+Set PA1(AON_GPIO1) to High
+hx_drv_cis_set_slaveID(0x10)
+IMX219 Init Stream by app 
+IMX219 Init by app (IMX219_binning_setting)
+IMX219 Init by app (IMX219_exposure_setting)
+IMX219 Init by app (IMX219_again_setting)
+IMX219 Init by app (IMX219_dgain_setting)
+IMX219 Init by app (IMX219_mirror_setting)
+WD1[340dfe80], WD2_J[340dfe80], WD3_RAW[3406f680], JPAuto[3406f600]
+MIPI CLK change to PLL freq:(400000000 / 2)
+MIPI TX CLK: 200M
+RESET MIPI CSI RX/TX
+sensor_type: 15
+IMX219 on by app done
+g_cursensorstream: 0
+Frame ready IRQ
+Trigger send
+Camera: retrigger hardware for next frame
+invoke pass
+person_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 0: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 0: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 1: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 1: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 2: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 2: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 3: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 3: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 4: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 4: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame Frame 5: prediction = -25[1;48r[48;1H
+[1;49r[48;1H5: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 6: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 6: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 7: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 7: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 8: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 8: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 9: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 9: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 10: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 10: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 11: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 11: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 1Frame 12: prediction = -23[1;48r[48;1H
+[1;49r[48;1H2: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 13: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 13: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 14: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 14: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 15: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 15: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 16: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 16: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 17: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 17: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 18: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 18: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFrame 19Frame 19: prediction = -27[1;48r[48;1H
+[1;49r[48;1H: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 20: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 20: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 21: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 21: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 22: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 22: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 23: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 23: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 24: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 24: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 25: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 25: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 26Frame 26: prediction = -21[1;48r[48;1H
+[1;49r[48;1H: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-26[1;48r[48;1H
+[1;49r[48;1HFrame 27: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame 27: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 28: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 28: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 29: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 29: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 30: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 30: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 31: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 31: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 32: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 32: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 33:Frame 33: prediction = -21[1;48r[48;1H
+[1;49r[48;1H prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 34: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 34: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-17[1;48r[48;1H
+[1;49r[48;1HFrame 35: prediction = -17[1;48r[48;1H
+[1;49r[48;1HFrame 35: prediction = -17[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 36: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 36: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 37: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 37: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 38: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 38: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 39: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 39: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 40: Frame 40: prediction = -23[1;48r[48;1H
+[1;49r[48;1Hprediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 41: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 41: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 42: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 42: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 43: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 43: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 44: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 44: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 45: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 45: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 46: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 46: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 47: Frame 47: prediction = -25[1;48r[48;1H
+[1;49r[48;1Hprediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 48: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 48: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 49: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 49: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 50: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 50: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 51: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 51: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 52: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 52: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 53: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 53: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 54: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 54: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 55: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 55: prediction = -25[1;48r[48;1H
+[1;49r[48;1HCamera: stack HWM = 68 words (272 bytes)[1;48r[48;1H
+[1;49r[48;1HInference: stack HWM = 136 words (544 bytes)[1;48r[48;1H
+[1;49r[48;1HConsole: stack HWM = 190 words (760 bytes)[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 56: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 56: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFrame 57: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame 57: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 58: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 58: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 59: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 59: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 60: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 60: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 61: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 61: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 62: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 62: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 63: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 63: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 64: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 64: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 65: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 65: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 66: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 66: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 67: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 67: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 68: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 68: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 69: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 69: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFFrame 70: prediction = -27[1;48r[48;1H
+[1;49r[48;1Hrame 70: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 71: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 71: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 72: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 72: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 73: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 73: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 74: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 74: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 75: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 75: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 76: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 76: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFFrame 77: prediction = -20[1;48r[48;1H
+[1;49r[48;1Hrame 77: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 78: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 78: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 79: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 79: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 80: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 80: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 81: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 81: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 82: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 82: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 83: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 83: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrFrame 84: prediction = -24[1;48r[48;1H
+[1;49r[48;1Hame 84: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 85: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 85: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 86: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 86: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 87: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 87: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 88: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 88: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 89: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 89: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 90: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 90: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFraFrame 91: prediction = -23[1;48r[48;1H
+[1;49r[48;1Hme 91: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 92: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 92: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 93: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 93: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 94: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 94: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 95: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 95: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 96: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 96: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 97: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 97: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFraFrame 98: prediction = -24[1;48r[48;1H
+[1;49r[48;1Hme 98: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 99: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 99: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 100: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 100: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 101: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 101: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 102: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 102: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 103: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 103: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 104: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 104: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFramFrame 105: prediction = -21[1;48r[48;1H
+[1;49r[48;1He 105: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 106: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 106: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 107: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 107: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 108: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 108: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 109: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 109: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 110: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 110: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-26[1;48r[48;1H
+[1;49r[48;1HFrame 111: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame 111: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrameFrame 112: prediction = -25[1;48r[48;1H
+[1;49r[48;1H 112: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 113: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 113: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 114: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 114: prediction = -23[1;48r[48;1H
+[1;49r[48;1HCamera: stack HWM = 68 words (272 bytes)[1;48r[48;1H
+[1;49r[48;1HInference: stack HWM = 136 words (544 bytes)[1;48r[48;1H
+[1;49r[48;1HConsole: stack HWM = 174 words (696 bytes)[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 115: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 115: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 116: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 116: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 117: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 117: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 118: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 118: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrameFrame 119: prediction = -23[1;48r[48;1H
+[1;49r[48;1H 119: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 120: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 120: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 121: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 121: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 122: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 122: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 123: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 123: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 124: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 124: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 125: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 125: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame Frame 126: prediction = -25[1;48r[48;1H
+[1;49r[48;1H126: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 127: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 127: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 128: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 128: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 129: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 129: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFrame 130: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame 130: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 131: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 131: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 132: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 132: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 1Frame 133: prediction = -21[1;48r[48;1H
+[1;49r[48;1H33: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 134: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 134: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 135: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 135: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 136: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 136: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 137: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 137: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 138: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 138: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 139: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 139: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 1Frame 140: prediction = -21[1;48r[48;1H
+[1;49r[48;1H40: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 141: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 141: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 142: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 142: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 143: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 143: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 144: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 144: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 145: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 145: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 146: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 146: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 14Frame 147: prediction = -20[1;48r[48;1H
+[1;49r[48;1H7: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 148: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 148: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 149: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 149: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 150: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 150: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 151: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 151: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 152: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 152: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 153: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 153: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 154Frame 154: prediction = -19[1;48r[48;1H
+[1;49r[48;1H: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 155: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 155: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 156: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 156: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 157: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 157: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 158: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 158: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 159: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 159: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 160: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 160: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 161Frame 161: prediction = -22[1;48r[48;1H
+[1;49r[48;1H: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 162: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 162: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 163: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 163: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 164: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 164: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-26[1;48r[48;1H
+[1;49r[48;1HFrame 165: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame 165: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 166: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 166: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 167: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 167: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 168:Frame 168: prediction = -21[1;48r[48;1H
+[1;49r[48;1H prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 169: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 169: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 170: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 170: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 171: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 171: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 172: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 172: prediction = -24[1;48r[48;1H
+[1;49r[48;1HCamera: stack HWM = 68 words (272 bytes)[1;48r[48;1H
+[1;49r[48;1HInference: stack HWM = 136 words (544 bytes)[1;48r[48;1H
+[1;49r[48;1HConsole: stack HWM = 174 words (696 bytes)[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 173: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 173: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 174: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 174: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 175: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 175: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 176: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 176: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 177: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 177: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 178: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 178: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 179: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 179: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 180: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 180: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 181: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 181: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 182: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 182: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 183: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 183: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 184: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 184: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 185: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 185: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 186: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 186: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-26[1;48r[48;1H
+[1;49r[48;1HFrame 187: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame 187: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 188: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 188: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 189: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 189: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 190: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 190: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 191: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 191: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 192: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 192: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 193: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 193: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 194: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 194: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 195: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 195: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 196: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 196: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 197: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 197: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFFrame 198: prediction = -20[1;48r[48;1H
+[1;49r[48;1Hrame 198: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 199: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 199: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 200: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 200: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 201: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 201: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 202: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 202: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 203: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 203: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 204: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 204: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrFrame 205: prediction = -23[1;48r[48;1H
+[1;49r[48;1Hame 205: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 206: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 206: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 207: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 207: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 208: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 208: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 209: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 209: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFrame 210: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame 210: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 211: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 211: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrFrame 212: prediction = -23[1;48r[48;1H
+[1;49r[48;1Hame 212: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-27[1;48r[48;1H
+[1;49r[48;1HFrame 213: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame 213: prediction = -27[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 214: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 214: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 215: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 215: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 216: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 216: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 217: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 217: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 218: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 218: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFraFrame 219: prediction = -21[1;48r[48;1H
+[1;49r[48;1Hme 219: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 220: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 220: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 221: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 221: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 222: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 222: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 223: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 223: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 224: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 224: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 225: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 225: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFramFrame 226: prediction = -22[1;48r[48;1H
+[1;49r[48;1He 226: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 227: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 227: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 228: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 228: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 229: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 229: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 230: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 230: prediction = -21[1;48r[48;1H
+[1;49r[48;1HCamera: stack HWM = 68 words (272 bytes)[1;48r[48;1H
+[1;49r[48;1HInference: stack HWM = 136 words (544 bytes)[1;48r[48;1H
+[1;49r[48;1HConsole: stack HWM = 174 words (696 bytes)[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 231: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 231: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 232: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 232: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFramFrame 233: prediction = -21[1;48r[48;1H
+[1;49r[48;1He 233: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 234: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 234: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 235: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 235: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 236: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 236: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 237: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 237: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 238: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 238: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 239: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 239: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrameFrame 240: prediction = -23[1;48r[48;1H
+[1;49r[48;1H 240: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 241: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 241: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 242: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 242: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 243: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 243: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 244: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 244: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 245: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 245: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 246: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 246: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-17[1;48r[48;1H
+[1;49r[48;1HFrame Frame 247: prediction = -17[1;48r[48;1H
+[1;49r[48;1H247: prediction = -17[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 248: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 248: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 249: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 249: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 250: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 250: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 251: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 251: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 252: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 252: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 253: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 253: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame Frame 254: prediction = -19[1;48r[48;1H
+[1;49r[48;1H254: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 255: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 255: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 256: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 256: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 257: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 257: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 258: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 258: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 259: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 259: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 260: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 260: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 2Frame 261: prediction = -24[1;48r[48;1H
+[1;49r[48;1H61: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 262: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 262: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 263: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 263: prediction = -25[1;48r[48;1H
+[1;49r[48;1H[8;85H[?25l[0m(B[33;44m[1m+----------------------+[9;85H|    Leave Minicom?    |[10;85H|               No     |[11;85H+----------------------+[10;106H[?25l[10;88H[0m(B[33;44m[7m[1m   Yes  [?12l[?25h[8;1H[0m(B[37;40mCamera: retrigger hardware for next frame                                                                   [9;1Hinvoke pass                                                                                                 [10;1Hperson_score:-21                                                                                            [11;1HFrame 258: prediction = -21                                                                                 [48;1H[?12l[?25h[?12l[?25h[H[2J[?12l[?25h[?1l>[!p[?3;4l[4l>[!p[?3;4l[4l>[0m(B[37;40m[?1h=[H[2J[0m(B[37;41m[49;1H[K[?12l[?25h[?25l                                                                                                                                                                                             [?12l[?25h[?12l[?25h[?25lCTRL-A Z for help | 921600 8N1 | NOR | Minicom 2.10 | VT102 | Offline | ttyACM0                                                                                                              [49;160H[?12l[?25h[1;1H
+[0m(B[37;40mWelcome to minicom 2.10
+
+OPTIONS: I18n 
+Port /dev/ttyACM0, 23:48:13 [U]
+
+Press CTRL-A Z for help on special keys
+
+1st BL Modem Build DATE=Nov 30 2023, 0x0002000b
+Please input any key to enter X-Modem mode in 100 ms 
+waiting input key...
+slot flash_offset 0x00000000
+New MemDesp himax_sec_SB_image_process PASS
+set_memory_s_ns
+bl_status = 0x800000, HX_DSP_FLAG 1
+bl_status = 0x800000
+jump_addr=0x10000000
+Compiler Version: ARM GNU, 13.2.1 20231009
+freertos rtos_app
+BOli
+*** MainApp_Task: Run() returned, entering report loop ***
+Camera: initializing sensor
+
+thos-U55 device initialised
+model's schema version 3
+initial done
+cis_IMX219_init 
+mclk DIV3, xshutdown_pin=82
+Set PA1(AON_GPIO1) to High
+hx_drv_cis_set_slaveID(0x10)
+IMX219 Init Stream by app 
+IMX219 Init by app (IMX219_binning_setting)
+IMX219 Init by app (IMX219_exposure_setting)
+IMX219 Init by app (IMX219_again_setting)
+IMX219 Init by app (IMX219_dgain_setting)
+IMX219 Init by app (IMX219_mirror_setting)
+WD1[340dfe80], WD2_J[340dfe80], WD3_RAW[3406f680], JPAuto[3406f600]
+MIPI CLK change to PLL freq:(400000000 / 2)
+MIPI TX CLK: 200M
+RESET MIPI CSI RX/TX
+sensor_type: 15
+IMX219 on by app done
+g_cursensorstream: 0
+Frame ready IRQ
+Trigger send
+Camera: retrigger hardware for next frame
+invoke pass
+person_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 0: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 0: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 1: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 1: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 2: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 2: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 3: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 3: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 4: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 4: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame Frame 5: prediction = -21[1;48r[48;1H
+[1;49r[48;1H5: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 6: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 6: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 7: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 7: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 8: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 8: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 9: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 9: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 10: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 10: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 11: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 11: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 1Frame 12: prediction = -21[1;48r[48;1H
+[1;49r[48;1H2: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 13: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 13: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 14: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 14: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 15: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 15: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 16: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 16: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 17: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 17: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 18: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 18: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 1Frame 19: prediction = -25[1;48r[48;1H
+[1;49r[48;1H9: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 20: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 20: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 21: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 21: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 22: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 22: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 23: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 23: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 24: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 24: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 25: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 25: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 26Frame 26: prediction = -23[1;48r[48;1H
+[1;49r[48;1H: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 27: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 27: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 28: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 28: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 29: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 29: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 30: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 30: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 31: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 31: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 32: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 32: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 33:Frame 33: prediction = -24[1;48r[48;1H
+[1;49r[48;1H prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 34: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 34: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 35: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 35: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 36: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 36: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 37: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 37: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 38: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 38: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 39: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 39: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 40:Frame 40: prediction = -22[1;48r[48;1H
+[1;49r[48;1H prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 41: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 41: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 42: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 42: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 43: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 43: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 44: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 44: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 45: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 45: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-20[1;48r[48;1H
+[1;49r[48;1HFrame 46: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame 46: prediction = -20[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 47: Frame 47: prediction = -25[1;48r[48;1H
+[1;49r[48;1Hprediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 48: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 48: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 49: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 49: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 50: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 50: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 51: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 51: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 52: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 52: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 53: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 53: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 54: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 54: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-25[1;48r[48;1H
+[1;49r[48;1HFrame 55: prediction = -25[1;48r[48;1H
+[1;49r[48;1HFrame 55: prediction = -25[1;48r[48;1H
+[1;49r[48;1HCamera: stack HWM = 68 words (272 bytes)[1;48r[48;1H
+[1;49r[48;1HInference: stack HWM = 136 words (544 bytes)[1;48r[48;1H
+[1;49r[48;1HConsole: stack HWM = 190 words (760 bytes)[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 56: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 56: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 57: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 57: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 58: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 58: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-18[1;48r[48;1H
+[1;49r[48;1HFrame 59: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame 59: prediction = -18[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 60: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 60: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 61: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 61: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-26[1;48r[48;1H
+[1;49r[48;1HFrame 62: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame 62: prediction = -26[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 63: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 63: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-19[1;48r[48;1H
+[1;49r[48;1HFrame 64: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame 64: prediction = -19[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 65: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 65: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 66: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 66: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 67: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 67: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 68: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 68: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 69: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 69: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 70: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 70: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 71: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 71: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-23[1;48r[48;1H
+[1;49r[48;1HFrame 72: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame 72: prediction = -23[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-24[1;48r[48;1H
+[1;49r[48;1HFrame 73: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame 73: prediction = -24[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 74: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 74: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-21[1;48r[48;1H
+[1;49r[48;1HFrame 75: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame 75: prediction = -21[1;48r[48;1H
+[1;49r[48;1HFrame ready IRQ[1;48r[48;1H
+[1;49r[48;1HTrigger send[1;48r[48;1H
+[1;49r[48;1HCamera: retrigger hardware for next frame[1;48r[48;1H
+[1;49r[48;1Hinvoke pass[1;48r[48;1H
+[1;49r[48;1Hperson_score:-22[1;48r[48;1H
+[1;49r[48;1HFrame 76: prediction = -22[1;48r[48;1H
+[1;49r[48;1HFrame 76: prediction = -22[1;48r[48;1H
+[1;49r[48;1H[8;85H[?25l[0m(B[33;44m[1m+----------------------+[9;85H|    Leave Minicom?    |[10;85H|               No     |[11;85H+----------------------+[10;106H[?25l[10;88H[0m(B[33;44m[7m[1m   Yes  [?12l[?25h[8;1H[0m(B[37;40mCamera: retrigger hardware for next frame                                                                   [9;1Hinvoke pass                                                                                                 [10;1Hperson_score:-21                                                                                            [11;1HFrame 71: prediction = -21                                                                                  [48;1H[?12l[?25h[?12l[?25h[H[2J[?12l[?25h[?1l>[!p[?3;4l[4l>

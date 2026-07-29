@@ -10,7 +10,6 @@ Inference::Inference(Chanin<frame_t> in, Chanout<result_t> out)
 
 void Inference::run()
 {
-    // Initialise model once
     if (cv_init(true, true) < 0) {
         xprintf("Inference: model init failed\n");
         return;
@@ -18,16 +17,12 @@ void Inference::run()
 
     while (true) {
         frame_t f;
-        m_frame_in.read(f);                  // wait for a frame
+        m_frame_in.read(f);
 
-        // Invalidate cache if needed
-        // hx_InvalidateDCache_by_Addr((void*)f.jpeg_addr, f.jpeg_sz);
-
-        // The model expects raw YUV input. In the original code, cv_run()
-        // automatically uses the raw buffer (app_get_raw_addr()), so we don't
-        // need to pass the JPEG buffer. Instead, we simply run inference.
-        // If your model needs JPEG decoding, you'd call a decoder here.
-        int8_t score = cv_run();              // runs on the latest raw frame
+        // cv_run() reads directly from the raw sensor buffer, not the
+        // JPEG buffer -- a model expecting JPEG input would need a
+        // decode step here first.
+        int8_t score = cv_run();
 
         result_t res;
         res.frame_index = f.index;

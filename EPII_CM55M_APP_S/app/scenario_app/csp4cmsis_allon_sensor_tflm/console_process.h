@@ -7,10 +7,12 @@
 // Forward declaration of result_t – the full definition will be included in the .cpp file.
 struct result_t;
 
-class Console : public csp::CSProcess {
+// API 1.3: see camera_process.h for why 256 and why CSProcessStatic<N>.
+class Console : public csp::CSProcessStatic<256> {
 public:
     explicit Console(csp::Chanin<result_t> in);
     void run() override;
+    const char* name() const override { return "Console"; }
 
 private:
     csp::Chanin<result_t> m_result_in;

@@ -5,10 +5,16 @@
 #include "common_types.h"
 #include "cisdp_sensor.h"
 
-class Camera : public csp::CSProcess {
+// API 1.3: stack depth (words) is now fixed at compile time via
+// CSProcessStatic<N> -- 256 matches the value this process previously
+// received as CSP_LEGACY_PARALLEL_STACK_WORDS's dynamic fallback, so
+// its memory footprint is unchanged; only where it lives (static
+// storage vs. heap) has changed.
+class Camera : public csp::CSProcessStatic<256> {
 public:
     Camera(csp::Chanout<frame_t> out);
     void run() override;
+    const char* name() const override { return "Camera"; }
 
 private:
     csp::Chanout<frame_t> m_frame_out;

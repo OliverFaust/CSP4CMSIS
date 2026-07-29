@@ -1,4 +1,4 @@
-#include "buffered_channel.h"
+#include "csp/buffered_channel.h"
 
 namespace csp::internal {
     // BufferedChannel is a template class.

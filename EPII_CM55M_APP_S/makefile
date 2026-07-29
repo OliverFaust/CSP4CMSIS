@@ -153,24 +153,24 @@ CUSTOMER ?= seeed
 # tflm_yolo11_od
 # tflm_yolov8_gender_cls
 ##
-#APP_TYPE = csp4cmsis_alt_test
-#APP_TYPE = csp4cmsis_chain_test
-#APP_TYPE = csp4cmsis_sieve
-#APP_TYPE = csp4cmsis_matrix_multiplication
-#APP_TYPE = csp4cmsis_comstime
-#APP_TYPE = csp4cmsis_dining_philosophers
-#APP_TYPE = csp4cmsis_asymmetric_philosophers
-#APP_TYPE = csp4cmsis_irq
-#APP_TYPE = csp4cmsis_alt_test_max
-#APP_TYPE = csp4cmsis_AI_testbench
-#APP_TYPE = allon_sensor_tflm_freertos
+# APP_TYPE = csp4cmsis_alt_test
+# APP_TYPE = csp4cmsis_chain_test
+# APP_TYPE = csp4cmsis_sieve
+# APP_TYPE = csp4cmsis_matrix_multiplication
+# APP_TYPE = csp4cmsis_comstime
+# APP_TYPE = csp4cmsis_dining_philosophers
+# APP_TYPE = csp4cmsis_asymmetric_philosophers
+# APP_TYPE = csp4cmsis_irq
+APP_TYPE = csp4cmsis_alt_test_max
+# APP_TYPE = csp4cmsis_AI_testbench
+# APP_TYPE = allon_sensor_tflm_freertos
 # APP_TYPE = csp4cmsis_allon_sensor_tflm
 # APP_TYPE = csp4cmsis_lossy_policy_test
 # APP_TYPE = csp4cmsis_kws_pdm_record
 # APP_TYPE = hello_world_freertos_tz_s_only
 # APP_TYPE = csp4cmsis_shake_detection
 # APP_TYPE = csp4cmsis_kws_iic
-APP_TYPE = csp4cmsis_kws_PCA9685
+# APP_TYPE = csp4cmsis_kws_PCA9685
 
 ### Options above must be added before include options.mk ###
 override EPII_ROOT := $(strip $(subst \,/,$(EPII_ROOT)))

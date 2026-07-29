@@ -98,7 +98,16 @@ namespace {
     constexpr float     kReportWindowMs = 20.0f * (float)kNativeHopMs; // 10000.0f
 }
 
-class ReporterProcess : public CSProcess {
+// CSProcess itself is abstract: stackWords()/stackBuffer()/taskBuffer() are
+// pure virtual so each task supplies its own static stack + StaticTask_t
+// storage (no more implicit fallback, per the v1.3 API notes above
+// InferenceProcess/PreprocessingProcess). CSProcessStatic<N> is the library
+// helper that supplies that storage for you -- inherit from it instead of
+// CSProcess directly and give it the stack size in words. Sizes below are
+// provisional (same "measure the HWM report line, then right-size" caveat
+// as MAIN_APP_STACK_WORDS); ReporterProcess just does xprintf formatting so
+// 1024 words is a generous starting point.
+class ReporterProcess : public CSProcessStatic<1024> {
     Chanin<KwsReportMsg> in;
 public:
     explicit ReporterProcess(Chanin<KwsReportMsg> r) : in(r) {}
@@ -309,7 +318,8 @@ namespace {
     };
 }
 
-class Pca9685Process : public CSProcess {
+// I2C register writes only, no deep call stack -- 1024 words is generous.
+class Pca9685Process : public CSProcessStatic<1024> {
     Chanin<bool> i2c_sync;
     Chanin<KwsTokenMsg> in_cmd;
 
@@ -410,7 +420,8 @@ public:
  * everything else (_silence_, _unknown_, yes, no, on, off, stop, ...)
  * is silently dropped before it ever reaches the FSM.
  ******************************************************************************/
-class FilterProcess : public CSProcess {
+// Trivial string-compare filter, minimal stack needed.
+class FilterProcess : public CSProcessStatic<512> {
     Chanin<KwsTokenMsg> in;
     Chanout<KwsTokenMsg> out;
 
@@ -452,7 +463,8 @@ public:
     }
 };
 
-class FsmProcess : public CSProcess {
+// Simple state machine, minimal stack needed.
+class FsmProcess : public CSProcessStatic<512> {
     Chanin<KwsTokenMsg> in;
     Chanout<KwsReportMsg> out_report;
     Chanout<KwsTokenMsg> out_hw; // New: sends execution to hardware
@@ -521,11 +533,10 @@ public:
 /*******************************************************************************
  * InferenceProcess, PreprocessingProcess, AcquisitionProcess remains identical
  ******************************************************************************/
-class InferenceProcess : public CSProcess {
+class InferenceProcess : public CSProcessStatic<4 * 2048> {
     Chanin<FeatureTensorMsg> in;
 public:
     explicit InferenceProcess(Chanin<FeatureTensorMsg> r) : in(r) {}
-    size_t stackWords() const override { return 4 * 2048; }
     UBaseType_t taskPriority() const override { return tskIDLE_PRIORITY + 2; }
 
     void run() override {
@@ -557,19 +568,15 @@ public:
     }
 };
 
-class PreprocessingProcess : public CSProcess {
+class PreprocessingProcess : public CSProcessStatic<2 * 2048> {
     Chanin<AudioChunkMsg> in;
     Chanout<FeatureTensorMsg> out;
 public:
     PreprocessingProcess(Chanin<AudioChunkMsg> r, Chanout<FeatureTensorMsg> w) : in(r), out(w) {}
     UBaseType_t taskPriority() const override { return tskIDLE_PRIORITY + 3; }
-    // Only InferenceProcess previously overrode stackWords(); this process
-    // was silently running on the CSP4CMSIS composition default (256 words
-    // per the v1.2 API doc), despite calling through nested std::vector /
-    // std::function MFCC code 50 frames deep every cycle. Bumping this is
-    // justified regardless of whether it's the actual cause of the hang --
-    // 256 words is very tight for this call depth either way.
-    size_t stackWords() const override { return 2 * 2048; }
+    // 2*2048 words (was: 256-word CSP4CMSIS composition default from the
+    // v1.2 API, which was very tight given this calls through nested
+    // std::vector / std::function MFCC code 50 frames deep every cycle).
 
     void run() override {
         int32_t processed = 0; int32_t priming_step = 0;
@@ -608,7 +615,7 @@ public:
     }
 };
 
-class AcquisitionProcess : public CSProcess {
+class AcquisitionProcess : public CSProcessStatic<2048> {
     Chanout<AudioChunkMsg> out;
 public:
     explicit AcquisitionProcess(Chanout<AudioChunkMsg> w) : out(w) {}
