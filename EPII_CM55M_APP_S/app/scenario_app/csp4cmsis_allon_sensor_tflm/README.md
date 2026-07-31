@@ -134,7 +134,7 @@ Camera: retrigger hardware for next frame
 | Inference | 1024 bytes | 472 bytes | 552 bytes | 138 |
 | Console | 1024 bytes | 256 bytes | 768 bytes | 192 |
 
-Camera and Console both still have comfortable headroom, and Inference -- the process closest to its allocation, since it drives the Ethos‑U55 NPU call -- is still using well under half of its 1024-byte stack. `CSP_Main` itself has over 1.7 KB of its 2 KB allocation free even after taking on the monitoring loop.
+Camera is the process closest to its allocation (744/1024 bytes used, only 280 bytes of headroom) -- worth keeping an eye on if the sensor-handling path grows. Inference and Console both have more comfortable margins, at under half and a quarter of their 1024-byte stacks respectively, despite Inference being the process that drives the Ethos‑U55 NPU call. `CSP_Main` itself has over 1.7 KB of its 2 KB allocation free even after taking on the monitoring loop.
 
 ## 🚀 How to Run
 ### Prerequisites
