@@ -86,10 +86,55 @@ void MainApp_Task(void* params) {
     static Inference inference(frame_chan.reader(), result_chan.writer());
     static Console   console(result_chan.reader());
 
-    // Execute the parallel network
-    Run(InParallel(camera, inference, console), ExecutionMode::StaticNetwork);
+    // Kept as a named object -- ParallelHelper still holds references to
+    // camera/inference/console after Run() returns, which the stack
+    // reporting loop below needs.
+    auto network = InParallel(camera, inference, console);
+    Run(network, ExecutionMode::StaticNetwork);
+
+    // camera/inference/console each run forever, so there's no natural
+    // "network finished" point -- instead, MainApp_Task periodically
+    // walks the network and reports FreeRTOS stack high-water-mark
+    // usage for every process, plus its own.
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(CSP_STACK_REPORT_INTERVAL_MS));
+        // ... report CSP_Main HWM, then network.forEachProcess(...) ...
+    }
 }
 ```
+
+## 📊 Stack Occupancy Reporting
+
+`MainApp_Task` isn't a `CSProcess` itself, so it isn't sized via `CSProcessStatic<N>` -- its stack is allocated explicitly (`MAIN_APP_STACK_WORDS`, currently 512 words) and given to `xTaskCreateStatic` along with a static TCB, the same way FreeRTOS supplies its idle/timer task hooks.
+
+Once the network is started, `MainApp_Task` becomes a monitoring loop: every `CSP_STACK_REPORT_INTERVAL_MS` (default 3000 ms, overridable at compile time) it:
+
+* Reads its own high-water-mark via `uxTaskGetStackHighWaterMark()` and reports `CSP_Main`'s unused headroom.
+* Calls `network.forEachProcess(...)` to walk every process in the static network and report each one's allocated stack, used bytes, unused headroom, and HWM in words. If a process doesn't expose a HWM, this is reported as unavailable rather than guessed at.
+
+Because camera/inference/console all run forever, there's no natural "network finished" point to take a single reading at -- these are *live, worst-observed-so-far* readings, and are only trustworthy once each process's deepest call path has actually been exercised (e.g. after error/edge-case branches in inference or console have run at least once).
+
+### Sample Output
+```text
+invoke pass
+person_score:-37
+Frame 55: prediction = -37
+Frame 55: prediction = -37
+CSP_Main: 1760 bytes unused headroom (440 words HWM, of 512 allocated)
+Camera: 744/1024 bytes used (280 bytes unused headroom, 70 words HWM)
+Inference: 472/1024 bytes used (552 bytes unused headroom, 138 words HWM)
+Console: 256/1024 bytes used (768 bytes unused headroom, 192 words HWM)
+Camera: retrigger hardware for next frame
+```
+
+| Task | Allocated | Used | Unused Headroom | HWM (words) |
+|---|---|---|---|---|
+| CSP_Main | 2048 bytes (512 words) | -- | 1760 bytes | 440 |
+| Camera | 1024 bytes | 744 bytes | 280 bytes | 70 |
+| Inference | 1024 bytes | 472 bytes | 552 bytes | 138 |
+| Console | 1024 bytes | 256 bytes | 768 bytes | 192 |
+
+Camera and Console both still have comfortable headroom, and Inference -- the process closest to its allocation, since it drives the Ethos‑U55 NPU call -- is still using well under half of its 1024-byte stack. `CSP_Main` itself has over 1.7 KB of its 2 KB allocation free even after taking on the monitoring loop.
 
 ## 🚀 How to Run
 ### Prerequisites
@@ -127,7 +172,15 @@ Camera: retrigger hardware for next frame
 Frame 0: prediction = -128
 Frame 1: prediction = -127
 ...
+*** MainApp_Task: Run() returned, entering report loop ***
+...
+CSP_Main: 1760 bytes unused headroom (440 words HWM, of 512 allocated)
+Camera: 744/1024 bytes used (280 bytes unused headroom, 70 words HWM)
+Inference: 472/1024 bytes used (552 bytes unused headroom, 138 words HWM)
+Console: 256/1024 bytes used (768 bytes unused headroom, 192 words HWM)
+...
 ```
+Stack occupancy lines like the block above are printed every `CSP_STACK_REPORT_INTERVAL_MS` (3 s by default) once the network is running -- see [Stack Occupancy Reporting](#-stack-occupancy-reporting) below.
 
 ## 📁 File Structure
 ```text
@@ -148,6 +201,7 @@ app/scenario_app/csp4cmsis_allon_sensor_tflm/
 * Crash after first IRQISR BlockingEnsure you use putFromISR(), not write() inside the callback.
 * Pipeline stallsMissing RetriggerEnsure sensordplib_retrigger_capture() is called at the end of the camera loop.
 * Memory OverrunBuffer sizeIf using BufferedChannel, ensure the size is sufficient for your FPS.
+* Stack overflow / corruptionTask stack too smallCheck the periodic stack report (see [Stack Occupancy Reporting](#-stack-occupancy-reporting)); if a process's unused headroom is trending toward 0, increase its `CSProcessStatic<N>` size (or `MAIN_APP_STACK_WORDS` for `CSP_Main`).
 
 ## 📝 License
 This example is provided under the standard Himax SDK license terms. Refer to the top‑level license file in the SDK for details.
