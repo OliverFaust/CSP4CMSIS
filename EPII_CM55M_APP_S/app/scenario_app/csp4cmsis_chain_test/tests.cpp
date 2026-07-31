@@ -15,11 +15,12 @@ using namespace csp;
  * @brief Simple Source process.
  * Outputs an incrementing integer.
  */
-class CountingSender : public CSProcess {
+class CountingSender : public CSProcessStatic<256> {
 private:
     Chanout<int> out;
 public:
     CountingSender(Chanout<int> w) : out(w) {}
+    const char* name() const override { return "CountingSender"; }
 
     void run() override {
         printf("[Sender] Starting stream...\r\n");
@@ -38,7 +39,7 @@ public:
  * Complies with SPN by being a purely sequential actor:
  * Inputs from one channel, outputs to another.
  */
-class Relay : public CSProcess {
+class Relay : public CSProcessStatic<256> {
 private:
     Chanin<int> in;
     Chanout<int> out;
@@ -46,6 +47,7 @@ private:
 public:
     Relay(Chanin<int> r, Chanout<int> w, int relay_id) 
         : in(r), out(w), id(relay_id) {}
+    const char* name() const override { return "Relay"; }
 
     void run() override {
         int data;
@@ -60,11 +62,12 @@ public:
  * @brief Sink process.
  * Verifies the data integrity across the network.
  */
-class CheckerReceiver : public CSProcess {
+class CheckerReceiver : public CSProcessStatic<256> {
 private:
     Chanin<int> in;
 public:
     CheckerReceiver(Chanin<int> r) : in(r) {}
+    const char* name() const override { return "CheckerReceiver"; }
 
     void run() override {
         int received;
@@ -132,6 +135,10 @@ void MainApp_Task(void* params) {
         ),
         ExecutionMode::StaticNetwork
     );
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 void RunProcessingChainTest(void) {

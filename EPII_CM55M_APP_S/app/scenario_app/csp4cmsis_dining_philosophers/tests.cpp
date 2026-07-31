@@ -7,7 +7,7 @@ using namespace csp;
 /**
  * @brief The Fork process acts as a shared resource.
  */
-class Fork : public CSProcess {
+class Fork : public CSProcessStatic<256> {
     // Reordered: id first to match constructor initialization
     int id;
     Chanin<int> pick_up;
@@ -15,6 +15,7 @@ class Fork : public CSProcess {
 public:
     Fork(int _id, Chanin<int> p, Chanin<int> d) 
         : id(_id), pick_up(p), put_down(d) {}
+    const char* name() const override { return "Fork"; }
 
     void run() override {
         int phil_id;
@@ -28,7 +29,7 @@ public:
 /**
  * @brief The Philosopher process represents a thread of execution.
  */
-class Philosopher : public CSProcess {
+class Philosopher : public CSProcessStatic<256> {
     // Reordered: id first to match constructor initialization
     int id;
     Chanout<int> left_p, left_d;
@@ -36,6 +37,7 @@ class Philosopher : public CSProcess {
 public:
     Philosopher(int _id, Chanout<int> lp, Chanout<int> ld, Chanout<int> rp, Chanout<int> rd) 
         : id(_id), left_p(lp), left_d(ld), right_p(rp), right_d(rd) {}
+    const char* name() const override { return "Philosopher"; }
 
     void run() override {
         // SEED UNIQUE TO THIS PHILOSOPHER
@@ -100,6 +102,10 @@ void MainApp_Task(void* params) {
         ),
         ExecutionMode::StaticNetwork
     );
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 extern "C" void RunProcessingChainTest(void) {

@@ -7,7 +7,7 @@ using namespace csp;
 /**
  * @brief The Fork process acts as a shared resource.
  */
-class Fork : public CSProcess {
+class Fork : public CSProcessStatic<256> {
     // Reordered: id first to match constructor initialization
     int id;
     Chanin<int> pick_up;
@@ -15,6 +15,7 @@ class Fork : public CSProcess {
 public:
     Fork(int _id, Chanin<int> p, Chanin<int> d) 
         : id(_id), pick_up(p), put_down(d) {}
+    const char* name() const override { return "Fork"; }
 
     void run() override {
         int phil_id;
@@ -29,7 +30,7 @@ public:
  * @brief Asymmetric Philosopher: Picks up RIGHT then LEFT.
  * This breaks the circular wait cycle.
  */
-class AsymmetricPhilosopher : public CSProcess {
+class AsymmetricPhilosopher : public CSProcessStatic<256> {
     // Reordered: id first to match constructor initialization
     int id;
     Chanout<int> left_p, left_d;
@@ -37,6 +38,7 @@ class AsymmetricPhilosopher : public CSProcess {
 public:
     AsymmetricPhilosopher(int _id, Chanout<int> lp, Chanout<int> ld, Chanout<int> rp, Chanout<int> rd) 
         : id(_id), left_p(lp), left_d(ld), right_p(rp), right_d(rd) {}
+    const char* name() const override { return "AsymmetricPhilosopher"; }
 
     void run() override {
         // SEED UNIQUE TO THIS PHILOSOPHER
@@ -68,7 +70,7 @@ public:
 /**
  * @brief The Philosopher process represents a thread of execution.
  */
-class Philosopher : public CSProcess {
+class Philosopher : public CSProcessStatic<256> {
     // Reordered: id first to match constructor initialization
     int id;
     Chanout<int> left_p, left_d;
@@ -76,6 +78,7 @@ class Philosopher : public CSProcess {
 public:
     Philosopher(int _id, Chanout<int> lp, Chanout<int> ld, Chanout<int> rp, Chanout<int> rd) 
         : id(_id), left_p(lp), left_d(ld), right_p(rp), right_d(rd) {}
+    const char* name() const override { return "Philosopher"; }
 
     void run() override {
         // SEED UNIQUE TO THIS PHILOSOPHER
@@ -122,7 +125,7 @@ void MainApp_Task(void* params) {
         Fork(4, pick[4].reader(), put[4].reader())
     };
 
-// Philosophers 0-3 are standard. Philosopher 4 is Asymmetric.
+    // Philosophers 0-3 are standard. Philosopher 4 is Asymmetric.
     static Philosopher p0(0, pick[0].writer(), put[0].writer(), pick[1].writer(), put[1].writer());
     static Philosopher p1(1, pick[1].writer(), put[1].writer(), pick[2].writer(), put[2].writer());
     static Philosopher p2(2, pick[2].writer(), put[2].writer(), pick[3].writer(), put[3].writer());
@@ -132,6 +135,12 @@ void MainApp_Task(void* params) {
     printf("\n=== CSP4CMSIS Asymmetric Philosophers (Liveness Test) ===\r\n");
     printf("This test should run infinitely without deadlocking.\r\n\n");
 
+    // Deliberately using the default (TerminatingNetwork) Run() overload,
+    // not ExecutionMode::StaticNetwork: since every process loops forever,
+    // Run() blocks here indefinitely waiting on the completion semaphore
+    // that will never be signalled. MainApp_Task therefore never falls off
+    // the end of its function, so no vTaskDelete(NULL) is needed -- unlike
+    // the StaticNetwork examples elsewhere, control simply never returns.
     Run(InParallel(forks[0], forks[1], forks[2], forks[3], forks[4], p0, p1, p2, p3, p4));
 }
 

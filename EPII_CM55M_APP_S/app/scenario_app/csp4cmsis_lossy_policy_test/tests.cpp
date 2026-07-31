@@ -16,12 +16,13 @@ using OldestChan = BufferedOne2OneChannel<Message, 10, BufferPolicy::KeepOldest>
 
 // --- 2. Define Processes ---
 
-class PolicySender : public CSProcess {
+class PolicySender : public CSProcessStatic<256> {
 private:
     Chanout<Message> outNew;
     Chanout<Message> outOld;
 public:
     PolicySender(Chanout<Message> n, Chanout<Message> o) : outNew(n), outOld(o) {}
+    const char* name() const override { return "PolicySender"; }
 
     void run() override {
         printf("[Sender] Bursting %d messages to KeepNewest...\r\n", TEST_COUNT);
@@ -39,12 +40,13 @@ public:
     }
 };
 
-class PolicyReceiver : public CSProcess {
+class PolicyReceiver : public CSProcessStatic<256> {
 private:
     Chanin<Message> inNew;
     Chanin<Message> inOld;
 public:
     PolicyReceiver(Chanin<Message> n, Chanin<Message> o) : inNew(n), inOld(o) {}
+    const char* name() const override { return "PolicyReceiver"; }
 
     void run() override {
         // Wait for sender to finish its non-blocking bursts
@@ -97,8 +99,13 @@ void MainApp_Task(void* params) {
         InParallel(snd, rcv),
         ExecutionMode::StaticNetwork
     );
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 extern "C" void RunProcessingChainTest(void) {
     xTaskCreate(MainApp_Task, "PolicyTest", 4096, NULL, tskIDLE_PRIORITY + 3, NULL);
 }
+

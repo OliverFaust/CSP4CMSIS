@@ -296,7 +296,7 @@ int main(void)
 #endif
 
 #ifdef CSP4CMSIS_CHAIN_TEST
-#include "csp4cmsis_sieve.h"
+#include "csp4cmsis_chain_test.h"
 
 /** main entry */
 int main(void)

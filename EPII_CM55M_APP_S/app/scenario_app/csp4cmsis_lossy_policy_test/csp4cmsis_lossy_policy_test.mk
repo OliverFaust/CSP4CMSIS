@@ -17,12 +17,6 @@ APPL_DEFINES += -DDBG_MORE
 ##
 LIB_SEL = csp4cmsis
 
-##
-# middleware support feature
-# Add new middleware here
-# The source code should be loacted in ~\middleware\{mid_name}\
-##
-
 #override OS_SEL := freertos
 override OS_SEL := freertos_10_5_1
 override OS_HAL := n
@@ -33,13 +27,6 @@ override TRUSTZONE_FW_TYPE := 1
 override CIS_SEL := HM_COMMON
 override EPII_USECASE_SEL := drv_onecore_cm55m_s
 
-ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_imx219)
-APPL_DEFINES += -DCIS_IMX
-else ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_imx477)
-APPL_DEFINES += -DCIS_IMX
-else ifeq ($(CIS_SUPPORT_INAPP_MODEL), cis_imx708)
-APPL_DEFINES += -DCIS_IMX
-endif
 
 ifeq ($(strip $(TOOLCHAIN)), arm)
 override LINKER_SCRIPT_FILE := $(SCENARIO_APP_ROOT)/$(APP_TYPE)/csp4cmsis_lossy_policy_test.sct
@@ -52,9 +39,4 @@ endif
 # The source code should be located in ~\external\{device_name}\
 ##
 #EXT_DEV_LIST += 
-
-
-
-
-
 

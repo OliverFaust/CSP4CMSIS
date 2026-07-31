@@ -17,14 +17,18 @@ extern "C" void timer1_callback(uint32_t event) {
     hx_drv_timer_ClearIRQ(TIMER_ID_1);
     static uint32_t count = 0;
     count++;
-    
-    // Writing to the channel from the ISR
-    // Note: If 'write' causes a hang, check if your library has 'write_from_isr'
-    timerChannel.writer().write(count);
+
+    // ISR context: must use the ISR-safe, non-blocking write. The plain
+    // write()/output() path can register the calling context as a waiting
+    // task and block on a task notification -- not valid from an ISR, and
+    // exactly what could cause the hang the old comment here warned about.
+    timerChannel.writer().putFromISR(count);
 }
 
-class TimerProcess : public CSProcess {
+class TimerProcess : public CSProcessStatic<256> {
 public:
+    const char* name() const override { return "TimerProcess"; }
+
     void run() override {
         printf("[CSP] Manual Engine Active. Waiting for Channel...\r\n");
         uint32_t val = 0;
@@ -38,8 +42,10 @@ public:
     }
 };
 
-class LogicProcess : public CSProcess {
+class LogicProcess : public CSProcessStatic<256> {
 public:
+    const char* name() const override { return "LogicProcess"; }
+
     void run() override {
         while(true) {
             // Do some background AI or Logic
@@ -65,8 +71,13 @@ void MainApp_Task(void* params) {
     static TimerProcess p1;
     static LogicProcess  p2;
     Run(InParallel(p1, p2), ExecutionMode::StaticNetwork);
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 extern "C" void RunProcessingChainTest(void) {
     xTaskCreate(MainApp_Task, "CspManual", 4096, NULL, tskIDLE_PRIORITY + 2, NULL);
 }
+

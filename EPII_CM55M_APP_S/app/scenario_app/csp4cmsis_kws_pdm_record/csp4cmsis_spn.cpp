@@ -38,18 +38,26 @@ using namespace csp;
  * window assembly (the persistent, incrementally-updated 98-frame tensor)
  * now lives in PreprocessingProcess via cv_kws_preprocess_step().
  *
- * Priority/stack note (see library/csp4cmsis/inc/csp/{run.h,public_task.h}):
- * InParallel(...)'s index-0 process runs on the CALLING task's own stack and
- * priority; every other process is spawned as a new task with a hardcoded
- * 256-word stack and tskIDLE_PRIORITY+2. InferenceProcess still has by far
- * the deepest call chain (TFLM interpreter -> CMSIS-NN -> Ethos-U driver)
- * and MUST remain argument 0 in InParallel(...) below. PreprocessingProcess
- * is new and does real DSP work (FFT/DCT via Mfcc.cc/PlatformMath.cc) at the
- * hardcoded 256-word stack; this is expected to be shallower than
- * InferenceProcess's chain since it never enters TFLM/CMSIS-NN/the NPU
- * driver, but that has NOT been verified against actual stack usage on
- * hardware (e.g. via uxTaskGetStackHighWaterMark()) -- worth checking before
- * treating this as settled.
+ * Stack/priority note (API 1.3, see library/csp4cmsis/inc/csp/process.h):
+ * every process below derives from CSProcessStatic<N>, not CSProcess
+ * directly -- CSProcess itself is abstract, since stackWords()/
+ * stackBuffer()/taskBuffer() are pure virtual and CSProcessStatic<N> is
+ * what supplies them as statically-allocated members sized by N. Position
+ * in InParallel(...) below carries no stack/priority meaning: each process
+ * is spawned with exactly the N it declares via its own CSProcessStatic<N>,
+ * and its own taskPriority() override if it has one, regardless of where
+ * it's listed. InferenceProcess still has by far the deepest call chain
+ * (TFLM interpreter -> CMSIS-NN -> Ethos-U driver), hence CSProcessStatic<
+ * 4*2048> and an explicit taskPriority() override below; the other three
+ * use CSProcessStatic<256>, carried over from the previous hardcoded
+ * per-task default. PreprocessingProcess does real DSP work (FFT/DCT via
+ * Mfcc.cc/PlatformMath.cc) at that same 256-word figure; this is expected
+ * to be shallower than InferenceProcess's chain since it never enters
+ * TFLM/CMSIS-NN/the NPU driver, but that has NOT been verified against
+ * actual stack usage on hardware. Worth checking before treating this as
+ * settled -- CSProcess::stackHighWaterMarkWords() (also new in this API
+ * revision) is the direct way to do that per-process, without reaching for
+ * uxTaskGetStackHighWaterMark() by hand.
  ******************************************************************************/
 
 // ---- Acquisition -> Preprocessing: one raw 0.25 s ring-buffer slot per cycle ----
@@ -98,10 +106,11 @@ struct KwsReportMsg {
 // ever fills, we drop the oldest queued print rather than block any sender.
 static SamplingBufferedChannel<KwsReportMsg, 8, BufferPolicy::KeepNewest> g_reportChan;
 
-class ReporterProcess : public CSProcess {
+class ReporterProcess : public CSProcessStatic<256> {
     Chanin<KwsReportMsg> in;
 public:
     explicit ReporterProcess(Chanin<KwsReportMsg> r) : in(r) {}
+    const char* name() const override { return "ReporterProcess"; }
 
     void run() override {
         KwsReportMsg msg;
@@ -243,16 +252,17 @@ extern "C" void kws_report_infer_stats(int32_t processed,
  * receive is the pipeline's pacing point and a genuine FreeRTOS block, so
  * lower-priority processes are never starved by this one.
  ******************************************************************************/
-class InferenceProcess : public CSProcess {
+class InferenceProcess : public CSProcessStatic<4 * 2048> {
     Chanin<FeatureTensorMsg> in;
 public:
     explicit InferenceProcess(Chanin<FeatureTensorMsg> r) : in(r) {}
+    const char* name() const override { return "InferenceProcess"; }
 
-    // API 1.2: explicit requirements, reproducing the values this process
-    // used to receive implicitly by being first in InParallel(...) and
-    // running inline on MainApp_Task's stack/priority. Now correct
-    // regardless of its position in the InParallel(...) argument list.
-    size_t stackWords() const override { return 4 * 2048; }
+    // API 1.3: stackWords() is now fixed by the CSProcessStatic<4*2048>
+    // base above (it's `final` there) rather than overridden here --
+    // this reproduces the same 4*2048-word figure this process declared
+    // explicitly under API 1.2. taskPriority() remains a normal virtual
+    // override, unaffected by that change.
     UBaseType_t taskPriority() const override { return tskIDLE_PRIORITY + 3; }
 
     void run() override {
@@ -298,11 +308,12 @@ public:
  * completed tensor to InferenceProcess. During the 3 priming steps after
  * startup, cv_kws_preprocess_step() returns nullptr and nothing is sent.
  ******************************************************************************/
-class PreprocessingProcess : public CSProcess {
+class PreprocessingProcess : public CSProcessStatic<256> {
     Chanin<AudioChunkMsg> in;
     Chanout<FeatureTensorMsg> out;
 public:
     PreprocessingProcess(Chanin<AudioChunkMsg> r, Chanout<FeatureTensorMsg> w) : in(r), out(w) {}
+    const char* name() const override { return "PreprocessingProcess"; }
 
     void run() override {
         int32_t processed = 0;
@@ -351,10 +362,11 @@ public:
  * assembles a multi-slot window -- hands over a pointer to exactly one
  * freshly-completed 0.25 s ring slot per cycle.
  ******************************************************************************/
-class AcquisitionProcess : public CSProcess {
+class AcquisitionProcess : public CSProcessStatic<256> {
     Chanout<AudioChunkMsg> out;
 public:
     explicit AcquisitionProcess(Chanout<AudioChunkMsg> w) : out(w) {}
+    const char* name() const override { return "AcquisitionProcess"; }
 
     void run() override {
         int32_t last_current_buf = -1;   // -1 == "no completed iteration yet"
@@ -442,9 +454,10 @@ void MainApp_Task(void* params) {
         return;
     }
 
-    // API 1.2: argument order is no longer priority/stack-significant --
-    // each process declares its own requirements (see InferenceProcess
-    // above). Listed here in physical pipeline order for readability.
+    // API 1.2/1.3: argument order is not priority/stack-significant --
+    // each process declares its own requirements via its CSProcessStatic<N>
+    // base and (optionally) taskPriority(). Listed here in physical
+    // pipeline order for readability.
     static AcquisitionProcess acquisition(g_audioChan.writer());
     static PreprocessingProcess preprocessing(g_audioChan.reader(), g_featureChan.writer());
     static InferenceProcess inference(g_featureChan.reader());
@@ -469,13 +482,13 @@ extern "C" void RunProcessingChainTest(void)
 {
     // NOTE (API 1.2): this task's stack no longer needs to accommodate
     // any CSP process's call depth -- that requirement now lives on
-    // InferenceProcess itself (see its stackWords() override) and is
+    // InferenceProcess itself (see its CSProcessStatic<4*2048> base) and is
     // honored regardless of its position in InParallel(...) above. This
     // 4*2048 figure predates that change and is very likely oversized for
     // what MainApp_Task itself now does (spawn calls + cv_kws_preprocess_init()
     // + a couple of xprintf calls). It has been left unchanged here rather
     // than guessed at, since cv_kws_preprocess_init()'s own stack depth is
-    // opaque to this analysis -- a good first experiment for the API 1.2
+    // opaque to this analysis -- a good first experiment for the API 1.3
     // test project is to measure MainApp_Task's actual high-water mark via
     // uxTaskGetStackHighWaterMark() and right-size this literal down.
     BaseType_t status = xTaskCreate(MainApp_Task, "MainApp", 4*2048, NULL, tskIDLE_PRIORITY + 3, NULL);
@@ -483,4 +496,3 @@ extern "C" void RunProcessingChainTest(void)
         xprintf("ERROR: MainApp_Task creation failed!\r\n");
     }
 }
-

@@ -5,12 +5,13 @@ using namespace csp;
 
 // --- 1. The Number Generator ---
 // Sends numbers 2, 3, 4, 5... into the chain.
-class NaturalNumbers : public CSProcess {
+class NaturalNumbers : public CSProcessStatic<256> {
 private:
     Chanout<int> out;
     int limit;
 public:
     NaturalNumbers(Chanout<int> w, int max_n) : out(w), limit(max_n) {}
+    const char* name() const override { return "NaturalNumbers"; }
 
     void run() override {
         for (int i = 2; i <= limit; ++i) {
@@ -24,7 +25,7 @@ public:
 // --- 2. The Prime Filter Process ---
 // Holds a prime 'p'. For every 'n' it receives, it only passes 'n' 
 // to the next stage if (n % p != 0).
-class PrimeFilter : public CSProcess {
+class PrimeFilter : public CSProcessStatic<256> {
 private:
     Chanin<int> in;
     Chanout<int> out;
@@ -33,6 +34,7 @@ private:
 public:
     PrimeFilter(Chanin<int> r, Chanout<int> w, int filter_id) 
         : in(r), out(w), id(filter_id) {}
+    const char* name() const override { return "PrimeFilter"; }
 
     void run() override {
         int candidate;
@@ -53,11 +55,13 @@ public:
 
 // --- 3. The Sink (Receiver) ---
 // The final stage that just prints whatever makes it through all filters.
-class PrimeSink : public CSProcess {
+class PrimeSink : public CSProcessStatic<256> {
 private:
     Chanin<int> in;
 public:
     PrimeSink(Chanin<int> r) : in(r) {}
+    const char* name() const override { return "PrimeSink"; }
+
     void run() override {
         int found;
         while (true) {
@@ -92,6 +96,10 @@ void MainApp_Task(void* params) {
         InParallel(generator, f0, f1, f2, f3, f4, sink),
         ExecutionMode::StaticNetwork
     );
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 void RunProcessingChainTest(void) {
