@@ -29,7 +29,7 @@ extern "C" void i2c_callback(void) {
 }
 
 // --- 1. ADXL345 Reader Process ---
-class Adxl345Reader : public CSProcess {
+class Adxl345Reader : public CSProcessStatic<256> {
     Chanin<bool> i2c_sync;     // Reads from the ISR
     Chanout<AccelData> out;    // Writes to the ShakeLogic
     const uint8_t slave_addr = 0x53;
@@ -61,7 +61,8 @@ class Adxl345Reader : public CSProcess {
 public:
     // Constructor now takes the ISR synchronization channel as an input
     Adxl345Reader(Chanin<bool> sync_in, Chanout<AccelData> w) : i2c_sync(sync_in), out(w) {}
-    
+    const char* name() const override { return "Adxl345Reader"; }
+
     void run() override {
         printf("[Reader] Initializing ADXL345...\r\n");
         
@@ -93,13 +94,14 @@ public:
 };
 
 // --- 2. Shake Math Logic Process ---
-class ShakeLogic : public CSProcess {
+class ShakeLogic : public CSProcessStatic<256> {
     Chanin<AccelData> in;
     Chanout<bool> out;
 
 public:
     ShakeLogic(Chanin<AccelData> r, Chanout<bool> w) : in(r), out(w) {}
-    
+    const char* name() const override { return "ShakeLogic"; }
+
     void run() override {
         AccelData current;
         AccelData previous = {0, 0, 0};
@@ -130,11 +132,12 @@ public:
 };
 
 // --- 3. Shake Event Consumer Process ---
-class ShakeEventConsumer : public CSProcess {
+class ShakeEventConsumer : public CSProcessStatic<256> {
     Chanin<bool> in;
 
 public:
     ShakeEventConsumer(Chanin<bool> r) : in(r) {}
+    const char* name() const override { return "ShakeEventConsumer"; }
 
     void run() override {
         bool shake_flag;
@@ -169,6 +172,10 @@ void MainApp_Task(void* params) {
         InParallel(proc_reader, proc_logic, proc_consumer),
         ExecutionMode::StaticNetwork
     );
+
+    // Run() returns immediately in StaticNetwork mode; the task must
+    // delete itself rather than fall off the end of the function.
+    vTaskDelete(NULL);
 }
 
 void RunProcessingChainTest(void) {

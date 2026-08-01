@@ -165,9 +165,9 @@ CUSTOMER ?= seeed
 # APP_TYPE = csp4cmsis_AI_testbench
 # APP_TYPE = csp4cmsis_allon_sensor_tflm
 # APP_TYPE = csp4cmsis_lossy_policy_test
-APP_TYPE = csp4cmsis_kws_pdm_record
+# APP_TYPE = csp4cmsis_kws_pdm_record
 # APP_TYPE = csp4cmsis_shake_detection
-# APP_TYPE = csp4cmsis_kws_iic
+APP_TYPE = csp4cmsis_kws_iic
 # APP_TYPE = csp4cmsis_kws_PCA9685
 
 ### Options above must be added before include options.mk ###
