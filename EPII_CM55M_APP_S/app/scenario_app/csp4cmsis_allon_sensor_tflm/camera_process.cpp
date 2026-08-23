@@ -28,7 +28,7 @@ Camera::Camera(Chanout < frame_t > out): m_frame_out(out), m_frame_counter(0) {}
 void Camera::run() {
   trigger_t t;
   auto trigger_reader = g_trigger_chan.reader();
-  xprintf("Camera: initializing sensor\e\n");
+  xprintf("Camera: initializing sensor\r\n");
   if (cisdp_sensor_init(true) < 0) {
     dbg_printf(DBG_LESS_INFO, "Camera: sensor init failed\r\n");
     return;

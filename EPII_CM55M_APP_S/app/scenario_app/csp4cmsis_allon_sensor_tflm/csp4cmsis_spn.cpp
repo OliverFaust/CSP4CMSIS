@@ -32,7 +32,6 @@ void MainApp_Task(void* params)
     static Inference inference(frame_chan.reader(), result_chan.writer());
     static Console   console(result_chan.reader());
 
-    xprintf("BOli\r\n");
     // Kept as a named object rather than passed straight into Run() --
     // ParallelHelper still holds references to camera/inference/console
     // after Run() returns, which the report loop below needs.

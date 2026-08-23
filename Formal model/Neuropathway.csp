@@ -1,0 +1,37 @@
+-- Neuropathway
+MAX_INDEX = 2
+
+datatype prediction_t = person | no_person
+
+channel g_trigger_chan
+channel frame_chan : Int
+channel result_chan : Int.prediction_t
+channel print_
+
+ENV = g_trigger_chan -> ENV
+
+Camera(c) =
+    g_trigger_chan -> frame_chan!c -> Camera((c+1) % MAX_INDEX)
+
+Inference =
+    frame_chan?f ->
+        (
+            (result_chan!f!person -> Inference)
+        |~|
+            (result_chan!f!no_person -> Inference)
+        )
+
+Console =
+    result_chan?f?p -> print_ -> Console
+
+NEUROPATHWAY =
+    Camera(0)
+        [| {| frame_chan |} |]
+    (Inference [| {| result_chan |} |] Console)
+
+SYSTEM =
+    ENV [| {| g_trigger_chan |} |] NEUROPATHWAY
+
+-- Sanity checks:
+assert SYSTEM :[deadlock free[F]]
+assert SYSTEM :[divergence free]
