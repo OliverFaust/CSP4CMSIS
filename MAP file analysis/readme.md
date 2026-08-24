@@ -73,7 +73,4 @@ python3 csp4cmsis_map_report.py project.map --no-demangle
 used to classify a file as CSP4CMSIS; adjust it if your project's
 source layout differs from this repository's.
 
-## Important prerequisite: the zero-heap audit needs `--cref`
 
-The zero-heap audit depends on the linker's **Cross Reference Table**,
-which GNU ld does **not** emit by default. You must link with:
