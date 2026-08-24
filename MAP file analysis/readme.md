@@ -37,6 +37,15 @@ What it does:
        - the N largest individual CSP4CMSIS symbols
        - the stack/heap headroom implied by _end/_estack/_Min_Stack_Size,
          matching the picture drawn in sysmem.c's _sbrk() comment.
+       - a zero-heap audit (if the map file has a Cross Reference Table,
+         i.e. was linked with -Wl,--cref): for a fixed list of dynamic
+         allocator symbols (pvPortMalloc, xTaskCreate, operator new,
+         ...), reports for EACH one whether it's absent from the image,
+         present but never called by CSP4CMSIS code, or -- a real
+         finding -- called by CSP4CMSIS code, naming the offending
+         object file(s). C++ symbols (operator new/new[]) are matched
+         via demangled name, not raw mangled text, since the mangled
+         form never appears as literal "operator new" in the map file.
 """
 
 import argparse
@@ -45,6 +54,7 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
+
 
 # --- Default set of object-file name fragments considered "CSP4CMSIS".
 # Matched case-insensitively against the object file path in each map
@@ -111,6 +121,130 @@ TOP_SECTION_KIND = {
     ".heap": "RAM",
     ".stack": "RAM",
 }
+
+
+# --- Cross-reference-table parsing (zero-heap verification) ---
+# Only present in the map file if you link with -Wl,--cref in addition
+# to -Wl,-Map=<project>.map -- GNU ld does not emit this table by default.
+
+RE_XREF_SYM_AND_FILE = re.compile(r"^(?P<sym>\S+)\s+(?P<file>\S+)\s*$")
+RE_XREF_FILE_ONLY = re.compile(r"^\s+(?P<file>\S+)\s*$")
+
+# Plain C symbols are matched by exact equality against the raw (still
+# mangled, but C symbols aren't mangled) name. C++ symbols demangle WITH
+# their parameter list attached (e.g. "_Znwj" -> "operator new(unsigned
+# int)"), so "operator new" / "operator new[]" below are matched as a
+# PREFIX of the demangled form (must include the trailing "(" so
+# "operator new(" never accidentally matches "operator new[](...)").
+DEFAULT_HEAP_SYMBOLS = [
+    "pvPortMalloc",
+    "vPortFree",
+    "xTaskCreate",
+    "xEventGroupCreate",
+    "xQueueCreate",
+    "xSemaphoreCreateBinary",
+    "xSemaphoreCreateCounting",
+    "xSemaphoreCreateMutex",
+    "malloc",
+    "_malloc_r",
+    "operator new",
+    "operator new[]",
+]
+
+
+def parse_cross_reference_table(lines):
+    """Parse the GNU ld 'Cross Reference Table' section. Returns
+    {symbol_name: [file, file, ...]} -- every file listed under that
+    symbol's block (definer and referencers alike; we don't need to
+    tell them apart for a "does CSP4CMSIS code touch this symbol at
+    all" check)."""
+    xref = {}
+    in_section = False
+    current_sym = None
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if line.strip() == "Cross Reference Table":
+            in_section = True
+            continue
+        if not in_section or not line.strip():
+            continue
+        if line.strip().startswith("Symbol") and "File" in line:
+            continue
+
+        m = RE_XREF_SYM_AND_FILE.match(line)
+        if m and not line[0].isspace():
+            current_sym = m.group("sym")
+            xref.setdefault(current_sym, []).append(m.group("file"))
+            continue
+
+        m = RE_XREF_FILE_ONLY.match(line)
+        if m and current_sym is not None:
+            xref[current_sym].append(m.group("file"))
+            continue
+
+        current_sym = None
+    return xref
+
+
+def _file_is_csp(file_path, fragments):
+    norm = file_path.replace("\\", "/").lower()
+    if "libcsp4cmsis.a(" in norm or "/csp4cmsis/" in norm:
+        return True
+    stem = obj_basename_stem(file_path).lower()
+    return any(stem == frag.lower() for frag in fragments)
+
+
+def audit_zero_heap(xref, fragments, heap_symbols=None, demangler=None):
+    """Full, auditable zero-heap check. Returns a list of dicts, one per
+    symbol in heap_symbols, each with:
+        symbol      -- the human-readable target name
+        status      -- "NOT_IN_IMAGE" (never referenced by anything in
+                        this build -- nothing was actually exercised),
+                        "OK" (referenced, but never by CSP4CMSIS code),
+                        or "FAIL" (referenced by CSP4CMSIS code)
+        callers     -- every file (CSP4CMSIS or not) that references it
+        csp_callers -- the subset of callers classified as CSP4CMSIS
+
+    Unlike a single pass/fail summary, every symbol gets an explicit
+    verdict, so "no findings" can't be mistaken for "nothing was
+    checked" (e.g. because a symbol never appears anywhere in the
+    linked image, dynamic or not).
+
+    C++ symbols are matched by demangled name, since the mangled form
+    (e.g. "_Znwj") never equals the literal string "operator new" --
+    matching that literally, as an earlier version of this script did,
+    silently never matches anything and gives a false sense of coverage.
+    """
+    heap_symbols = heap_symbols or DEFAULT_HEAP_SYMBOLS
+    raw_syms = list(xref.keys())
+    demangled = demangle_all(raw_syms, demangler) if demangler else {s: s for s in raw_syms}
+
+    def matches(raw, target):
+        if raw == target:
+            return True
+        dm = demangled.get(raw, raw)
+        if target in ("operator new", "operator new[]"):
+            return dm.startswith(target + "(")
+        return dm == target
+
+    results = []
+    for target in heap_symbols:
+        matched_raw = [raw for raw in raw_syms if matches(raw, target)]
+        if not matched_raw:
+            results.append({
+                "symbol": target, "status": "NOT_IN_IMAGE",
+                "callers": [], "csp_callers": [],
+            })
+            continue
+        all_callers = sorted(set(f for raw in matched_raw for f in xref[raw]))
+        csp_callers = sorted(set(f for f in all_callers if _file_is_csp(f, fragments)))
+        results.append({
+            "symbol": target,
+            "status": "FAIL" if csp_callers else "OK",
+            "callers": all_callers,
+            "csp_callers": csp_callers,
+        })
+    return results
 
 
 def classify_kind(section_name: str) -> str:
@@ -481,6 +615,45 @@ def main():
     print("(STM32CubeIDE does this by default in Release) to get one map entry per")
     print("symbol -- without it, only region totals above are meaningful.")
     print("=" * 72)
+
+    # --- Zero-heap audit ---
+    xref = parse_cross_reference_table(raw_lines)
+    print("Zero-heap audit (dynamic allocator cross-references):")
+    if not xref:
+        print(
+            "  note: no Cross Reference Table found in this map file. Re-link with\n"
+            "  -Wl,--cref added alongside -Wl,-Map=<project>.map to enable this check."
+        )
+    else:
+        results = audit_zero_heap(xref, fragments, demangler=demangler)
+        print(f"  {'Symbol':<26}{'Status':<14}{'Callers (non-CSP4CMSIS)':<28}CSP4CMSIS callers")
+        any_fail = False
+        for r in results:
+            if r["status"] == "NOT_IN_IMAGE":
+                print(f"  {r['symbol']:<26}{'not in image':<14}"
+                      f"{'(never referenced anywhere in this build)':<28}-")
+                continue
+            non_csp = [f for f in r["callers"] if f not in r["csp_callers"]]
+            non_csp_str = ", ".join(non_csp) if non_csp else "-"
+            csp_str = ", ".join(r["csp_callers"]) if r["csp_callers"] else "-"
+            if len(non_csp_str) > 26:
+                non_csp_str = non_csp_str[:23] + "..."
+            print(f"  {r['symbol']:<26}{r['status']:<14}{non_csp_str:<28}{csp_str}")
+            if r["status"] == "FAIL":
+                any_fail = True
+        print()
+        if any_fail:
+            print("  RESULT: FAILED -- see 'CSP4CMSIS callers' column above for the")
+            print("  offending object file(s).")
+        else:
+            checked = [r["symbol"] for r in results if r["status"] != "NOT_IN_IMAGE"]
+            print(f"  RESULT: PASSED for all symbols actually present in this image")
+            print(f"  ({', '.join(checked) if checked else 'none of the checked symbols appear in this build'}).")
+            not_present = [r["symbol"] for r in results if r["status"] == "NOT_IN_IMAGE"]
+            if not_present:
+                print(f"  Not present in this build at all, so not exercised by this check:")
+                print(f"  {', '.join(not_present)}.")
+    print()
 
 
 if __name__ == "__main__":
