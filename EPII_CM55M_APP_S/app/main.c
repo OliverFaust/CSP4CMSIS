@@ -235,6 +235,19 @@ int main(void)
 }
 #endif
 
+#ifdef CSP4CMSIS_ALT_ALT_TEST
+#include "csp4cmsis_alt_alt_test.h"
+
+/** main entry */
+int main(void)
+{
+	board_init();
+	app_main();
+	return 0;
+}
+#endif
+
+
 #ifdef CSP4CMSIS_SHAKE_DETECTION
 #include "csp4cmsis_shake_detection.h"
 

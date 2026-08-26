@@ -86,20 +86,38 @@ bool ChanInGuard::enable(AltScheduler* alt, EventBits_t bit) {
 
 void ChanInGuard::activate() {
     if (xSemaphoreTake(parent_channel->getMutex(), portMAX_DELAY) != pdTRUE) return;
-    
-    // Check standard task first
+
+    // Case 1: partner is a plain blocking task.
     TaskHandle_t sender = parent_channel->getWaitingOutTask();
     if (sender != nullptr) {
-        if (user_data_dest && parent_channel->getNonAltOutDataPtr()) 
+        if (user_data_dest && parent_channel->getNonAltOutDataPtr())
             memcpy(user_data_dest, parent_channel->getNonAltOutDataPtr(), data_size);
-        
+
         parent_channel->clearWaitingOut();
         xSemaphoreGive(parent_channel->getMutex());
         xTaskNotifyGive(sender);
-    } else {
-        // Partner was an ALT sender or data was already moved by tryHandshake
-        xSemaphoreGive(parent_channel->getMutex());
+        return;
     }
+
+    // Case 2: partner is another ALT (ALT-vs-ALT rendezvous). Without this
+    // branch no data is ever copied and the partner's AltScheduler is never
+    // woken -- it blocks until its own timeout guard (if any) fires.
+    WaitingAlt& out_alt = parent_channel->getWaitingOutAlt();
+    if (out_alt.isActive()) {
+        AltScheduler* partner_alt = out_alt.alt_ptr;
+        EventBits_t   partner_bit = out_alt.assigned_bit;
+
+        if (user_data_dest && out_alt.data_ptr)
+            memcpy(user_data_dest, out_alt.data_ptr, data_size);
+
+        out_alt.clear();
+        xSemaphoreGive(parent_channel->getMutex());
+        if (partner_alt) partner_alt->wakeUp(partner_bit);
+        return;
+    }
+
+    // Case 3: nothing to do (e.g. data was already moved by tryHandshake()).
+    xSemaphoreGive(parent_channel->getMutex());
 }
 
 bool ChanInGuard::disable() {
@@ -127,18 +145,33 @@ bool ChanOutGuard::enable(AltScheduler* alt, EventBits_t bit) {
 
 void ChanOutGuard::activate() {
     if (xSemaphoreTake(parent_channel->getMutex(), portMAX_DELAY) != pdTRUE) return;
-    
+
     TaskHandle_t receiver = parent_channel->getWaitingInTask();
     if (receiver != nullptr) {
         if (parent_channel->getNonAltInDataPtr() && user_data_source)
             memcpy(parent_channel->getNonAltInDataPtr(), user_data_source, data_size);
-        
+
         parent_channel->clearWaitingIn();
         xSemaphoreGive(parent_channel->getMutex());
         xTaskNotifyGive(receiver);
-    } else {
-        xSemaphoreGive(parent_channel->getMutex());
+        return;
     }
+
+    WaitingAlt& in_alt = parent_channel->getWaitingInAlt();
+    if (in_alt.isActive()) {
+        AltScheduler* partner_alt = in_alt.alt_ptr;
+        EventBits_t   partner_bit = in_alt.assigned_bit;
+
+        if (in_alt.data_ptr && user_data_source)
+            memcpy(in_alt.data_ptr, user_data_source, data_size);
+
+        in_alt.clear();
+        xSemaphoreGive(parent_channel->getMutex());
+        if (partner_alt) partner_alt->wakeUp(partner_bit);
+        return;
+    }
+
+    xSemaphoreGive(parent_channel->getMutex());
 }
 
 bool ChanOutGuard::disable() {
