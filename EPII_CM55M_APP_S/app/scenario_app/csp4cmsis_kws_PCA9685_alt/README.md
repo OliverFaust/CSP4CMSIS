@@ -1,6 +1,6 @@
 # CSP4CMSIS-based Keyword Spotting with Hardware Actuation
 
-Keyword Spotting (KWS) detects specific spoken words within a continuous audio stream, typically in low-power, always-on settings. This app uses ARM's [Keyword Transformer](https://www.isca-archive.org/interspeech_2021/berg21_interspeech.pdf) model to run KWS on the Himax WE2 (Cortex-M55 + Ethos-U55 NPU), and goes one step further than plain classification: recognized voice commands drive two channels of a **PCA9685 16-channel, 12-bit PWM I2C servo driver** — say a direction, confirm it, and watch a servo step one position.
+Keyword Spotting (KWS) detects specific spoken words within a continuous audio stream, typically in low-power, always-on settings. This app uses ARM's [Keyword Transformer](https://www.isca-archive.org/interspeech_2021/berg21_interspeech.pdf) model to run KWS on the Himax WE2 (Cortex-M55 + Ethos-U55 NPU), and goes one step further than plain classification: recognized voice commands drive two channels of a **PCA9685 16-channel, 12-bit PWM I2C servo driver** — say a direction, confirm it, and watch a servo step one position. A second, independent control path is available too: **WASD keypresses on the console** drive the same two servo channels directly, no voice confirmation needed.
 
 Audio preprocessing follows ARM's [ml-embedded-evaluation-kit](https://review.mlplatform.org/plugins/gitiles/ml/ethos-u/ml-embedded-evaluation-kit/+/refs/tags/22.02/docs/use_cases/kws.md) approach: raw audio → MFCC features → NPU inference.
 
@@ -8,7 +8,7 @@ Audio preprocessing follows ARM's [ml-embedded-evaluation-kit](https://review.ml
 
 ## 🚀 Concurrency with CSP4CMSIS
 
-The app is a **seven-process CSP network** built with [CSP4CMSIS](https://oliverfaust.github.io/CSP4CMSIS/)'s Communicating Sequential Processes model on top of FreeRTOS. Each process is an independent, statically-allocated task communicating exclusively through typed channels — no shared mutable state, no manual locking. Six of the seven form the active audio-to-actuation pipeline; the seventh (`ReporterProcess`) is a diagnostic sink that sits off to the side so console I/O can never stall the pipeline.
+The app is an **eight-process CSP network** built with [CSP4CMSIS](https://oliverfaust.github.io/CSP4CMSIS/)'s Communicating Sequential Processes model on top of FreeRTOS. Each process is an independent, statically-allocated task communicating exclusively through typed channels — no shared mutable state, no manual locking. Seven of the eight form the active audio-to-actuation pipeline plus the console input path; the eighth (`ReporterProcess`) is a diagnostic sink that sits off to the side so console I/O can never stall the pipeline.
 
 | Process | Responsibility |
 |---|---|
@@ -17,7 +17,8 @@ The app is a **seven-process CSP network** built with [CSP4CMSIS](https://oliver
 | **InferenceProcess** | Copies the completed tensor into the model's input, runs the Ethos-U55 NPU via `Invoke()`, and classifies the result. |
 | **FilterProcess** | Restricts the stream to the command vocabulary (`up`, `down`, `left`, `right`, `go`) — everything else (`_silence_`, `_unknown_`, `yes`, `no`, `on`, `off`, `stop`) is dropped here — and collapses consecutive duplicate labels, so a held-down keyword doesn't flood the FSM with repeats. |
 | **FsmProcess** | Interprets the filtered keyword stream as two-word commands (`<direction> go`) and drives the hardware channel — see [Voice Command Interaction](#-voice-command-interaction) below. |
-| **Pca9685Process** | Owns the I2C bus; translates a confirmed FSM command into a PWM pulse-width update on one of two PCA9685 servo channels. |
+| **ConsoleInputProcess** | Polls the console UART for `w`/`a`/`s`/`d` keypresses and turns them straight into direction commands — a second, independent command source for the hardware channel; see [Console Keypress Interaction](#-console-keypress-interaction) below. |
+| **Pca9685Process** | Owns the I2C bus; arbitrates between the confirmed FSM command stream and the raw console keypress stream via a CSP `Alternative`/`fairSelect()`, and translates whichever wins into a PWM pulse-width update on one of two PCA9685 servo channels. |
 | **ReporterProcess** | Owns all UART/console output via a lossy, non-blocking channel, so a burst of print activity can never propagate backpressure into the acquisition/inference path. |
 
 ### Process Network Diagram
@@ -28,7 +29,8 @@ flowchart LR
     Prep -->|FeatureTensorMsg<br/>buffered×2| Inf[InferenceProcess]
     Inf -->|KwsTokenMsg<br/>rendezvous| Filt[FilterProcess]
     Filt -->|KwsTokenMsg<br/>rendezvous| Fsm[FsmProcess]
-    Fsm -->|KwsTokenMsg<br/>rendezvous| Pca[Pca9685Process]
+    Fsm -->|KwsTokenMsg<br/>rendezvous| Pca{{Pca9685Process<br/>Alternative/fairSelect}}
+    Con[ConsoleInputProcess] -->|KwsTokenMsg<br/>rendezvous| Pca
     Pca -.I2C bus.-> HW[(PCA9685<br/>2ch servo driver)]
     ISR([I2C ISR]) -.completion signal.-> Pca
 
@@ -36,10 +38,12 @@ flowchart LR
     Prep -.diagnostics.-> Rep
     Inf -.diagnostics.-> Rep
     Fsm -.diagnostics.-> Rep
+    Pca -.diagnostics.-> Rep
     Rep -->|UART| Console[/Console/]
+    Console -.keypresses.-> Con
 ```
 
-`AcquisitionProcess → PreprocessingProcess` and `PreprocessingProcess → InferenceProcess` are **depth-2 buffered channels**, giving a little slack for pipelining. `InferenceProcess → FilterProcess → FsmProcess → Pca9685Process` are **zero-capacity rendezvous channels** — each stage blocks until the next is ready, so a downstream stall (e.g. a slow I2C write) correctly back-pressures all the way to Acquisition rather than silently dropping data. All diagnostic/status output funnels into `ReporterProcess` through a **lossy, buffered channel** (`SamplingBufferedChannel`, keep-newest policy), which is intentionally the *only* lossy link in the network.
+`AcquisitionProcess → PreprocessingProcess` and `PreprocessingProcess → InferenceProcess` are **depth-2 buffered channels**, giving a little slack for pipelining. `InferenceProcess → FilterProcess → FsmProcess → Pca9685Process` and `ConsoleInputProcess → Pca9685Process` are all **zero-capacity rendezvous channels** — each stage blocks until the next is ready, so a downstream stall (e.g. a slow I2C write) correctly back-pressures all the way to Acquisition rather than silently dropping data. `Pca9685Process` is the one point where two independent rendezvous channels feed a single consumer: it holds `Alternative alt(in_hw | voiceCmd, in_console | consoleCmd)` and calls `alt.fairSelect()` each iteration, so a held key can't starve a pending voice command and vice versa. All diagnostic/status output — including `Pca9685Process`'s own, which no longer calls `xprintf()` directly — funnels into `ReporterProcess` through a **lossy, buffered channel** (`SamplingBufferedChannel`, keep-newest policy), which is intentionally the *only* lossy link in the network.
 
 ### Task Priorities
 
@@ -51,7 +55,7 @@ FreeRTOS on this build is configured with `configMAX_PRIORITIES = 5`, so every t
 | `AcquisitionProcess` | `+4` |
 | `PreprocessingProcess` | `+3` |
 | `InferenceProcess` | `+2` |
-| `FilterProcess` / `FsmProcess` | `+1` |
+| `FilterProcess` / `FsmProcess` / `ConsoleInputProcess` | `+1` |
 | `ReporterProcess` / `Pca9685Process` | `+0` |
 
 ---
@@ -72,7 +76,7 @@ stateDiagram-v2
 **Example interaction:**
 
 > *"left"* → FSM arms, remembers `left`, no output yet
-> *"go"* → FSM confirms, sends `left` to the hardware controller, prints `[FSM] Executing Command Console Output: left`, channel 1's servo steps from `Middle` to `Half Left`, log shows `[PCA9685] Ch1 <- 'left' -> position 1/4 (Half Left)`
+> *"go"* → FSM confirms, sends `left` to the hardware controller, prints `[FSM] Executing Command Console Output: left`, channel 1's servo steps from `Middle` to `Half Left`, log shows `[PCA9685/voice] Ch1 -> Half Left (1/4)`
 
 If you change your mind mid-sequence, just say a new direction — it silently replaces the pending one without needing to abort first:
 
@@ -82,26 +86,49 @@ If you change your mind mid-sequence, just say a new direction — it silently r
 
 > **Note on aborting:** `FsmProcess` still contains an `else` branch that aborts an armed sequence (`[FSM] Sequence aborted! Returning to Idle.`) on receiving anything that isn't a direction or `go`. That branch is currently **unreachable** in practice: `FilterProcess` now only ever forwards `up`, `down`, `left`, `right`, and `go` (see [Recognized Vocabulary](#recognized-vocabulary) below), so words like `yes`/`no`/`stop` never make it past the filter to trigger it. An armed command with no matching `go` will simply wait indefinitely rather than being cancelled by an off-vocabulary word. If you want that abort-on-irrelevant-word behavior back, the vocabulary words would need to pass through `FilterProcess` and instead be screened out only while the FSM is `Idle`.
 
-### Command → Hardware Mapping
+---
 
-Two PCA9685 channels are driven, each holding one of **5 discrete positions**. `up`/`down` step channel 0; `left`/`right` step channel 1. Both channels initialize to `Middle` at startup, and stepping past either end simply holds at the limit (logged as `[at limit]`) rather than wrapping.
+## ⌨️ Console Keypress Interaction
+
+A second, independent way to drive the same two servo channels: `w`/`a`/`s`/`d` on the console. `ConsoleInputProcess` polls the console UART non-blocking (`hx_drv_uart_get_dev(...)->uart_read_nonblock(...)`) and turns a recognized key straight into a `KwsTokenMsg`, sent directly to `Pca9685Process` — deliberately **bypassing `FilterProcess`/`FsmProcess` entirely**.
+
+| Key | Equivalent voice command |
+|---|---|
+| `w` | `up` |
+| `s` | `down` |
+| `a` | `left` |
+| `d` | `right` |
+
+Unlike the voice path, a keypress needs **no `"go"` confirmation** and moves the servo immediately on receipt. The reasoning is asymmetric risk: a KWS classification is probabilistic and a stray misclassification firing hardware unprompted would be bad, so the voice path requires a deliberate two-word confirmation before it acts. A keypress *is* the deliberate action — there's nothing to confirm.
+
+Because both paths ultimately drive the same two channels, `Pca9685Process` is the single arbitration point (see the [process network diagram](#process-network-diagram) above): it holds `Alternative alt(in_hw | voiceCmd, in_console | consoleCmd)` and calls `alt.fairSelect()` each iteration, so a key held down can't starve a pending voice command, and vice versa. Status lines are tagged by source so it's clear which path issued a given move — `[PCA9685/voice]`, `[PCA9685/key]`, or `[PCA9685/init]` at startup.
+
+> **Note on UART ownership:** `Pca9685Process` no longer calls `xprintf()` directly — its status output now goes through the same `g_reportChan` → `ReporterProcess` path as everything else. This keeps UART TX exclusively owned by `ReporterProcess`, so `ConsoleInputProcess`'s UART RX polling can't race with it on the same peripheral.
+
+> **Note on UART instance:** `ConsoleInputProcess` currently assumes the console is `USE_DW_UART_0`. Confirm this matches your board's actual console/debug UART wiring — if keypresses don't register, try `USE_DW_UART_1` or `USE_DW_UART_2` instead.
+
+---
+
+## 🎯 Command → Hardware Mapping
+
+Two PCA9685 channels are driven, each holding one of **5 discrete positions**, regardless of which control path issued the command. `up`/`down`/`w`/`s` step channel 0; `left`/`right`/`a`/`d` step channel 1. Both channels initialize to `Middle` at startup, and stepping past either end simply holds at the limit (logged as `[at limit]`) rather than wrapping.
 
 | Position index | Name | Pulse width | Reached by |
 |---|---|---|---|
-| 0 | Max Left | 1000 µs | repeated `up` (ch0) / `left` (ch1) |
+| 0 | Max Left | 1000 µs | repeated `up`/`w` (ch0) / `left`/`a` (ch1) |
 | 1 | Half Left | 1250 µs | |
 | 2 | Middle *(startup default)* | 1500 µs | |
 | 3 | Half Right | 1750 µs | |
-| 4 | Full Right | 2000 µs | repeated `down` (ch0) / `right` (ch1) |
+| 4 | Full Right | 2000 µs | repeated `down`/`s` (ch0) / `right`/`d` (ch1) |
 
-| Spoken command | Channel | Step direction |
-|---|---|---|
-| `up` | 0 | one position towards Max Left |
-| `down` | 0 | one position towards Full Right |
-| `left` | 1 | one position towards Max Left |
-| `right` | 1 | one position towards Full Right |
+| Command | Key | Channel | Step direction |
+|---|---|---|---|
+| `up` | `w` | 0 | one position towards Max Left |
+| `down` | `s` | 0 | one position towards Full Right |
+| `left` | `a` | 1 | one position towards Max Left |
+| `right` | `d` | 1 | one position towards Full Right |
 
-`yes`, `no`, `on`, `off`, and `stop` are recognized by the model but are dropped in `FilterProcess` before they can reach the FSM or the hardware — they currently have no effect at all.
+`yes`, `no`, `on`, `off`, and `stop` are recognized by the model but are dropped in `FilterProcess` before they can reach the FSM or the hardware — they currently have no effect at all. On the console side, any key other than `w`/`a`/`s`/`d` (case-insensitive) is likewise ignored by `ConsoleInputProcess`.
 
 ### Recognized Vocabulary
 
@@ -164,6 +191,19 @@ void set_pwm(uint8_t channel, uint16_t on, uint16_t off) {
 }
 ```
 
+### Arbitrating two command sources with `Alternative` (`csp4cmsis_spn.cpp`)
+`Pca9685Process` is fed by two independent rendezvous channels — confirmed voice commands from `FsmProcess`, and raw keypresses from `ConsoleInputProcess`. `fairSelect()` guarantees neither can starve the other:
+```cpp
+KwsTokenMsg voiceCmd, consoleCmd;
+Alternative alt(in_hw | voiceCmd, in_console | consoleCmd);
+
+while (true) {
+    int selected = alt.fairSelect();
+    if (selected == 0) apply_command(voiceCmd, /*source=*/0);   // FSM/voice
+    else               apply_command(consoleCmd, /*source=*/1); // console key
+}
+```
+
 ---
 
 ## Sample Console Output
@@ -171,13 +211,14 @@ void set_pwm(uint8_t channel, uint16_t on, uint16_t off) {
 ```text
 --- KWS Pipeline starting (incl. PCA9685 I2C servo control) ---
 Preprocessing state initialised: tensor_bytes=3920 type=9
-Preprocessing: priming step [PCA9685] Initializing PWM driver, centering both servos...
-1/1 (window not yet fully real)
-[PCA9685] Ch0 (up/down) -> Middle | Ch1 (left/right) -> Middle
+Preprocessing: priming step 1/1 (window not yet fully real)
+[PCA9685/init] Ch0 -> Middle (2/4)
+[PCA9685/init] Ch1 -> Middle (2/4)
 Label: left Score: 90 % Label Index: 6
 Label: go Score: 84 % Label Index: 11
 [FSM] Executing Command Console Output: left
-[PCA9685] Ch1 <- 'left' -> position 1/4 (Half Left)
+[PCA9685/voice] Ch1 -> Half Left (1/4)
+[PCA9685/key] Ch0 -> Half Left (1/4)
 [Acq]  Missed 0/20 | ms: dma_wait=9682 buf_asm=0 chan_send_wait=0 | elapsed=9684ms rtf=1.03
 [DMA]  cb_count=19 avg_interval=512ms (ground truth, ISR-measured)
 [Mem]  free_heap=219248 min_ever_free=185040 | stack_hwm(words): prep=0 infer=0
@@ -196,10 +237,12 @@ app/scenario_app/csp4cmsis_kws_iic/
 ├── csp4cmsis_kws_iic.h     // Ring-buffer sizing (BLK_NUM, NUM_BUFF, AUDIO_LEN)
 ├── cvapp_kws.cpp           // Model init, MFCC, Invoke(), label table
 ├── cvapp_kws.h             // cv_kws_* API, timing globals
-├── csp4cmsis_spn.cpp       // The 7 CSP processes + network construction
+├── csp4cmsis_spn.cpp       // The 8 CSP processes + network construction
 ├── csp4cmsis_spn.h         // Reporting API shared across processes
 └── ethosu_rtos_semaphore.c // FreeRTOS-backed semaphore for the Ethos-U55 IRQ
 ```
+
+`csp4cmsis_spn.cpp` also pulls in `hx_drv_uart.h` (from `drivers/inc/`) for `ConsoleInputProcess`'s non-blocking console read, alongside the existing `hx_drv_scu.h`/`hx_drv_iic.h`.
 
 ## 🐛 Troubleshooting
 
@@ -221,6 +264,7 @@ app/scenario_app/csp4cmsis_kws_iic/
       TFLITE_DCHECK(filter->params.zero_point == 0);
     #endif
     ```
+* **Keypresses on the console don't move the servo, but voice commands still work fine** — `ConsoleInputProcess` assumes the console is `USE_DW_UART_0`; if that's not the physical instance your board's console is wired to, `uart_read_nonblock()` will just silently never see any bytes. Try `USE_DW_UART_1` or `USE_DW_UART_2` in `kConsoleUartId`. This is a runtime-silent failure, not a build error, so it's easy to miss.
 
 ## Building and Running on WE2
 
@@ -232,7 +276,7 @@ app/scenario_app/csp4cmsis_kws_iic/
     python3 xmodem/xmodem_send.py --port=/dev/ttyACM0 --baudrate=921600 --protocol=xmodem --file=we2_image_gen_local/output_case1_sec_wlcsp/output.img --model="model_zoo/kws_pdm_record/kwt1_relu_mfcc_fvp_aligned_vela.tflite 0xB7B000 0x00000"
     ```
 5. Wire a PCA9685 to the WE2's I2C0 bus (default address `0x40`; leave A0–A5 address pads unbridged). Plug one servo into **channel 0** (up/down) and a second into **channel 1** (left/right). The PCA9685's servo-power rail (V+ screw terminal) needs its own 5–6V external supply — the WE2's I2C lines don't power it — and that supply's ground must be tied to the PCA9685/WE2 ground.
-6. Press `reset` and try saying a direction followed by `"go"`.
+6. Press `reset` and try saying a direction followed by `"go"` — or, from the same serial terminal you're viewing the console log on, press `w`/`a`/`s`/`d` for immediate, unconfirmed servo steps.
 
 ## 📝 License
 This example is provided under the standard Himax SDK license terms. Refer to the top-level license file in the SDK for details.
