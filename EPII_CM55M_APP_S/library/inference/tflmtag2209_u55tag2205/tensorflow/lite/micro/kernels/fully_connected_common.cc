@@ -69,7 +69,7 @@ TfLiteStatus CalculateOpDataFullyConnected(
     // int8 quantization. See
     // https://github.com/tensorflow/tensorflow/issues/44912 for additional
     // context.
-  #if ((defined(KWS_PDM_RECORD) || defined(CSP4CMSIS_KWS_PDM_RECORD)) || defined(CSP4CMSIS_KWS_IIC)) || defined(CSP4CMSIS_KWS_PCA9685)
+  #if (((defined(KWS_PDM_RECORD) || defined(CSP4CMSIS_KWS_PDM_RECORD)) || defined(CSP4CMSIS_KWS_IIC)) || defined(CSP4CMSIS_KWS_PCA9685)) || defined(CSP4CMSIS_KWS_PCA9685_ALT)
 
   #else
     TFLITE_DCHECK(filter->params.zero_point == 0);
