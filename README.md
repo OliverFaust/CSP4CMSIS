@@ -93,5 +93,4 @@ validated without it.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
-# CSP4CMSIS
-# CSP4CMSIS
+
