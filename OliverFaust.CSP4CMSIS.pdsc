@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package schemaVersion="1.7.2" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="PACK.xsd">
+  <vendor>OliverFaust</vendor>
+
+  <name>CSP4CMSIS</name>
+  <description>
+    A CSP (Communicating Sequential Processes)-style concurrency library --
+    channels, ALT/select, and process composition -- for CMSIS-RTOS2. Runs
+    unmodified on any conforming CMSIS-RTOS2 implementation; verified on
+    both the CMSIS-RTOS2-over-FreeRTOS adapter and native RTX5. csp4cmsis
+    does not manage multicore/inter-processor communication -- it stops at
+    the boundary of a single CMSIS-RTOS2 instance; coordinating across
+    cores is application-level and out of this library's scope.
+  </description>
+
+  <url>https://github.com/YourOrg/CSP4CMSIS/releases/latest/download/</url>
+  <!-- TODO: replace YourOrg — see the earlier discussion on GitHub
+       Releases as the update mechanism (releases/latest/download/ resolves
+       to whatever tag is newest, so this URL never needs to change). -->
+
+  <supportContact>https://github.com/YourOrg/CSP4CMSIS/issues</supportContact>
+  <license>LICENSE</license>
+
+  <releases>
+    <release version="1.0.0" date="2026-09-24">
+      Initial pack release. csp4cmsis migrated from FreeRTOS-native to
+      CMSIS-RTOS2; verified on the CMSIS-RTOS2-over-FreeRTOS adapter and
+      native RTX5 (DK-E8, Cortex-M55). Backend-agnostic static allocation,
+      portable BASEPRI-based critical sections, ARM AAPCS-correct stack
+      alignment. Also includes the fixes that make the pack itself
+      actually installable: the .pdsc filename corrected to the required
+      &lt;Vendor&gt;.&lt;PackName&gt;.pdsc convention, and a missing
+      csp4cmsis/inc/ include-path declaration added (consumers reach the
+      public API via #include "csp/csp4cmsis.h", which needs that
+      directory on the path) -- both found by actually installing this
+      pack and building a project against it as a component, not by
+      schema validation alone.
+    </release>
+    <!-- TODO: confirm 1.0.0 is the version you want to launch on — this
+         is a placeholder reflecting "first pack release," not a claim
+         about how mature the underlying code is. -->
+  </releases>
+
+  <keywords>
+    <keyword>CSP</keyword>
+    <keyword>Communicating Sequential Processes</keyword>
+    <keyword>Concurrency</keyword>
+    <keyword>CMSIS-RTOS2</keyword>
+    <keyword>Channels</keyword>
+  </keywords>
+
+  <conditions>
+    <!-- Generic CMSIS-RTOS2 API condition — deliberately not tied to
+         FreeRTOS or RTX5 specifically. This is the real structural payoff
+         of the migration: one component, one condition, works against
+         either backend, because csp4cmsis only ever calls the standard
+         cmsis_os2.h surface. The backend-specific seam
+         (csp_rtos_static.h's static-allocation types) is handled inside
+         the source via the CSP4CMSIS_RTOS2_BACKEND_* defines, not via
+         separate pack components/conditions. -->
+    <condition id="CSP4CMSIS Core">
+      <description>Requires a CMSIS-RTOS2 API implementation and CMSIS-Core.</description>
+      <require Cclass="CMSIS" Cgroup="RTOS2"/>
+      <require Cclass="CMSIS" Cgroup="CORE"/>
+    </condition>
+  </conditions>
+
+  <components>
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="1.0.0" condition="CSP4CMSIS Core">
+      <description>
+        CSP4CMSIS core library -- channels (rendezvous, buffered, overwriting),
+        ALT/select, process/thread wrapping, and critical sections. Requires
+        three project-level preprocessor defines -- see
+        Documentation/CSP4CMSIS_Configuration.md, included below, before
+        first use.
+      </description>
+      <files>
+        <!-- csp4cmsis/inc/ itself (not just inc/csp/) must be on the
+             include path: consumers reach the public API via
+             #include "csp/csp4cmsis.h" (e.g. application.cpp), a path
+             that only resolves if inc/ is a search root. The per-header
+             <file category="header"> entries below only cause
+             csolution/cbuild to auto-add inc/csp/ (the directory each
+             header actually lives in) — confirmed by a real pack-
+             consumption build failing on this exact include with only
+             inc/csp/ auto-added. category="include" declares an extra
+             search path without treating it as a real project file
+             (Open-CMSIS-Pack spec: name must be a directory, ending in
+             "/"). inc/csp/ itself doesn't need its own such entry: the
+             library's own internal cross-includes use bare names (e.g.
+             process.h's #include "time.h"), which the auto-added
+             per-header paths already satisfy. -->
+        <file category="include" name="csp4cmsis/inc/"/>
+
+        <!-- Headers -->
+        <file category="header" name="csp4cmsis/inc/csp/alt.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/barrier.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/buffered_channel.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/csp_critical.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/overwriting_channel.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/process.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/public_channel.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/public_task.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/run.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/sync_channel.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/time.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
+
+        <!-- exceptions.h/test_types.h deliberately excluded, same
+             rationale as kernel.cpp below: confirmed genuinely unused —
+             neither is #included by any other file in the library
+             (verified by grep), so neither is part of what actually
+             builds. exceptions.h's PoisonException is dead code (the
+             -fno-exceptions build never throws/catches it); test_types.h
+             is unused test scaffolding. -->
+
+
+        <!-- Sources -->
+        <file category="source" name="csp4cmsis/src/alt_channel_sync.cpp"/>
+        <file category="source" name="csp4cmsis/src/alternative.cpp"/>
+        <file category="source" name="csp4cmsis/src/barrier.cpp"/>
+        <!-- buffered_channel.cpp is intentionally empty (its own comment:
+             "left empty to resolve linker conflicts" — BufferedChannel<T,P>
+             is a template, all its logic lives in buffered_channel.h).
+             Still listed: it's a real, actively-referenced translation
+             unit every consuming project compiles as part of its own
+             build, unlike kernel.cpp below. -->
+        <file category="source" name="csp4cmsis/src/buffered_channel.cpp"/>
+        <file category="source" name="csp4cmsis/src/channel_sync.cpp"/>
+        <file category="source" name="csp4cmsis/src/csp_wrapper.cpp"/>
+        <file category="source" name="csp4cmsis/src/glue.cpp"/>
+        <file category="source" name="csp4cmsis/src/sync_channel.cpp"/>
+
+        <!-- kernel.cpp deliberately excluded: confirmed dead code all
+             session (its ThreadFuncWrapper is entirely commented out; the
+             real one lives in csp_wrapper.cpp). Don't ship known-dead code
+             in a public pack release — if it turns out to serve a purpose
+             (a placeholder for something, forward-compat), add it back
+             deliberately with a note explaining why, not by default. -->
+
+        <!-- Documentation -->
+        <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>
+      </files>
+    </component>
+  </components>
+</package>
