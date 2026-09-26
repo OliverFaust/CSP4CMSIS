@@ -85,15 +85,18 @@ pulled in by the code paths that need it.
 
 ## 4. `CSP4CMSIS_ISR_MAX_ELEMENT_SIZE` (optional, default 64)
 
-`putFromISR()` copies the element into the channel with `BASEPRI` raised,
-so every interrupt at or below `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`
-waits for that copy. To keep this bounded, `Chanout<T>::putFromISR()`
-contains `static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE)`.
+An ISR writes into a buffered channel through its ISR writer end
+(`auto isr_out = chan.isrWriter();`, then `isr_out.putFromISR(v)`). The
+element is copied into the channel with `BASEPRI` raised, so every interrupt
+at or below `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` waits for that copy.
+To keep this bounded, `IsrChanout<T>` contains
+`static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE)`. Rendezvous
+and signal channels have no ISR writer.
 The default of 64 bytes (a 16-word copy) costs about as much as an RTOS
 queue operation.
 
-- Only code that actually calls `putFromISR()` is checked; channels of large
-  types used only between tasks are unaffected.
+- Only code that takes an ISR writer end (`isrWriter()`) is checked; channels
+  of large types used only between tasks are unaffected.
 - To allow larger ISR writes, define the limit for the whole project, e.g.
   `-DCSP4CMSIS_ISR_MAX_ELEMENT_SIZE=256`, after checking the extra
   interrupt latency on your target.
@@ -136,7 +139,7 @@ Corstone-300 FVP, Arm Compiler 6 and GCC):
   function-local statics constructed after `osKernelInitialize()`.
 - **Never construct a channel in an ISR**, and never let a channel be
   destroyed while any process or ISR may still use it.
-- A channel must be constructed before any `putFromISR()` to it can run:
+- A channel must be constructed before any ISR write to it can run:
   enable the interrupt only after the channel exists.
 
 ## Application-level dynamic allocation (not CSP4CMSIS's concern)

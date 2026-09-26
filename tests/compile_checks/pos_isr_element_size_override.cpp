@@ -4,6 +4,6 @@
 struct Mid { unsigned char b[100]; };
 void isr() {
     static csp::SamplingBufferedChannel<Mid, 2> ch;
-    auto out = ch.writer(); Mid v = {};
+    auto out = ch.isrWriter(); Mid v = {};
     (void)out.putFromISR(v);
 }

@@ -24,7 +24,7 @@ for cc_path in sys.argv[1:]:
         m = re.match(r'// EXPECT-(ERROR|OK):\s*(.*)', first)
         r = subprocess.run(cmd + ['-fsyntax-only', '-Wall', '-Wextra', os.path.join(here, probe)],
                            capture_output=True, text=True)
-        diag = re.sub(r'\x1b\[[0-9;]*m', '', r.stderr)
+        diag = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', r.stderr)
         if m.group(1) == 'ERROR':
             ok = r.returncode != 0 and m.group(2) in diag
         else:

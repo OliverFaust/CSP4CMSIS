@@ -72,10 +72,6 @@ namespace csp::internal {
         // plain (blocking) operations
         void output(const void* src);
         void input(void* dst);
-        /// Non-blocking write: delivers only to a plain reader that is
-        /// already waiting; false otherwise (an ALT reader is NOT woken).
-        /// ISR-safe (one CSP critical section, then the copy and a flag).
-        bool offer(const void* src);
 
         // ALT guard operations (flag = the guard's thread flag in `alt`)
         bool inEnable(AltScheduler* alt, uint32_t flag, void* dst);

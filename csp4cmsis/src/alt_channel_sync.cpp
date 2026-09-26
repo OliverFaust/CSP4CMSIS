@@ -90,19 +90,6 @@ void RendezvousCore::input(void* dst) {
     in_.serial.release();
 }
 
-bool RendezvousCore::offer(const void* src) {
-    osThreadId_t reader = nullptr; void* dst = nullptr;
-    {
-        Crit c;
-        if (in_.pend_thread != nullptr) { reader = in_.pend_thread; dst = in_.pend_data; in_.pend_thread = nullptr; }
-    }
-    if (reader == nullptr) return false;
-    std::memcpy(dst, src, size_);                          // the reader is blocked: buffer stable
-    { Crit c; in_.pend_done = true; }
-    (void)osThreadFlagsSet(reader, RENDEZVOUS_FLAG);
-    return true;
-}
-
 // ---------------------------------------------------------------------------
 // ALT reader (input guard)
 // ---------------------------------------------------------------------------

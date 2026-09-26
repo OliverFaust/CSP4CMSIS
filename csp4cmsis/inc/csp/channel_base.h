@@ -45,6 +45,20 @@ namespace csp::internal {
     };
 
     /**
+     * @brief ISR write interface. Only buffered channels implement it: an
+     * interrupt can never wait, so it can only hand data to a buffer.
+     * Obtained by applications through csp::IsrChanout<T>.
+     */
+    template <typename DATA_TYPE>
+    class IsrSink {
+    public:
+        /// Never blocks. Block policy: false if full; KeepNewest/KeepOldest: true.
+        virtual bool putFromISR(const DATA_TYPE& data) = 0;
+    protected:
+        ~IsrSink() = default;
+    };
+
+    /**
      * @brief The core contract for CSP communication.
      * Updated to support both Synchronous (Rendezvous) and Asynchronous (Buffered) logic.
      */
@@ -82,9 +96,6 @@ namespace csp::internal {
          * For KeepNewest/KeepOldest, this is effectively always true. 
          */
         virtual bool space_available() = 0;
-
-        /** @brief ISR-safe non-blocking write. */
-        virtual bool putFromISR(const DATA_TYPE& data) = 0;
 
         /// Constructs this channel's input/output guard in `slot` (see GuardSlot).
         virtual internal::Guard* getInputGuard(GuardSlot& slot, DATA_TYPE& dest) = 0;

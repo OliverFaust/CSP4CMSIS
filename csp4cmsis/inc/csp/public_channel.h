@@ -4,7 +4,7 @@
 #include "rendezvous_channel.h"
 #include "buffered_channel.h"
 
-// Largest element type that putFromISR() accepts (bytes). The element is
+// Largest element type that IsrChanout<T>::putFromISR() accepts (bytes). The element is
 // copied with BASEPRI raised (see buffered_channel.h, "Masked copy"), so
 // this bounds the extra interrupt latency an ISR write can cause. Raise it
 // per project with -DCSP4CMSIS_ISR_MAX_ELEMENT_SIZE=<bytes> if the latency
@@ -12,6 +12,10 @@
 #ifndef CSP4CMSIS_ISR_MAX_ELEMENT_SIZE
 #define CSP4CMSIS_ISR_MAX_ELEMENT_SIZE 64
 #endif
+
+/// ISR writes only through IsrChanout<T> from buffered channels (2.0); rendezvous
+/// and signal channels are Block-only. Undefined in 1.x.
+#define CSP4CMSIS_ISR_WRITER_API 1
 
 namespace csp {
 
@@ -47,18 +51,30 @@ public:
     void operator<<(const T& data) { internal_ptr->output(&data); }
     void write(const T& data) { internal_ptr->output(&data); }
     
-    bool putFromISR(const T& data) {
-        // Checked here, not in the (virtual) channel member: only code that
-        // really writes from an ISR instantiates this function.
-        static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE,
-                      "putFromISR(): sizeof(T) exceeds CSP4CMSIS_ISR_MAX_ELEMENT_SIZE "
-                      "(send an index into a static pool, or raise the limit)");
-        return internal_ptr->putFromISR(data);
-    }
-    
     internal::Guard* getGuard(const T& source) {
         return internal_ptr->getOutputGuard(guard_slot, source);
     }
+};
+
+/**
+ * @brief ISR writer end of a buffered channel (the only ISR write path).
+ * Obtain it with SamplingBufferedChannel::isrWriter(); rendezvous and signal
+ * channels have none (an interrupt cannot wait for a partner).
+ * The element is copied with BASEPRI raised, so its size is bounded at
+ * compile time by CSP4CMSIS_ISR_MAX_ELEMENT_SIZE.
+ */
+template <typename T>
+class IsrChanout {
+    static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE,
+                  "IsrChanout: sizeof(T) exceeds CSP4CMSIS_ISR_MAX_ELEMENT_SIZE "
+                  "(send an index into a static pool, or raise the limit)");
+private:
+    internal::IsrSink<T>* sink;
+public:
+    explicit IsrChanout(internal::IsrSink<T>* s) : sink(s) {}
+    /// Never blocks. Block policy: false if the buffer is full.
+    /// KeepNewest/KeepOldest: always true (the policy decides what is kept).
+    bool putFromISR(const T& data) { return sink->putFromISR(data); }
 };
 
 template <typename T>
@@ -82,8 +98,10 @@ public:
 // =============================================================
 
 /**
- * @brief Zero-capacity Synchronization Primitive.
- * In KeepNewest/Oldest modes, it behaves as a pure sampling port.
+ * @brief Zero-capacity synchronisation primitive (rendezvous).
+ * Block policy only: KeepNewest/KeepOldest are rejected at compile time
+ * (use SamplingBufferedChannel<T, 1, P> for a "latest value" channel).
+ * No ISR writer: interrupts write to buffered channels (isrWriter()).
  */
 template <typename T, BufferPolicy P = BufferPolicy::Block>
 class SamplingChannel {
@@ -111,6 +129,8 @@ public:
 
     Chanout<T> writer() { return Chanout<T>(&internal_chan); }
     Chanin<T> reader() { return Chanin<T>(&internal_chan); }
+    /// ISR writer end (the only way to write from an interrupt).
+    IsrChanout<T> isrWriter() { return IsrChanout<T>(&internal_chan); }
 };
 
 /// Payload of a signal channel (no data).
@@ -123,6 +143,8 @@ struct Signal {};
  */
 template <BufferPolicy P = BufferPolicy::Block>
 class SignalChannel {
+    static_assert(P == BufferPolicy::Block,
+                  "SignalChannel: KeepNewest/KeepOldest need a buffer: use SamplingBufferedChannel<csp::Signal, 1, P>");
 private:
     internal::RendezvousChannel<Signal, P> internal_chan;
 public:

@@ -137,7 +137,13 @@ void spin(uint32_t k) { for (volatile uint32_t i = 0; i < k; ++i) { } }
 void park() { for (;;) osDelay(osWaitForever); }
 template <typename C> void drain(C& ch) { uint32_t x; while (ch.pending()) ch.input(&x); }
 
-uint32_t g_pass = 0, g_fail = 0, g_skip = 0;
+uint32_t g_pass = 0, g_fail = 0, g_skip = 0, g_replaced = 0;
+// A test whose defect became impossible to write: the API that allowed it was
+// removed, and a compile check (tests/compile_checks/) proves the removal.
+void replaced(const char* id, const char* check, const char* what) {
+    g_replaced++;
+    printf("RESULT %s: REPLACED -- %s (compile check %s)\r\n", id, what, check);
+}
 void result(const char* id, int verdict /*1 pass, 0 fail, -1 skip*/, const char* what) {
     const char* v = verdict > 0 ? "PASS" : (verdict == 0 ? "FAIL" : "SKIP");
     if (verdict > 0) g_pass++; else if (verdict == 0) g_fail++; else g_skip++;
@@ -325,10 +331,12 @@ void t2_newest_reader(void*) {         // ALT reader on KeepNewest, 2 rounds
     for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
     park();
 }
-void t2_rv_reader(void*) { uint32_t v; csp::Chanin<uint32_t> in = t2_r->reader(); in >> v; t2_got = t2_got + v; park(); }
 void t2_isr_buffered() { uint32_t v = 1000; t2_b->putFromISR(v); }
 void t2_isr_newest()   { uint32_t v = 2000; t2_n->putFromISR(v); }
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
+void t2_rv_reader(void*) { uint32_t v; csp::Chanin<uint32_t> in = t2_r->reader(); in >> v; t2_got = t2_got + v; park(); }
 void t2_isr_rv()       { uint32_t v = 3000; Out out = t2_r->writer(); out.putFromISR(v); }
+#endif
 void test_T2() {
     static BlockChan<1> b; static NewestChan<1> n; static csp::Channel<uint32_t> r;
     t2_b = &b; t2_n = &n; t2_r = &r;
@@ -345,9 +353,13 @@ void test_T2() {
     spawn(t2_newest_reader, nullptr, osPriorityAboveNormal, t2_s3, "T2nr");
     osDelay(2); { uint32_t v = 10, w = 20; n.output(&v); n.output(&w); } osDelay(2);
     g_isr_op = t2_isr_newest; isr_fire(); osDelay(2);
-    // (4) rendezvous putFromISR() to a blocked reader
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
+    // (4) rendezvous putFromISR() to a blocked reader (1.x only: 2.0 has no ISR path into rendezvous)
     spawn(t2_rv_reader, nullptr, osPriorityAboveNormal, t2_s4, "T2rv"); osDelay(2);
     g_isr_op = t2_isr_rv; isr_fire(); osDelay(2);
+#else
+    (void)t2_r; (void)t2_s4;
+#endif
     g_isr_op = nullptr;
     printf("   [T2] RTOS calls with BASEPRI raised: %lu (last: %s); workload sum=%lu\r\n",
            (unsigned long)g_rtos_in_crit, g_rtos_in_crit_fn ? g_rtos_in_crit_fn : "-", (unsigned long)t2_got);
@@ -676,6 +688,7 @@ void test_T12() {
 // ---------------------------------------------------------------------------
 constexpr uint32_t T15_SENT = 0xDEADBEEFu;   // "nothing received" marker
 
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
 // T15i -- rendezvous putFromISR() to a waiting ALT reader: the ISR reports
 // success, the reader's select() returns the channel guard. Correct: the
 // reader has the ISR's value (or putFromISR() returns false and the reader
@@ -703,6 +716,13 @@ void test_T15i() {
     if (phantom) printf("   [T15i] rendezvous reported without data transfer; the ISR's value is lost\r\n");
     result("T15i", ok ? 1 : 0, "rendezvous putFromISR() to an ALT reader delivers the value (or reports failure)");
 }
+
+#else
+void test_T15i() {
+    replaced("T15i", "neg_rendezvous_isr.cpp",
+             "rendezvous putFromISR() no longer exists (ISR writes go to buffered channels via isrWriter())");
+}
+#endif
 
 // T15s -- SignalChannel ALT receiver {X (buffered, index 0), signal (index 1)}.
 // X becomes ready and a sender signals before the receiver runs; the receiver
@@ -826,6 +846,7 @@ void test_T15() {
 // ---------------------------------------------------------------------------
 const char* volatile g_current_test = "-";
 
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
 // T16s -- SignalChannel putFromISR() to a receiver blocked in input(): it
 // must release the receiver (or return false).
 csp::SignalChannel<>* t16s_sig; ThreadSlot t16s_s; volatile int t16s_done = 0; volatile bool t16s_ok = false;
@@ -847,6 +868,13 @@ void test_T16s() {
            "signal putFromISR() releases a blocked receiver (or returns false)");
 }
 
+#else
+void test_T16s() {
+    replaced("T16s", "neg_signal_isr.cpp", "signal channels have no ISR writer (data-less rendezvous, task-only)");
+}
+#endif
+
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
 // T16n -- KeepNewest rendezvous: output() while a reader waits in an ALT.
 // The reader is waiting, so the value must be taken (API: "data is captured
 // only if a receiver is already waiting").
@@ -871,6 +899,14 @@ void test_T16n() {
            "KeepNewest rendezvous output() to a waiting ALT reader delivers the value");
 }
 
+#else
+void test_T16n() {
+    replaced("T16n", "neg_rendezvous_policy.cpp",
+             "KeepNewest/KeepOldest rendezvous channels are rejected at compile time (use SamplingBufferedChannel<T, 1, P>)");
+}
+#endif
+
+#if !defined(CSP4CMSIS_ISR_WRITER_API)
 // T16a (sweep) -- rendezvous putFromISR() vs a plain reader entering input().
 // The task path protects AltChanSyncBase with the mutex, putFromISR() with
 // BASEPRI; they do not exclude each other. registerWaitingTask() stores
@@ -904,6 +940,13 @@ void test_T16a() {
     printf("   [T16a] trials with putFromISR()==true but the value not received: %lu\r\n", (unsigned long)t16a_bad);
     g_isr_op = nullptr;
 }
+
+#else
+void test_T16a() {
+    replaced("T16a", "neg_rendezvous_isr.cpp",
+             "no ISR path into rendezvous channels, so no mutex/BASEPRI race (their state is task-only)");
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // T14 -- objects constructed at namespace scope, i.e. during C++ static
@@ -956,8 +999,8 @@ void runner(void*) {
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
-    printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
-           (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
+    printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
+           (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)g_replaced, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));
     printf("\x04");
     fflush(stdout);

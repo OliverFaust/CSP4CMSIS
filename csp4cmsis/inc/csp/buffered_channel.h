@@ -52,7 +52,8 @@
 //    constant overhead. Interrupts above that priority are not affected.
 //    For small elements (<= 64 bytes) this is comparable to an RTOS queue
 //    operation (FreeRTOS also copies inside its own critical section).
-//    Chanout<T>::putFromISR() enforces this at compile time:
+//    csp::IsrChanout<T> (the only way to call putFromISR(), obtained from
+//    SamplingBufferedChannel::isrWriter()) enforces this at compile time:
 //    sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE (default 64, public_channel.h;
 //    raise it with -D if the latency is acceptable). Task-side operations
 //    are not limited.
@@ -103,7 +104,7 @@ namespace csp::internal {
     template <typename T, size_t SIZE, csp::BufferPolicy P> class BufferedOutputGuard;
 
     template <typename T, size_t SIZE, csp::BufferPolicy P = csp::BufferPolicy::Block>
-    class BufferedChannel : public internal::BaseAltChan<T>
+    class BufferedChannel : public internal::BaseAltChan<T>, public internal::IsrSink<T>
     {
         static_assert(SIZE > 0, "BufferedChannel: SIZE must be > 0");
         static_assert(std::is_trivially_copyable_v<T>,
