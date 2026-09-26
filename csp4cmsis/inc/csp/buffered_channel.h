@@ -1,227 +1,314 @@
 #ifndef CSP4CMSIS_BUFFERED_CHANNEL_H
 #define CSP4CMSIS_BUFFERED_CHANNEL_H
 
+// =============================================================================
+// BufferedChannel<T, SIZE, P> -- bounded buffer, statically allocated (2.0)
+//
+// Storage : `SIZE` elements of T inside the channel object (no RTOS queue,
+//           no heap). T must be trivially copyable (moved with memcpy).
+// Policies: Block      -- writers block while full, readers while empty
+//           KeepNewest -- a write to a full channel overwrites the oldest
+//                         element, atomically (one critical section)
+//           KeepOldest -- a write to a full channel is dropped
+//
+// Concurrency design (see BUFFERED_CHANNEL_ANALYSIS.md, design B):
+//  * The ring state (storage_, head_, count_) and the ALT registrations are
+//    only touched inside csp_enter_critical()/csp_exit_critical().
+//  * NO CMSIS-RTOS2 call is ever made inside such a section. Every operation
+//    snapshots whom to wake inside the section and acts after leaving it.
+//  * Blocking uses two counting semaphores with static control blocks
+//    (CSP4CMSIS_STATIC_ALLOCATION):
+//      items  : tokens <= count_          (released after a push,
+//                                          acquired before a pop)
+//      spaces : tokens <= SIZE - count_   (Block only; acquired before a
+//                                          push, released after a pop)
+//    KeepNewest overwrite / KeepOldest drop leave count_ unchanged and
+//    move no token. Readers always pop the current oldest element.
+//  * ALT: enable() checks readiness and registers {thread, flag} in one
+//    critical section (no lost wakeup); at most ONE ALTing reader and ONE
+//    ALTing writer (Block) per channel -- a second, different thread is a
+//    fatal error. Any number of blocking readers/writers is allowed.
+//    activate() takes the semaphore token with timeout 0 and reports a lost
+//    race to select() (which then starts a new round).
+//  * putFromISR(): never blocks; Block policy fails if full. ISR priority
+//    must be numerically >= CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY
+//    (masked by the critical section). The element copy runs with BASEPRI
+//    raised, i.e. interrupt latency grows with sizeof(T).
+// =============================================================================
+
 #include "cmsis_os2.h"
 #include "csp_critical.h"
+#include "csp_fatal.h"
+#include "csp_rtos_static.h"
 #include "channel_base.h"
 #include "alt.h"
-#include <cstdlib>
+#include <cstring>
+#include <cstddef>
+#include <type_traits>
+
+/// API generation of BufferedChannel (2 = static ring buffer, SIZE template
+/// parameter). Undefined in 1.x.
+#define CSP4CMSIS_BUFFERED_CHANNEL_API 2
 
 namespace csp::internal {
 
-    template <typename T, csp::BufferPolicy P> class BufferedInputGuard;
-    template <typename T, csp::BufferPolicy P> class BufferedOutputGuard;
+    /// Whom to wake after leaving a critical section.
+    struct AltWake {
+        osThreadId_t thread = nullptr;
+        uint32_t     flag   = 0;
+        void signal() const { if (thread != nullptr) (void)osThreadFlagsSet(thread, flag); }
+    };
 
-    /**
-     * @brief A policy-based buffered channel implementation using CMSIS-RTOS2 message queues.
-     */
-    template <typename T, csp::BufferPolicy P = csp::BufferPolicy::Block>
+    /// Counting semaphore, static control block under CSP4CMSIS_STATIC_ALLOCATION.
+    class CspSemaphore {
+    private:
+        osSemaphoreId_t id_ = nullptr;
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+        csp_static_semaphore_storage_t cb_;
+#endif
+    public:
+        CspSemaphore() = default;
+        CspSemaphore(const CspSemaphore&) = delete;
+        CspSemaphore& operator=(const CspSemaphore&) = delete;
+        ~CspSemaphore() { if (id_ != nullptr) (void)osSemaphoreDelete(id_); }
+
+        void create(uint32_t max_count, uint32_t initial, const char* name) {
+            osSemaphoreAttr_t attr = {};
+            attr.name = name;
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+            attr.cb_mem  = &cb_;
+            attr.cb_size = sizeof(cb_);
+#endif
+            id_ = osSemaphoreNew(max_count, initial, &attr);
+            if (id_ == nullptr) fatal("CSP4CMSIS: BufferedChannel: osSemaphoreNew() failed");
+        }
+        bool acquire(uint32_t timeout) { return osSemaphoreAcquire(id_, timeout) == osOK; }
+        void release() { (void)osSemaphoreRelease(id_); }
+    };
+
+    struct NoSemaphore {
+        void create(uint32_t, uint32_t, const char*) {}
+        void release() {}
+    };
+
+    template <typename T, size_t SIZE, csp::BufferPolicy P> class BufferedInputGuard;
+    template <typename T, size_t SIZE, csp::BufferPolicy P> class BufferedOutputGuard;
+
+    template <typename T, size_t SIZE, csp::BufferPolicy P = csp::BufferPolicy::Block>
     class BufferedChannel : public internal::BaseAltChan<T>
     {
+        static_assert(SIZE > 0, "BufferedChannel: SIZE must be > 0");
+        static_assert(std::is_trivially_copyable_v<T>,
+                      "BufferedChannel: T must be trivially copyable (elements are copied with memcpy)");
+
+        static constexpr bool kBlock = (P == csp::BufferPolicy::Block);
+
+        friend class BufferedInputGuard<T, SIZE, P>;
+        friend class BufferedOutputGuard<T, SIZE, P>;
+
     private:
-        osMessageQueueId_t queue_handle;
+        // --- ring buffer (critical-section protected) ---
+        alignas(T) unsigned char storage_[SIZE * sizeof(T)];
+        size_t          head_  = 0;        // index of the oldest element
+        volatile size_t count_ = 0;        // elements stored
 
-        AltScheduler* alt_reader = nullptr;
-        uint32_t      read_bit = 0;
+        // --- ALT registrations (critical-section protected) ---
+        AltWake alt_reader_;
+        AltWake alt_writer_;               // Block only
 
-        AltScheduler* alt_writer = nullptr;
-        uint32_t      write_bit = 0;
+        CspSemaphore items_;
+        std::conditional_t<kBlock, CspSemaphore, NoSemaphore> spaces_;
 
+        unsigned char* at(size_t i) { return storage_ + (i % SIZE) * sizeof(T); }
 
-        /** @brief Internal helper to notify an ALTed reader that data is available. */
-        void _notifyReader() {
-            uint32_t saved = csp_enter_critical();
-            if (alt_reader != nullptr) {
-                alt_reader->wakeUp(read_bit);
-            }
-            csp_exit_critical(saved);
+        // Inside a critical section: append / remove one element.
+        AltWake pushLocked(const T* src) {
+            std::memcpy(at(head_ + count_), src, sizeof(T));
+            count_ = count_ + 1;
+            return alt_reader_;
+        }
+        AltWake popLocked(T* dst) {
+            std::memcpy(dst, at(head_), sizeof(T));
+            head_  = (head_ + 1) % SIZE;
+            count_ = count_ - 1;
+            return alt_writer_;
         }
 
-        /** @brief Internal helper to notify an ALTed writer that space is available. */
-        void _notifyWriter() {
-            uint32_t saved = csp_enter_critical();
-            if (alt_writer != nullptr) {
-                alt_writer->wakeUp(write_bit);
+        // Block: push after a `spaces` token has been taken.
+        void pushWithToken(const T* src) {
+            AltWake w;
+            { uint32_t s = csp_enter_critical(); w = pushLocked(src); csp_exit_critical(s); }
+            items_.release();
+            w.signal();
+        }
+        // Pop after an `items` token has been taken.
+        void popWithToken(T* dst) {
+            AltWake w;
+            { uint32_t s = csp_enter_critical(); w = popLocked(dst); csp_exit_critical(s); }
+            spaces_.release();
+            w.signal();
+        }
+
+        // KeepNewest / KeepOldest write, task or ISR: never blocks.
+        void offer(const T* src) {
+            bool pushed = false;
+            AltWake w;
+            {
+                uint32_t s = csp_enter_critical();
+                if (count_ < SIZE) {
+                    w = pushLocked(src);
+                    pushed = true;
+                } else if constexpr (P == csp::BufferPolicy::KeepNewest) {
+                    // Full: the oldest slot becomes the newest, in place.
+                    std::memcpy(at(head_), src, sizeof(T));
+                    head_ = (head_ + 1) % SIZE;
+                }
+                // KeepOldest and full: drop.
+                csp_exit_critical(s);
             }
-            csp_exit_critical(saved);
+            if (pushed) { items_.release(); w.signal(); }
+        }
+
+        // --- ALT registration: check and register atomically ---
+        bool altRegister(AltWake& slot, osThreadId_t t, uint32_t flag, bool reader) {
+            bool conflict = false, ready;
+            {
+                uint32_t s = csp_enter_critical();
+                if (slot.thread != nullptr && slot.thread != t) conflict = true;
+                else { slot.thread = t; slot.flag = flag; }
+                ready = reader ? (count_ > 0) : (count_ < SIZE);
+                csp_exit_critical(s);
+            }
+            if (conflict)
+                fatal(reader ? "CSP4CMSIS: BufferedChannel: second ALTing reader (at most one per channel)"
+                             : "CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)");
+            return ready;
+        }
+        bool altUnregister(AltWake& slot, osThreadId_t t, bool reader) {
+            uint32_t s = csp_enter_critical();
+            if (slot.thread == t) slot = AltWake{};
+            bool ready = reader ? (count_ > 0) : (count_ < SIZE);
+            csp_exit_critical(s);
+            return ready;
         }
 
     public:
-        BufferedChannel(size_t capacity)
-        {
-            if (capacity == 0) std::abort();
-            queue_handle = osMessageQueueNew(capacity, sizeof(T), NULL);
+        BufferedChannel() {
+            items_.create(SIZE, 0, "CspBufItems");
+            spaces_.create(SIZE, SIZE, "CspBufSpaces");
         }
+        ~BufferedChannel() override = default;
 
-        ~BufferedChannel() override {
-            if (queue_handle) osMessageQueueDelete(queue_handle);
-        }
+        // Guards and registrations point at this object.
+        BufferedChannel(const BufferedChannel&) = delete;
+        BufferedChannel& operator=(const BufferedChannel&) = delete;
+        BufferedChannel(BufferedChannel&&) = delete;
+        BufferedChannel& operator=(BufferedChannel&&) = delete;
 
-        // --- BaseAltChan Overrides ---
+        static constexpr size_t capacity() { return SIZE; }
 
-        bool pending() override {
-            return osMessageQueueGetCount(queue_handle) > 0;
-        }
+        // --- BaseAltChan ---
+        bool pending() override { return count_ > 0; }
 
-        /**
-         * @brief Checks if a write operation will block.
-         * For KeepNewest/KeepOldest, this always returns true as they are non-blocking.
-         */
+        /// Block: a write would not block now. KeepNewest/KeepOldest: always true.
         bool space_available() override {
-            if constexpr (P == csp::BufferPolicy::Block) {
-                return osMessageQueueGetSpace(queue_handle) > 0;
-            }
-            return true;
+            if constexpr (kBlock) return count_ < SIZE;
+            else return true;
         }
 
-        /**
-         * @brief Policy-aware ISR output.
-         * Useful for high-speed peripherals like the STM32N6 DCMIPP (Camera).
-         *
-         * osMessageQueuePut()/osMessageQueueGet() detect IRQ context
-         * internally (timeout must be 0 from an ISR, satisfied below) --
-         * unlike FreeRTOS's separate xQueueSendFromISR()/
-         * xQueueReceiveFromISR() plus an explicit portYIELD_FROM_ISR(),
-         * one call each replaces both context's variants.
-         */
+        /// Never blocks. Block: false if full. KeepNewest/KeepOldest: true.
         bool putFromISR(const T& data) override {
-            bool result = false;
-
-            if (osMessageQueuePut(queue_handle, &data, 0, 0) == osOK) {
-                result = true;
+            if constexpr (kBlock) {
+                if (!spaces_.acquire(0)) return false;
+                pushWithToken(&data);
+                return true;
             } else {
-                if constexpr (P == csp::BufferPolicy::KeepNewest) {
-                    T dummy;
-                    osMessageQueueGet(queue_handle, &dummy, NULL, 0);
-                    osMessageQueuePut(queue_handle, &data, 0, 0);
-                    result = true;
-                } else if constexpr (P == csp::BufferPolicy::KeepOldest) {
-                    result = true; // Handled by discarding
-                }
+                offer(&data);
+                return true;
             }
-
-            if (result && alt_reader != nullptr) {
-                alt_reader->wakeUp(read_bit);
-            }
-
-            return result;
         }
-
-        // --- Core I/O ---
 
         void input(T* const dest) override {
-            if (osMessageQueueGet(queue_handle, dest, NULL, osWaitForever) == osOK) {
-                _notifyWriter();
-            }
+            if (!items_.acquire(osWaitForever)) fatal("CSP4CMSIS: BufferedChannel: input() wait failed");
+            popWithToken(dest);
         }
 
         void output(const T* const source) override {
-            if constexpr (P == csp::BufferPolicy::Block) {
-                if (osMessageQueuePut(queue_handle, source, 0, osWaitForever) == osOK) {
-                    _notifyReader();
-                }
+            if constexpr (kBlock) {
+                if (!spaces_.acquire(osWaitForever)) fatal("CSP4CMSIS: BufferedChannel: output() wait failed");
+                pushWithToken(source);
             } else {
-                // Non-blocking branch: 0 timeout
-                if (osMessageQueuePut(queue_handle, source, 0, 0) != osOK) {
-                    if constexpr (P == csp::BufferPolicy::KeepNewest) {
-                        T dummy;
-                        osMessageQueueGet(queue_handle, &dummy, NULL, 0); // Drop oldest
-                        osMessageQueuePut(queue_handle, source, 0, 0);    // Push newest
-                    }
-                    // KeepOldest does nothing
-                }
-                _notifyReader();
+                offer(source);
             }
         }
 
         void beginExtInput(T* const dest) override { this->input(dest); }
         void endExtInput() override { }
 
-        // --- Guard Factories ---
-
+        // --- Guard factories (guard lives in the caller's handle slot) ---
         internal::Guard* getInputGuard(GuardSlot& slot, T& dest) override {
-            auto* g = slot.emplace<BufferedInputGuard<T, P>>(this);
-            g->setTarget(&dest);
-            return g;
+            return slot.emplace<BufferedInputGuard<T, SIZE, P>>(this, &dest);
         }
-
         internal::Guard* getOutputGuard(GuardSlot& slot, const T& source) override {
-            auto* g = slot.emplace<BufferedOutputGuard<T, P>>(this);
-            g->setTarget(&source);
-            return g;
+            return slot.emplace<BufferedOutputGuard<T, SIZE, P>>(this, &source);
         }
-
-        // --- ALT Registration ---
-
-        void registerInputAlt(AltScheduler* alt, uint32_t b) {
-            uint32_t saved = csp_enter_critical(); alt_reader = alt; read_bit = b; csp_exit_critical(saved);
-        }
-        void unregisterInputAlt() {
-            uint32_t saved = csp_enter_critical(); alt_reader = nullptr; csp_exit_critical(saved);
-        }
-        void registerOutputAlt(AltScheduler* alt, uint32_t b) {
-            uint32_t saved = csp_enter_critical(); alt_writer = alt; write_bit = b; csp_exit_critical(saved);
-        }
-        void unregisterOutputAlt() {
-            uint32_t saved = csp_enter_critical(); alt_writer = nullptr; csp_exit_critical(saved);
-        }
-
-        osMessageQueueId_t getQueueHandle() const { return queue_handle; }
     };
 
     // =============================================================
     // Guards
     // =============================================================
 
-    template <typename T, csp::BufferPolicy P>
+    template <typename T, size_t SIZE, csp::BufferPolicy P>
     class BufferedInputGuard : public Guard {
     private:
-        BufferedChannel<T, P>* channel;
-        T* dest_ptr = nullptr;
+        BufferedChannel<T, SIZE, P>* channel;
+        T* dest;
+        osThreadId_t owner = nullptr;
     public:
-        BufferedInputGuard(BufferedChannel<T, P>* chan) : channel(chan) {}
-        void setTarget(T* dest) { dest_ptr = dest; }
+        BufferedInputGuard(BufferedChannel<T, SIZE, P>* c, T* d) : channel(c), dest(d) {}
 
-        bool enable(AltScheduler* alt, uint32_t bit) override {
-            if (channel->pending()) return true;
-            channel->registerInputAlt(alt, bit);
-            return false;
+        bool enable(AltScheduler* alt, uint32_t flag) override {
+            owner = alt->ownerThread();
+            return channel->altRegister(channel->alt_reader_, owner, flag, true);
         }
-        bool disable() override {
-            channel->unregisterInputAlt();
-            return channel->pending();
-        }
+        bool disable() override { return channel->altUnregister(channel->alt_reader_, owner, true); }
         bool confirm(bool ready) override { return ready; }
         bool activate() override {
-            return osMessageQueueGet(channel->getQueueHandle(), dest_ptr, NULL, 0) == osOK;
+            if (!channel->items_.acquire(0)) return false;   // a blocking reader was faster
+            channel->popWithToken(dest);
+            return true;
         }
     };
 
-    template <typename T, csp::BufferPolicy P>
+    template <typename T, size_t SIZE, csp::BufferPolicy P>
     class BufferedOutputGuard : public Guard {
     private:
-        BufferedChannel<T, P>* channel;
-        const T* source_ptr = nullptr;
+        BufferedChannel<T, SIZE, P>* channel;
+        const T* source;
+        osThreadId_t owner = nullptr;
+        static constexpr bool kBlock = (P == csp::BufferPolicy::Block);
     public:
-        BufferedOutputGuard(BufferedChannel<T, P>* chan) : channel(chan) {}
-        void setTarget(const T* source) { source_ptr = source; }
+        BufferedOutputGuard(BufferedChannel<T, SIZE, P>* c, const T* s) : channel(c), source(s) {}
 
-        bool enable(AltScheduler* alt, uint32_t bit) override {
-            // KeepNewest/KeepOldest are always ready to accept output
-            if (channel->space_available()) return true;
-
-            channel->registerOutputAlt(alt, bit);
-            return false;
+        bool enable(AltScheduler* alt, uint32_t flag) override {
+            if constexpr (!kBlock) { (void)alt; (void)flag; return true; }   // never blocks
+            else {
+                owner = alt->ownerThread();
+                return channel->altRegister(channel->alt_writer_, owner, flag, false);
+            }
         }
         bool disable() override {
-            if constexpr (P != csp::BufferPolicy::Block) return true;
-            channel->unregisterOutputAlt();
-            return channel->space_available();
+            if constexpr (!kBlock) return true;
+            else return channel->altUnregister(channel->alt_writer_, owner, false);
         }
         bool confirm(bool ready) override { return ready; }
         bool activate() override {
-            channel->output(source_ptr);
-            return true;
+            if constexpr (!kBlock) { channel->offer(source); return true; }
+            else {
+                if (!channel->spaces_.acquire(0)) return false;   // a blocking writer was faster
+                channel->pushWithToken(source);
+                return true;
+            }
         }
     };
 

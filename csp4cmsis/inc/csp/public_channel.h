@@ -90,10 +90,12 @@ public:
 template <typename T, size_t SIZE, BufferPolicy P = BufferPolicy::Block>
 class SamplingBufferedChannel {
 private:
-    internal::BufferedChannel<T, P> internal_chan;
+    internal::BufferedChannel<T, SIZE, P> internal_chan;   // static storage for SIZE elements
 public:
-    SamplingBufferedChannel() : internal_chan(SIZE) {}
-    
+    SamplingBufferedChannel() = default;
+    SamplingBufferedChannel(const SamplingBufferedChannel&) = delete;
+    SamplingBufferedChannel& operator=(const SamplingBufferedChannel&) = delete;
+
     Chanout<T> writer() { return Chanout<T>(&internal_chan); }
     Chanin<T> reader() { return Chanin<T>(&internal_chan); }
 };
