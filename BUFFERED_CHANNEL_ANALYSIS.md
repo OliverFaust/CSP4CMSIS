@@ -1255,3 +1255,76 @@ flag.
 **3b, mixed ALT:** A ALTs {c0 rendezvous, c1 buffered}; an ISR writes c1 (atomic push, token, snapshot
 and signal); the task partner on c0 is a plain writer or an ALT writer; stale flag.
 - `[FD=`, deadlock freedom, round bound and audit hold for both partner kinds.
+
+## Implementation (one logical change per commit; full suite after each)
+
+| Commit | Change | Suite (12 configurations) |
+|---|---|---|
+| `fcc29c5` | **OWRV** for rendezvous and signal channels. Per-ALT state word; `select()` re-verifies every wakeup; non-template `RendezvousCore` under CSP critical sections (no mutex, copies outside); ALT-vs-ALT claim of both words in one section, reader copies; signal channel = data-less rendezvous (`csp::Signal`); `SyncChannel` removed; all objects static (`csp_semaphore.h`) | PASS=25 FAIL=1 (T16n, until C2) |
+| `bd3965f` | **C1/C2:** ISR writes only via `SamplingBufferedChannel::isrWriter()` → `IsrChanout<T>` (size `static_assert`); `Chanout`/`BaseAltChan::putFromISR()` removed; Block-only rendezvous and signal channels (`static_assert`); 17 compile checks | PASS=22 FAIL=0 REPLACED=4 |
+| `0dc7fe9` | configuration §3: the priority define is always required (and unshifted) | unchanged, images identical |
+| `29d79cf` | harness on the 2.0 API (`IsrChanout`); T2 covers the OWRV paths; T17 (no heap) | PASS=23 FAIL=0 REPLACED=4 |
+| `c109660` | `Barrier`: static objects, phase-alternating release (fixes two 1.x reuse bugs); T18 | PASS=24 FAIL=0 REPLACED=4 |
+| `44325a4` | heap-free proof: T19, README, CMSIS-FreeRTOS issue draft | 12 standard: PASS=24; **4 heap-free: PASS=25**; FAIL=0 everywhere |
+
+FVP test branch: `f364bf2` (RTOS heap 16 KB; the static rendezvous objects pushed `.bss` past `RW_RAM0`)
+and `3b5e443` (heap-free build types).
+
+**The formerly failing tests:**
+
+| Test | Now | Evidence |
+|---|---|---|
+| T15 (ALT-vs-ALT late wakeup: SILENT, PHANTOM) | **passes** | 0 bad trials in every configuration (was 61–120 per two sweeps) |
+| T15s (lost signal) | **passes** | second `select()` receives the signal, sender completes |
+| T15i (rendezvous `putFromISR()` to an ALT reader) | **replaced** | `neg_rendezvous_isr.cpp`, `neg_rendezvous_isr_writer.cpp` |
+| T16a (rendezvous `putFromISR()` mutex/BASEPRI race) | **replaced** | same compile checks; rendezvous state is task-only |
+| T16s (signal `putFromISR()` to a blocked receiver) | **replaced** | `neg_signal_isr.cpp`, `neg_signal_putfromisr.cpp` |
+| T16n (KeepNewest rendezvous PHANTOM) | **replaced** | `neg_rendezvous_policy.cpp` (and `neg_signal_policy.cpp`) |
+
+(Between `fcc29c5` and `bd3965f`, T15i, T16s and T16a also passed at run time; T16n failed.)
+
+**Heap-free proof** (details in `tests/fvp_sse300/README.md`):
+- **`FreeRTOS-NoHeap`:** `configSUPPORT_DYNAMIC_ALLOCATION=0`, no heap implementation linked. AC6: no
+  allocator is referenced in the image at all. GCC: the allocator traps were never called.
+- **`RTX5-NoHeap`:** `OS_DYNAMIC_MEM_SIZE=0`, no dynamic pool.
+- Both compilers, both backends: PASS=25 FAIL=0 REPLACED=4, RTOS heap used 0 B.
+- Two CMSIS-FreeRTOS 11.3.0 adapter defects needed test-branch workarounds (issue draft
+  `docs/upstream/CMSIS-FreeRTOS_no_dynamic_allocation.md`, not filed).
+- RTX5 with the Arm C library needs its static mutex object pool for the library's own locks.
+
+**Other findings in this round:**
+- `Barrier` (1.x) released N tokens for N − 1 waiters and reset its count outside the lock, so it was
+  not reusable. T18 fails on 1.0.0 and passes on 2.0.
+- Four HimaxWE2 applications (not three) have the lost-I2C-completion race:
+  `docs/upstream/himax_i2c_completion.md`.
+- Rendezvous channels now require a trivially copyable `T` (as buffered channels do). A text check of the
+  sibling message types found no `std::` or virtual members; not compiled.
+- Behaviour change: an ALT-vs-ALT rendezvous now always completes. Himax `csp4cmsis_alt_alt_test`
+  expects the old failure (a timeout) in its comments and output.
+
+## Migration of sibling projects and book chapters (not done; nothing modified)
+
+Every project needs the **2.0 library itself** first:
+- the vendored copies under `lib/csp4cmsis` / `lib/CSP4CMSIS` (B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo
+  and its CubeIDE workspaces, the book's `nucleo-g474re_*` repositories);
+- `EPII_CM55M_APP_S/library/csp4cmsis` (HimaxWE2 and its GithubCode copy), `Alif/DK-E8/csp4cmsis`;
+- the `OliverFaust::CSP4CMSIS` pack (Alif-DK-E8-CSP4CMSIS clone), which also requires a 2.0 pack.
+
+It also needs the usual defines (`CSP4CMSIS_RTOS2_BACKEND_*`, `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`,
+optionally `CSP4CMSIS_STATIC_ALLOCATION`).
+
+| Project | Source changes needed |
+|---|---|
+| HimaxWE2 `csp4cmsis_kws_iic`, `csp4cmsis_kws_PCA9685`, `csp4cmsis_kws_PCA9685_alt`, `csp4cmsis_shake_detection` | I2C completion channel `Channel<bool>` → `BufferedChannel<bool, 1>`; `writer().putFromISR(true)` → `isrWriter().putFromISR(true)` (also fixes the lost completion) |
+| HimaxWE2 `csp4cmsis_irq` | `Channel<uint32_t> timerChannel` → `BufferedChannel<uint32_t, N>` (or `SamplingBufferedChannel<uint32_t, 1, KeepNewest>` for "latest count"); `isrWriter()` |
+| HimaxWE2 `csp4cmsis_allon_sensor_tflm` (book ch. 8) | `Channel<trigger_t> g_trigger_chan` → buffered (capacity 1, or KeepNewest); `isrWriter()`; README text on `putFromISR()` |
+| HimaxWE2 `csp4cmsis_alt_alt_test` | nothing to compile; its "expected (buggy) result: timeout" comments and messages are outdated (ALT-vs-ALT now completes) |
+| HimaxWE2 `csp4cmsis_lossy_policy_test`, other apps | library update only (their sampling channels are already buffered) |
+| Book ch. 5 `nucleo-g474re_Interrupts` | `Channel<ButtonEvent> buttonChan` → `BufferedChannel<ButtonEvent, N>`; `isrWriter()`; README ("synchronous rendezvous channel … putFromISR") and `Formal model/readme.md` (ISR semantics) |
+| Book ch. 6 `nucleo-g474re_Sensor_Data_Processing_Network` | `Channel<trigger_t> g_trigger_chan` → buffered; `isrWriter()` |
+| Book ch. 3, 4, 7 (`The_Process`, `Processes_and_Channels`, `Alternation`) | library update only (ch. 7's ALT now uses OWRV; no source change) |
+| Book site `CSP4CMSIS/api.md` | §2: remove `SamplingChannel<…, KeepNewest/KeepOldest>` (now a compile error) and the "captured only if a receiver is already waiting" policy text; point to `SamplingBufferedChannel<T, 1, P>`. §3: `writer().putFromISR()` → `isrWriter().putFromISR()`, buffered channels only. Signal channel: `reader()`/`writer()` with `csp::Signal` |
+| Alif `DK-E8/critsec_isr_test.cpp` | `Chanout<Message>* s_isr_writer` → `IsrChanout<Message>` from `isrWriter()` (the channel is already buffered, KeepNewest) |
+| Alif-DK-E8-CSP4CMSIS clone (`neuropathway`, `csp4cmsis_pack_test`, `csp4cmsis_alt_test`) | library/pack update only |
+| B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo (+ CubeIDE workspaces) | library update only (no ISR writes, no sampling rendezvous, no signal channels) |
+| FVP `csp4cmsis-pack-migration` demo | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
