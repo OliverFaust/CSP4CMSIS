@@ -23,8 +23,21 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
     for (size_t i = 0; i < amount; ++i) wait_mask |= altFlag(i);
 
     size_t order[ALT_MAX_GUARDS];
+    bool backoff = false;
 
     for (;;) {
+        if (backoff) {
+            // activate() lost a race: the partner is still inside its
+            // operation (e.g. preempted between its critical section and
+            // the semaphore release) or a competitor holds the token.
+            // Retrying at once could spin forever at this thread's
+            // priority while the (lower-priority) partner never runs.
+            // Block for at most one tick -- or less, if signalled -- so it
+            // can finish; then start a new round.
+            (void)osThreadFlagsWait(wait_mask, osFlagsWaitAny, 1U);
+            backoff = false;
+        }
+
         // Drop any wakeup left over from an earlier round or select().
         (void)osThreadFlagsClear(wait_mask);
 
@@ -76,8 +89,8 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         }
 
         // Phase 4: Re-verify (stale wakeups), then commit.
-        if (!guardArray[selected]->confirm(selected_ready)) continue;
-        if (!guardArray[selected]->activate()) continue;
+        if (!guardArray[selected]->confirm(selected_ready)) continue;   // stale: not ready, re-register
+        if (!guardArray[selected]->activate()) { backoff = true; continue; }
         return (unsigned int)selected;
     }
 }
