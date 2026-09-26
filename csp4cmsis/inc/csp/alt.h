@@ -59,10 +59,11 @@ namespace csp {
          *      those); it returns whether the guard can complete now.
          *   4. confirm(disable_result) on the chosen guard: false = stale
          *      wakeup, start a new round.
-         *   5. activate(): commit. false = the partner is still mid-operation
-         *      or a competitor took the item/space; select() then blocks for
-         *      up to one tick (or until signalled) before a new round, so a
-         *      preempted lower-priority partner can finish (no busy retry).
+         *   5. activate(): commit. false = a competitor took the item/space
+         *      between confirm() and activate(); start a new round.
+         *   Readiness reported by enable()/disable() must only become true
+         *   once the partner's operation is complete (otherwise select()
+         *   could retry without anybody making progress).
          */
         class Guard {
         public:

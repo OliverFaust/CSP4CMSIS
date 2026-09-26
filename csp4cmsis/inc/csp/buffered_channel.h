@@ -24,12 +24,22 @@
 //                                          push, released after a pop)
 //    KeepNewest overwrite / KeepOldest drop leave count_ unchanged and
 //    move no token. Readers always pop the current oldest element.
-//  * ALT: enable() checks readiness and registers {thread, flag} in one
-//    critical section (no lost wakeup); at most ONE ALTing reader and ONE
-//    ALTing writer (Block) per channel -- a second, different thread is a
-//    fatal error. Any number of blocking readers/writers is allowed.
-//    activate() takes the semaphore token with timeout 0 and reports a lost
-//    race to select() (which then starts a new round).
+//  * ALT readiness is the SEMAPHORE count (items / spaces), not the ring
+//    state: "ready" can only be observed once the token exists, so a partner
+//    preempted between its ring update and its token release makes the ALT
+//    block, never spin. Protocol (R/C = ALT side, P/T/S/G = partner side):
+//      enable(): R register {thread, flag} (critical section), then
+//                C readiness = osSemaphoreGetCount(...) > 0
+//      partner : P ring update (critical section), T osSemaphoreRelease(),
+//                S snapshot of the registration (critical section), G signal
+//    A lost wakeup would need C before T and S before R; with R before C and
+//    T before S that is a cycle, i.e. impossible.
+//    At most ONE ALTing reader and ONE ALTing writer (Block) per channel -- a
+//    second, different thread is a fatal error. Any number of blocking
+//    readers/writers is allowed. activate() takes the token with timeout 0;
+//    it can only fail if another reader/writer took that token in between
+//    (i.e. made progress); select() then starts a new round, which reads the
+//    updated count.
 //  * putFromISR(): never blocks; Block policy fails if full. ISR priority
 //    must be numerically >= CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY
 //    (masked by the critical section). The element copy runs with BASEPRI
@@ -84,11 +94,13 @@ namespace csp::internal {
         }
         bool acquire(uint32_t timeout) { return osSemaphoreAcquire(id_, timeout) == osOK; }
         void release() { (void)osSemaphoreRelease(id_); }
+        bool available() const { return osSemaphoreGetCount(id_) > 0U; }   // not in a critical section
     };
 
     struct NoSemaphore {
         void create(uint32_t, uint32_t, const char*) {}
         void release() {}
+        bool available() const { return true; }
     };
 
     template <typename T, size_t SIZE, csp::BufferPolicy P> class BufferedInputGuard;
@@ -122,74 +134,84 @@ namespace csp::internal {
         unsigned char* at(size_t i) { return storage_ + (i % SIZE) * sizeof(T); }
 
         // Inside a critical section: append / remove one element.
-        AltWake pushLocked(const T* src) {
+        void pushLocked(const T* src) {
             std::memcpy(at(head_ + count_), src, sizeof(T));
             count_ = count_ + 1;
-            return alt_reader_;
         }
-        AltWake popLocked(T* dst) {
+        void popLocked(T* dst) {
             std::memcpy(dst, at(head_), sizeof(T));
             head_  = (head_ + 1) % SIZE;
             count_ = count_ - 1;
-            return alt_writer_;
+        }
+        // S: snapshot a registration (after the token was released).
+        AltWake snapshot(const AltWake& slot) {
+            uint32_t s = csp_enter_critical();
+            AltWake w = slot;
+            csp_exit_critical(s);
+            return w;
         }
 
-        // Block: push after a `spaces` token has been taken.
+        // Block: push after a `spaces` token has been taken.  P, T, S, G.
         void pushWithToken(const T* src) {
-            AltWake w;
-            { uint32_t s = csp_enter_critical(); w = pushLocked(src); csp_exit_critical(s); }
+            { uint32_t s = csp_enter_critical(); pushLocked(src); csp_exit_critical(s); }
             items_.release();
-            w.signal();
+            snapshot(alt_reader_).signal();
         }
-        // Pop after an `items` token has been taken.
+        // Pop after an `items` token has been taken.  P, T, S, G.
         void popWithToken(T* dst) {
-            AltWake w;
-            { uint32_t s = csp_enter_critical(); w = popLocked(dst); csp_exit_critical(s); }
-            spaces_.release();
-            w.signal();
+            { uint32_t s = csp_enter_critical(); popLocked(dst); csp_exit_critical(s); }
+            if constexpr (kBlock) {
+                spaces_.release();
+                snapshot(alt_writer_).signal();
+            }
         }
 
         // KeepNewest / KeepOldest write, task or ISR: never blocks.
         void offer(const T* src) {
             bool pushed = false;
-            AltWake w;
             {
                 uint32_t s = csp_enter_critical();
                 if (count_ < SIZE) {
-                    w = pushLocked(src);
+                    pushLocked(src);
                     pushed = true;
                 } else if constexpr (P == csp::BufferPolicy::KeepNewest) {
-                    // Full: the oldest slot becomes the newest, in place.
+                    // Full: the oldest slot becomes the newest, in place
+                    // (count_ and the tokens are unchanged).
                     std::memcpy(at(head_), src, sizeof(T));
                     head_ = (head_ + 1) % SIZE;
                 }
                 // KeepOldest and full: drop.
                 csp_exit_critical(s);
             }
-            if (pushed) { items_.release(); w.signal(); }
+            if (pushed) {
+                items_.release();
+                snapshot(alt_reader_).signal();
+            }
         }
 
-        // --- ALT registration: check and register atomically ---
-        bool altRegister(AltWake& slot, osThreadId_t t, uint32_t flag, bool reader) {
-            bool conflict = false, ready;
+        // --- ALT registration: R (critical section), then C (token count) ---
+        template <typename Sem>
+        bool altRegister(AltWake& slot, osThreadId_t t, uint32_t flag, const Sem& tokens, bool reader) {
+            bool conflict = false;
             {
                 uint32_t s = csp_enter_critical();
                 if (slot.thread != nullptr && slot.thread != t) conflict = true;
                 else { slot.thread = t; slot.flag = flag; }
-                ready = reader ? (count_ > 0) : (count_ < SIZE);
                 csp_exit_critical(s);
             }
             if (conflict)
                 fatal(reader ? "CSP4CMSIS: BufferedChannel: second ALTing reader (at most one per channel)"
                              : "CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)");
-            return ready;
+            return tokens.available();
         }
-        bool altUnregister(AltWake& slot, osThreadId_t t, bool reader) {
-            uint32_t s = csp_enter_critical();
-            if (slot.thread == t) slot = AltWake{};
-            bool ready = reader ? (count_ > 0) : (count_ < SIZE);
-            csp_exit_critical(s);
-            return ready;
+        template <typename Sem>
+        bool altUnregister(AltWake& slot, osThreadId_t t, const Sem& tokens) {
+            {
+                uint32_t s = csp_enter_critical();
+                if (slot.thread == t) slot = AltWake{};
+                csp_exit_critical(s);
+            }
+            return tokens.available();
         }
 
     public:
@@ -269,12 +291,12 @@ namespace csp::internal {
 
         bool enable(AltScheduler* alt, uint32_t flag) override {
             owner = alt->ownerThread();
-            return channel->altRegister(channel->alt_reader_, owner, flag, true);
+            return channel->altRegister(channel->alt_reader_, owner, flag, channel->items_, true);
         }
-        bool disable() override { return channel->altUnregister(channel->alt_reader_, owner, true); }
+        bool disable() override { return channel->altUnregister(channel->alt_reader_, owner, channel->items_); }
         bool confirm(bool ready) override { return ready; }
         bool activate() override {
-            if (!channel->items_.acquire(0)) return false;   // a blocking reader was faster
+            if (!channel->items_.acquire(0)) return false;   // another reader took the token
             channel->popWithToken(dest);
             return true;
         }
@@ -294,18 +316,18 @@ namespace csp::internal {
             if constexpr (!kBlock) { (void)alt; (void)flag; return true; }   // never blocks
             else {
                 owner = alt->ownerThread();
-                return channel->altRegister(channel->alt_writer_, owner, flag, false);
+                return channel->altRegister(channel->alt_writer_, owner, flag, channel->spaces_, false);
             }
         }
         bool disable() override {
             if constexpr (!kBlock) return true;
-            else return channel->altUnregister(channel->alt_writer_, owner, false);
+            else return channel->altUnregister(channel->alt_writer_, owner, channel->spaces_);
         }
         bool confirm(bool ready) override { return ready; }
         bool activate() override {
             if constexpr (!kBlock) { channel->offer(source); return true; }
             else {
-                if (!channel->spaces_.acquire(0)) return false;   // a blocking writer was faster
+                if (!channel->spaces_.acquire(0)) return false;   // another writer took the token
                 channel->pushWithToken(source);
                 return true;
             }
