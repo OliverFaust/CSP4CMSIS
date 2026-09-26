@@ -24,7 +24,11 @@
 --    partner can no longer be claimed, a new round starts.
 --  * Signal channels are rendezvous channels without data (partner = PW).
 --
--- Variants (v): OW, and the mutations
+-- Variants (v): OW, OWRV, and the mutations
+--   OWRV     OW without the WAITING check after a wakeup: every wakeup is
+--            re-verified (disable all; a CLAIMED or ready guard wins; if none,
+--            a new round). This is what buffered and timer guards already
+--            do, so they need not touch the ALT's state word.
 --   OWTRUST  the ALT does not check its state after waking and, if nothing is
 --            ready, returns the fired guard (trust the wakeup)
 --   OWSPLIT  the ALT's claim of an ALT writer is split into two critical
@@ -34,6 +38,7 @@
 OW = 0
 OWTRUST = 1
 OWSPLIT = 2
+OWRV = 3
 
 AW = 0
 PW = 1
@@ -156,7 +161,7 @@ ACLAIMED(v, k, n, c, i, e, en1) =
                   else a_sigW.i -> ADIS(v, k, n, c, en1, i))
   else ADIS(v, k, n, c, en1, i)
 AWAIT(v, k, n, c) =
-  a_wait?g -> (if v == OWTRUST then ADIS(v, k, n, c, true, g)
+  a_wait?g -> (if v == OWTRUST or v == OWRV then ADIS(v, k, n, c, true, g)
                else a_chk?still -> (if still then AWAIT(v, k, n, c) else ADIS(v, k, n, c, true, g)))
 ADIS(v, k, n, c, en1, g) =
   a_dis.0?r0?m0 ->
@@ -217,6 +222,15 @@ assert STOP [T= SYS(OW, AW, AW, true) \ diff(Events, {bound_exceeded})
 -- SC3 (T15s): c0 = plain writer, c1 = signal sender. expected: PASS x2
 assert SPEC [FD= SYS(OW, PW, SW, true) \ diff(Events, OBS)
 assert SYS(OW, PW, SW, true) :[deadlock free [F]]
+-- OWRV (re-verification instead of the WAITING check). expected: PASS x8
+assert SPEC [FD= SYS(OWRV, AW, PW, true) \ diff(Events, OBS)
+assert SYS(OWRV, AW, PW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OWRV, AW, PW, true) \ diff(Events, {bound_exceeded})
+assert SPEC [FD= SYS(OWRV, AW, AW, true) \ diff(Events, OBS)
+assert SYS(OWRV, AW, AW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OWRV, AW, AW, true) \ diff(Events, {bound_exceeded})
+assert SPEC [FD= SYS(OWRV, PW, SW, true) \ diff(Events, OBS)
+assert SYS(OWRV, PW, SW, true) :[deadlock free [F]]
 -- mutations. expected: FAIL each
 assert SPEC [FD= SYS(OWTRUST, AW, PW, true) \ diff(Events, OBS)
 assert SPEC [FD= SYS(OWSPLIT, AW, AW, false) \ diff(Events, OBS)
@@ -236,14 +250,15 @@ assert STOP [T= SYS(OW, AW, AW, true) \ diff(Events, FREE)
 --  6  SC2        OW round bound                  PASS      PASS
 --  7  SC3 (T15s) OW [FD= (stale flag)            PASS      PASS
 --  8  SC3        OW deadlock free                PASS      PASS
---  9  SC1  OWTRUST [FD=                          FAIL      FAIL  a_sel.1.true.false, a_sel.0.false.false (PHANTOM)
--- 10  SC2  OWSPLIT [FD=                          FAIL      FAIL  a_sel.1.true.false, then refuses w_done.0
--- 11  SC2  OWSPLIT deadlock free                 FAIL      FAIL  a_en.0.0, w_en.1.0, a_en.1.2 (A claims
+--  9-16 OWRV: the same eight checks          PASS      PASS  (all eight)
+-- 17  SC1  OWTRUST [FD=                          FAIL      FAIL  a_sel.1.true.false, a_sel.0.false.false (PHANTOM)
+-- 18  SC2  OWSPLIT [FD=                          FAIL      FAIL  a_sel.1.true.false, then refuses w_done.0
+-- 19  SC2  OWSPLIT deadlock free                 FAIL      FAIL  a_en.0.0, w_en.1.0, a_en.1.2 (A claims
 --                                                                W1), w_en.0.1 (W0 claims A: A still
 --                                                                ENABLING), a_self.1 (overrides W0's
 --                                                                claim), ... W0 waits for a transfer
 --                                                                that never comes
--- 12-13 alphabet audit                           PASS      PASS
+-- 20-21 alphabet audit                           PASS      PASS
 --
 -- NOT covered: ISR partners (putFromISR), ALT writers with more than one
 -- guard (argument: a claim needs BOTH state words claimable in one critical
