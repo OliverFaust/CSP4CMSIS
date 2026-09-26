@@ -27,8 +27,6 @@ namespace csp::internal {
         AltScheduler* alt_writer = nullptr;
         uint32_t      write_bit = 0;
 
-        BufferedInputGuard<T, P>  res_in_guard;
-        BufferedOutputGuard<T, P> res_out_guard;
 
         /** @brief Internal helper to notify an ALTed reader that data is available. */
         void _notifyReader() {
@@ -50,7 +48,6 @@ namespace csp::internal {
 
     public:
         BufferedChannel(size_t capacity)
-            : res_in_guard(this), res_out_guard(this)
         {
             if (capacity == 0) std::abort();
             queue_handle = osMessageQueueNew(capacity, sizeof(T), NULL);
@@ -142,14 +139,16 @@ namespace csp::internal {
 
         // --- Guard Factories ---
 
-        internal::Guard* getInputGuard(T& dest) override {
-            res_in_guard.setTarget(&dest);
-            return &res_in_guard;
+        internal::Guard* getInputGuard(GuardSlot& slot, T& dest) override {
+            auto* g = slot.emplace<BufferedInputGuard<T, P>>(this);
+            g->setTarget(&dest);
+            return g;
         }
 
-        internal::Guard* getOutputGuard(const T& source) override {
-            res_out_guard.setTarget(&source);
-            return &res_out_guard;
+        internal::Guard* getOutputGuard(GuardSlot& slot, const T& source) override {
+            auto* g = slot.emplace<BufferedOutputGuard<T, P>>(this);
+            g->setTarget(&source);
+            return g;
         }
 
         // --- ALT Registration ---

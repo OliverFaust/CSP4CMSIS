@@ -17,13 +17,9 @@ template <typename T, csp::BufferPolicy P = csp::BufferPolicy::Block>
 class RendezvousChannel : public BaseAltChan<T> {
 private:
     AltChanSyncBase sync_base;
-    internal::ChanInGuard  res_in_guard;
-    internal::ChanOutGuard res_out_guard;
 
 public:
-    RendezvousChannel()
-        : res_in_guard(&sync_base, nullptr, sizeof(T)),
-          res_out_guard(&sync_base, nullptr, sizeof(T)) {}
+    RendezvousChannel() = default;
 
     virtual ~RendezvousChannel() override = default;
 
@@ -148,14 +144,12 @@ public:
         return success;
     }
 
-    virtual internal::Guard* getInputGuard(T& dest) override {
-        res_in_guard.updateBuffer(&dest);
-        return &res_in_guard;
+    virtual internal::Guard* getInputGuard(GuardSlot& slot, T& dest) override {
+        return slot.emplace<ChanInGuard>(&sync_base, static_cast<void*>(&dest), sizeof(T));
     }
 
-    virtual internal::Guard* getOutputGuard(const T& source) override {
-        res_out_guard.updateBuffer(const_cast<T*>(&source));
-        return &res_out_guard;
+    virtual internal::Guard* getOutputGuard(GuardSlot& slot, const T& source) override {
+        return slot.emplace<ChanOutGuard>(&sync_base, static_cast<const void*>(&source), sizeof(T));
     }
 
     void beginExtInput(T* const /*dest*/) override {}

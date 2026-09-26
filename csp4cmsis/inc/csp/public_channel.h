@@ -32,6 +32,7 @@ template <typename T>
 class Chanout {
 private:
     internal::BaseAltChan<T>* internal_ptr;
+    internal::GuardSlot guard_slot;   // this end's ALT guard (see GuardSlot)
 public:
     Chanout(internal::BaseAltChan<T>* ptr) : internal_ptr(ptr) {}
     
@@ -42,8 +43,8 @@ public:
         return internal_ptr->putFromISR(data); 
     }
     
-    internal::Guard* getGuard(const T& source) { 
-        return internal_ptr->getOutputGuard(source); 
+    internal::Guard* getGuard(const T& source) {
+        return internal_ptr->getOutputGuard(guard_slot, source);
     }
 };
 
@@ -51,14 +52,15 @@ template <typename T>
 class Chanin {
 private:
     internal::BaseAltChan<T>* internal_ptr;
+    internal::GuardSlot guard_slot;   // this end's ALT guard (see GuardSlot)
 public:
     Chanin(internal::BaseAltChan<T>* ptr) : internal_ptr(ptr) {}
     
     void operator>>(T& dest) { internal_ptr->input(&dest); }
     void read(T& dest) { internal_ptr->input(&dest); }
     
-    internal::Guard* getGuard(T& dest) { 
-        return internal_ptr->getInputGuard(dest); 
+    internal::Guard* getGuard(T& dest) {
+        return internal_ptr->getInputGuard(guard_slot, dest);
     }
 };
 

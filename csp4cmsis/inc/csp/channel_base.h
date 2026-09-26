@@ -1,7 +1,8 @@
 #ifndef CSP4CMSIS_CHANNEL_BASE_H
 #define CSP4CMSIS_CHANNEL_BASE_H
 
-#include <stddef.h> 
+#include <stddef.h>
+#include <new>
 
 namespace csp {
 
@@ -18,7 +19,30 @@ namespace csp {
 
 namespace csp::internal {
 
-    class Guard; 
+    class Guard;
+
+    /**
+     * @brief Storage for one ALT guard, owned by a channel-end handle
+     * (Chanin/Chanout). Guards are constructed into the caller's slot by
+     * getInputGuard()/getOutputGuard(), so their state (target buffer,
+     * registration) belongs to the process's own channel end, not to the
+     * channel: two writers ALTing on one channel no longer share -- and
+     * re-target -- a single guard object. A process must not share one
+     * handle object with another process (each process owns its ends).
+     */
+    struct GuardSlot {
+        static constexpr size_t SIZE = 24;
+        alignas(void*) unsigned char bytes[SIZE];
+
+        template <typename G, typename... Args>
+        G* emplace(Args&&... args) {
+            static_assert(sizeof(G) <= SIZE, "GuardSlot too small for this guard type");
+            static_assert(alignof(G) <= alignof(void*), "guard over-aligned for GuardSlot");
+            // Guards own no resources; the previous occupant is simply
+            // overwritten (no destructor side effects to preserve).
+            return ::new (static_cast<void*>(bytes)) G(static_cast<Args&&>(args)...);
+        }
+    };
 
     /**
      * @brief The core contract for CSP communication.
@@ -62,8 +86,9 @@ namespace csp::internal {
         /** @brief ISR-safe non-blocking write. */
         virtual bool putFromISR(const DATA_TYPE& data) = 0;
 
-        virtual internal::Guard* getInputGuard(DATA_TYPE& dest) = 0;
-        virtual internal::Guard* getOutputGuard(const DATA_TYPE& source) = 0;
+        /// Constructs this channel's input/output guard in `slot` (see GuardSlot).
+        virtual internal::Guard* getInputGuard(GuardSlot& slot, DATA_TYPE& dest) = 0;
+        virtual internal::Guard* getOutputGuard(GuardSlot& slot, const DATA_TYPE& source) = 0;
         
     public:
         inline virtual ~BaseAltChan() = default;
