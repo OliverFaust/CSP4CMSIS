@@ -5,6 +5,15 @@
 #include "buffered_channel.h"
 #include "sync_channel.h"
 
+// Largest element type that putFromISR() accepts (bytes). The element is
+// copied with BASEPRI raised (see buffered_channel.h, "Masked copy"), so
+// this bounds the extra interrupt latency an ISR write can cause. Raise it
+// per project with -DCSP4CMSIS_ISR_MAX_ELEMENT_SIZE=<bytes> if the latency
+// is acceptable; for large payloads send an index into a static pool.
+#ifndef CSP4CMSIS_ISR_MAX_ELEMENT_SIZE
+#define CSP4CMSIS_ISR_MAX_ELEMENT_SIZE 64
+#endif
+
 namespace csp {
 
 // Forward declarations
@@ -39,8 +48,13 @@ public:
     void operator<<(const T& data) { internal_ptr->output(&data); }
     void write(const T& data) { internal_ptr->output(&data); }
     
-    bool putFromISR(const T& data) { 
-        return internal_ptr->putFromISR(data); 
+    bool putFromISR(const T& data) {
+        // Checked here, not in the (virtual) channel member: only code that
+        // really writes from an ISR instantiates this function.
+        static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE,
+                      "putFromISR(): sizeof(T) exceeds CSP4CMSIS_ISR_MAX_ELEMENT_SIZE "
+                      "(send an index into a static pool, or raise the limit)");
+        return internal_ptr->putFromISR(data);
     }
     
     internal::Guard* getGuard(const T& source) {

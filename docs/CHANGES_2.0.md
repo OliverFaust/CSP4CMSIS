@@ -43,6 +43,9 @@ is in `tests/fvp_sse300/`.
   (`configTASK_NOTIFICATION_ARRAY_ENTRIES > 1`).
 - **`putFromISR()`** is only for ISRs at or below `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (unchanged).
   The element copy runs with BASEPRI raised, so interrupt latency grows with `sizeof(T)`.
+  **New:** `Chanout<T>::putFromISR()` has a `static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE)`
+  (default 64 bytes; override with `-D`). Only code that calls `putFromISR()` is affected. For larger
+  payloads, send an index into a static pool (pattern in `buffered_channel.h`).
 - Override `csp4cmsis_fatal_error(const char*)` (weak) to log or reset. It must not return.
 
 ## Source/API changes (internal API: only code using `csp::internal` is affected)

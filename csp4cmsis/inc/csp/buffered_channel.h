@@ -52,6 +52,10 @@
 //    constant overhead. Interrupts above that priority are not affected.
 //    For small elements (<= 64 bytes) this is comparable to an RTOS queue
 //    operation (FreeRTOS also copies inside its own critical section).
+//    Chanout<T>::putFromISR() enforces this at compile time:
+//    sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE (default 64, public_channel.h;
+//    raise it with -D if the latency is acceptable). Task-side operations
+//    are not limited.
 //    For large elements, do NOT buffer the payload: keep payloads in a
 //    statically allocated pool and send an index or pointer instead, e.g.
 //      static Frame pool[N];                              // payloads

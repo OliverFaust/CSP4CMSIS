@@ -83,6 +83,24 @@ If you're only using `RendezvousChannel`/ALT (not `BufferedChannel`, not
 `putFromISR()`), this define is not required -- `csp_critical.h` is only
 pulled in by the code paths that need it.
 
+## 4. `CSP4CMSIS_ISR_MAX_ELEMENT_SIZE` (optional, default 64)
+
+`putFromISR()` copies the element into the channel with `BASEPRI` raised,
+so every interrupt at or below `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`
+waits for that copy. To keep this bounded, `Chanout<T>::putFromISR()`
+contains `static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE)`.
+The default of 64 bytes (a 16-word copy) costs about as much as an RTOS
+queue operation.
+
+- Only code that actually calls `putFromISR()` is checked; channels of large
+  types used only between tasks are unaffected.
+- To allow larger ISR writes, define the limit for the whole project, e.g.
+  `-DCSP4CMSIS_ISR_MAX_ELEMENT_SIZE=256`, after checking the extra
+  interrupt latency on your target.
+- Better for large payloads: keep them in a statically allocated pool and
+  send the index (`uint8_t`) through the channel; see the "Masked copy"
+  comment in `buffered_channel.h`.
+
 ## Application-level dynamic allocation (not CSP4CMSIS's concern)
 
 CSP4CMSIS itself never calls `operator new`/`operator delete` and performs
