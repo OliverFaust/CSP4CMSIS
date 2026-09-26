@@ -37,32 +37,40 @@ RESULT T10: FAIL -- a second ALTing reader is rejected by assert; the first is s
 RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
    [T12] received a=500 b=500, per-channel order ok=1
 RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
-   [T1a] kb=31819 k=30319..32819 EARLY=1493 LATE=1001 BUG=7 ANOMALY=0 (BUG k=31539..31781)
-   [T1a] kb=31810 k=30310..32810 EARLY=1506 LATE=989 BUG=6 ANOMALY=0 (BUG k=31777..31782)
+   [T1a] kb=31819 k=30319..32819 EARLY=1493 LATE=1001 BUG=7 ANOMALY=0 (BUG k=31655..31781)
+   [T1a] kb=31820 k=30320..32820 EARLY=1491 LATE=1002 BUG=8 ANOMALY=0 (BUG k=31775..31782)
 RESULT T1a: FAIL -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=31819 k=30319..32819 EARLY=1496 LATE=999 BUG=6 ANOMALY=0 (BUG k=31776..31781)
-   [T1b] kb=31819 k=30319..32819 EARLY=1492 LATE=1003 BUG=6 ANOMALY=0 (BUG k=31776..31781)
+   [T1b] kb=31819 k=30319..32819 EARLY=1493 LATE=1001 BUG=7 ANOMALY=0 (BUG k=31776..31786)
+   [T1b] kb=31820 k=30320..32820 EARLY=1491 LATE=1002 BUG=8 ANOMALY=0 (BUG k=31651..31781)
 RESULT T1b: FAIL -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=31828 k=30328..32828 EARLY=1473 LATE=1001 BUG=27 ANOMALY=0 (BUG k=31762..31798)
-   [T3] kb=31828 k=30328..32828 EARLY=1474 LATE=1002 BUG=25 ANOMALY=0 (BUG k=31545..31787)
+   [T3] kb=31828 k=30328..32828 EARLY=1475 LATE=1000 BUG=26 ANOMALY=0 (BUG k=31762..31787)
+   [T3] kb=31828 k=30328..32828 EARLY=1472 LATE=1002 BUG=27 ANOMALY=0 (BUG k=31762..31797)
 RESULT T3: FAIL -- KeepNewest keeps the newest value of every writer (task vs task)
-   [T3i] kb=31810 k=30310..32810 EARLY=1490 LATE=985 BUG=26 ANOMALY=0 (BUG k=31762..31787)
-   [T3i] kb=31828 k=30328..32828 EARLY=1469 LATE=1004 BUG=28 ANOMALY=0 (BUG k=31761..31788)
+   [T3i] kb=31828 k=30328..32828 EARLY=1475 LATE=1001 BUG=25 ANOMALY=0 (BUG k=31659..31787)
+   [T3i] kb=31828 k=30328..32828 EARLY=1473 LATE=1001 BUG=27 ANOMALY=0 (BUG k=31645..31787)
 RESULT T3i: FAIL -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
-SUMMARY: PASS=4 FAIL=12 SKIP=1; heap used=1864 B; runner stack min free=7488 B
+   [T13] kb=31828 k=30328..32828 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T13] kb=31828 k=30328..32828 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
+   [T13] spins detected: 0
+   [T13b] kb=31828 k=30328..32828 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13b] kb=31828 k=30328..32828 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
+   [T13b] spins detected: 0
+SUMMARY: PASS=6 FAIL=12 SKIP=1; heap used=2064 B; runner stack min free=7488 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 132.310998s
-User time at initialisation             : 0.217134s
-User time                               : 38.411701s
-System time at initialisation           : 0.148091s
-System time                             : 0.019956s
-Wall time at initialisation             : 0.345498s
-Wall time                               : 38.398533s
-Performance index                       : 3.45
-cpu0                                    : 344.57 MIPS ( 13230953606 Inst)
-Memory highwater mark at initialisation : 0x1052a000 bytes ( 0.255 GB )
-Memory highwater mark                   : 0x10eb4000 bytes ( 0.264 GB )
+Simulated time                          : 197.422728s
+User time at initialisation             : 0.219736s
+User time                               : 58.928987s
+System time at initialisation           : 0.153815s
+System time                             : 0.029242s
+Wall time at initialisation             : 0.707830s
+Wall time                               : 58.918798s
+Performance index                       : 3.35
+cpu0                                    : 335.07 MIPS ( 19742020549 Inst)
+Memory highwater mark at initialisation : 0x10563000 bytes ( 0.255 GB )
+Memory highwater mark                   : 0x10eb8000 bytes ( 0.264 GB )
 -------------------------------------------------------------------------------

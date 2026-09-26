@@ -17,10 +17,11 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | FreeRTOS | RTX5 |
 |---|---|---|
-| v2, `buffered-channel-v2` @ `6920d1c` | PASS=17 FAIL=0 SKIP=0 | PASS=17 FAIL=0 SKIP=0 |
-| v1.0.0 @ `a789d2a` (regression baseline) | PASS=4 FAIL=12 SKIP=1 | PASS=4 FAIL=12 SKIP=1 |
+| v2, `buffered-channel-v2` @ `a34d608` | PASS=19 FAIL=0 SKIP=0 | PASS=19 FAIL=0 SKIP=0 |
+| v1.0.0 @ `a789d2a` (regression baseline) | PASS=6 FAIL=12 SKIP=1 | PASS=6 FAIL=12 SKIP=1 |
 
-On v1.0.0, only T0, T8, T11 and T12 pass. T9 needs a v2-only hook.
+On v1.0.0, only T0, T8, T11, T12, T13 and T13b pass. T9 needs a v2-only hook. The intermediate commit
+`6920d1c` failed T13/T13b (a livelock fixed in `a34d608`).
 
 ## Harness
 
@@ -106,6 +107,8 @@ done; wait
 | T10 | a second ALTing reader is rejected by the assert; the first is served |
 | T11 | rendezvous ALT-vs-ALT completes on both ends with the value |
 | T12 | rendezvous `fairSelect` over two channels with blocking senders (pipe syntax): 1000 messages, per-channel order |
+| T13 | *sweep*: no livelock when a high-priority ALT reader meets a preempted low-priority blocking writer (separate aggressor thread; the runner detects spinning and rescues by lowering the aggressor's priority) |
+| T13b | *sweep*: the same for a high-priority ALT writer vs a preempted low-priority blocking reader |
 
 ### T2 method
 
@@ -121,7 +124,7 @@ The workload drives every notification path:
 - a KeepNewest overwrite plus an ISR write;
 - a rendezvous `putFromISR()`.
 
-### Phase-sweep method (T1a, T1b, T3, T3i)
+### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b)
 
 1. The runner is the higher-priority aggressor. It aligns to a tick edge E0, releases the victim, and
    sleeps until the next edge E1.
