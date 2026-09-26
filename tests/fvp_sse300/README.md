@@ -15,21 +15,25 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 ## Current results (`results/`)
 
-The same 26-test suite was run everywhere:
-
 | Library | Configurations | Result |
 |---|---|---|
-| 2.0, `buffered-channel-v2` @ `57799f5` (library code: `dd954a9` + DSB/ISB `cbdc9bc` + ISR size limit `4ab6647`) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=21 FAIL=5 SKIP=0 in all 12.** The failures are T15i, T15s, T15, T16s and T16n, the known rendezvous/signal defects (see below). T13/T13b: 0 spins in every sweep |
-| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
+| 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`fcc29c5`), C1/C2 API (`bd3965f`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=23 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
+| v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `1ad3e11`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 
-- On v1.0.0, only T0, T8, T11, T12, T13, T13b, T14 and T16a pass. T9 needs a v2-only hook.
-- **T15i, T15s, T15, T16s and T16n fail on v1.0.0 too:** long-standing defects, not 2.0 regressions.
-  Analysis: `BUFFERED_CHANNEL_ANALYSIS.md` (review rounds 3 and 4); design models in `docs/formal/`.
-- **T15 per configuration:** 61–120 bad trials per two sweeps. Each bad trial is exactly one SILENT and one
-  PHANTOM selection.
-- **T16a passes but does NOT show the defect is absent.** The race window is 1–2 instructions with Arm
-  Compiler and does not exist with GCC `-O2` (the stores are reordered). The sweep moves the interrupt in
-  steps of about 10 cycles, and the FVP is not cycle-accurate. T16a is kept as a guard for hardware runs.
+- **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
+  check in `tests/compile_checks/` proves the removal. Not counted as PASS.
+
+  | Test | Compile check(s) |
+  |---|---|
+  | T15i, T16a | `neg_rendezvous_isr.cpp`, `neg_rendezvous_isr_writer.cpp` |
+  | T16s | `neg_signal_isr.cpp`, `neg_signal_putfromisr.cpp` |
+  | T16n | `neg_rendezvous_policy.cpp` (also `neg_signal_policy.cpp`) |
+
+- **T15, T15s** (the late wakeup and the lost signal) run and pass on the OWRV protocol.
+- The source still builds against v1.0.0: 1.x code paths are selected by the absence of
+  `CSP4CMSIS_ALT_PROTOCOL_OWRV` / `CSP4CMSIS_ISR_WRITER_API`.
+- **Harness RTOS heap:** 16 KB (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5 `OS_DYNAMIC_MEM_SIZE`; FVP test
+  branch `f364bf2`). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
 
 Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
 AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's
@@ -119,7 +123,7 @@ done; wait
 | T0 | control: a Block BufferedChannel read through ALT delivers 10 values |
 | T1a | *sweep*: no lost wakeup when a writer preempts an ALT reader at any point in `select()` |
 | T1b | *sweep*: no lost wakeup when a reader preempts an ALT writer at any point in `select()` |
-| T2 | no CMSIS-RTOS2 call is made with BASEPRI raised (see "T2 method" below) |
+| T2 | no CMSIS-RTOS2 call is made with BASEPRI raised (see "T2 method" below). 2.0 workload also covers the rendezvous and signal paths: plain writer → ALT reader, ALT writer → plain reader, ALT-vs-ALT, signal → ALT reader |
 | T3 | *sweep*: KeepNewest keeps every writer's newest value, task vs task |
 | T3i | *sweep*: KeepNewest keeps every writer's newest value, task vs ISR `putFromISR()` (I2S_IRQn pended as a software interrupt, priority 6) |
 | T4a | two ALT writers: both served, or the second rejected by the assert; never a silent hang |
@@ -138,6 +142,7 @@ done; wait
 | T14 | a BufferedChannel constructed at namespace scope (before `main()`) works. It also reports the kernel state and static/dynamic `osSemaphoreNew()` results during C++ static initialisation |
 | T15i | a rendezvous `putFromISR()` to a waiting ALT reader either delivers the value or returns false. (Today it returns true, and the reader's `select()` returns the channel guard with its destination unchanged.) |
 | T15s | `SignalChannel` ALT receiver {X, signal}: a signal that arrives while the receiver takes X (the lower index) is received by the next `select()`, and the sender completes. (Today `unregisterAltIn()` resets the channel, so the signal is lost and the sender blocks for good.) |
+| T17 | rendezvous and signal channels use no RTOS heap: 50 constructions and destructions of `Channel<uint32_t>` + `SignalChannel<>` allocate nothing (2.0; SKIP on 1.x) |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
 | T16a | *sweep*, rendezvous `putFromISR()` against a plain reader entering `input()`. The task path locks with the mutex, the ISR path with BASEPRI; an ISR between the two stores of `registerWaitingTask()` copies through a null pointer. Correct: `putFromISR()` true → the reader has the value; false → the runner's kick value. (Passes on the FVP; see "Current results".) A `HardFault_Handler` in the test file reports CFSR/HFSR/BFAR and ends the run if a fault happens |
@@ -156,7 +161,8 @@ The workload drives every notification path:
 - an ALT reader woken by `output()` and by `putFromISR()`;
 - an ALT writer woken by `input()`;
 - a KeepNewest overwrite plus an ISR write;
-- a rendezvous `putFromISR()`.
+- a rendezvous `putFromISR()` (1.x only; 2.0 has no ISR path into rendezvous channels);
+- 2.0: the rendezvous and signal task paths listed in the T2 row.
 
 ### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b, T15, T16a)
 

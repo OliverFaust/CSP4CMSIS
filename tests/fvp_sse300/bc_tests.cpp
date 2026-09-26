@@ -136,6 +136,13 @@ osThreadId_t spawn(osThreadFunc_t fn, void* arg, osPriority_t prio, ThreadSlotN<
 void spin(uint32_t k) { for (volatile uint32_t i = 0; i < k; ++i) { } }
 void park() { for (;;) osDelay(osWaitForever); }
 template <typename C> void drain(C& ch) { uint32_t x; while (ch.pending()) ch.input(&x); }
+// ISR write: 2.0 through the public ISR writer end (IsrChanout), 1.x through
+// the channel's own putFromISR().
+#if defined(CSP4CMSIS_ISR_WRITER_API)
+template <typename C> bool isr_put(C* ch, uint32_t v) { csp::IsrChanout<uint32_t> w(ch); return w.putFromISR(v); }
+#else
+template <typename C> bool isr_put(C* ch, uint32_t v) { return ch->putFromISR(v); }
+#endif
 
 uint32_t g_pass = 0, g_fail = 0, g_skip = 0, g_replaced = 0;
 // A test whose defect became impossible to write: the API that allowed it was
@@ -331,8 +338,14 @@ void t2_newest_reader(void*) {         // ALT reader on KeepNewest, 2 rounds
     for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
     park();
 }
-void t2_isr_buffered() { uint32_t v = 1000; t2_b->putFromISR(v); }
-void t2_isr_newest()   { uint32_t v = 2000; t2_n->putFromISR(v); }
+void t2_isr_buffered() { (void)isr_put(t2_b, 1000u); }
+void t2_isr_newest()   { (void)isr_put(t2_n, 2000u); }
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+csp::SignalChannel<>* t2_sig; ThreadSlot t2_s5, t2_s6, t2_s7;
+void t2_rv_alt_reader(void*) { In in = t2_r->reader(); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t2_got = t2_got + v; park(); }
+void t2_rv_alt_writer(void*) { Out out = t2_r->writer(); uint32_t w = 4000; csp::Alternative alt({out.getGuard(w)}); alt.priSelect(); park(); }
+void t2_sig_alt(void*) { csp::Chanin<csp::Signal> in = t2_sig->reader(); csp::Signal s; csp::Alternative alt({in.getGuard(s)}); alt.priSelect(); t2_got = t2_got + 1; park(); }
+#endif
 #if !defined(CSP4CMSIS_ISR_WRITER_API)
 void t2_rv_reader(void*) { uint32_t v; csp::Chanin<uint32_t> in = t2_r->reader(); in >> v; t2_got = t2_got + v; park(); }
 void t2_isr_rv()       { uint32_t v = 3000; Out out = t2_r->writer(); out.putFromISR(v); }
@@ -358,7 +371,18 @@ void test_T2() {
     spawn(t2_rv_reader, nullptr, osPriorityAboveNormal, t2_s4, "T2rv"); osDelay(2);
     g_isr_op = t2_isr_rv; isr_fire(); osDelay(2);
 #else
-    (void)t2_r; (void)t2_s4;
+    (void)t2_s4;
+    // (4) 2.0 rendezvous and signal channels (task-only, OWRV): plain writer -> ALT reader,
+    //     ALT writer -> plain reader, ALT writer vs ALT reader, signal to an ALT reader
+    static csp::SignalChannel<> sig; t2_sig = &sig;
+    spawn(t2_rv_alt_reader, nullptr, osPriorityAboveNormal, t2_s5, "T2ra"); osDelay(2);
+    { Out o = r.writer(); o << 3000u; } osDelay(2);
+    spawn(t2_rv_alt_writer, nullptr, osPriorityAboveNormal, t2_s6, "T2wa"); osDelay(2);
+    { In i = r.reader(); uint32_t x = 0; i >> x; t2_got = t2_got + x; } osDelay(2);
+    spawn(t2_rv_alt_writer, nullptr, osPriorityAboveNormal, t2_s7, "T2wb"); osDelay(2);
+    { In i = r.reader(); uint32_t x = 0; csp::Alternative alt({i.getGuard(x)}); alt.priSelect(); t2_got = t2_got + x; } osDelay(2);
+    static ThreadSlot t2_s8; spawn(t2_sig_alt, nullptr, osPriorityAboveNormal, t2_s8, "T2sg"); osDelay(2);
+    { csp::Chanout<csp::Signal> o = sig.writer(); o << csp::Signal{}; } osDelay(2);
 #endif
     g_isr_op = nullptr;
     printf("   [T2] RTOS calls with BASEPRI raised: %lu (last: %s); workload sum=%lu\r\n",
@@ -376,7 +400,7 @@ void t3_reset() { drain(*t3_ch); uint32_t a = 1, b = 2; t3_ch->output(&a); t3_ch
 bool t3_probe() { return t3_aggr_done; }
 void t3_victim() { static Out out(t3_ch); out << 100u; }
 void t3_aggr()   { uint32_t v = 200; t3_ch->output(&v); t3_aggr_done = true; }
-void t3_isr()    { uint32_t v = 200; t3_ch->putFromISR(v); t3_aggr_done = true; }
+void t3_isr()    { (void)isr_put(t3_ch, 200u); t3_aggr_done = true; }
 void t3i_aggr()  { g_isr_op = t3_isr; isr_fire(); }
 bool t3_check() {
     bool has100 = false, has200 = false; uint32_t x;
@@ -535,6 +559,25 @@ void test_T6() {
     printf("   [T6] RelTimeoutGuard: %lu B heap while alive; Alternative: %lu B; 200 loop constructions -> %lu allocations\r\n",
            (unsigned long)(u_in - u0), (unsigned long)u_alt, (unsigned long)allocs);
     result("T6", (u_in == u0 && u_alt == 0 && allocs == 0) ? 1 : 0, "RelTimeoutGuard and Alternative use no RTOS heap");
+}
+
+// ---------------------------------------------------------------------------
+// T17 -- rendezvous and signal channels use no RTOS heap (2.0, static
+//        allocation): 50 constructions/destructions of each
+// ---------------------------------------------------------------------------
+void test_T17() {
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+    uint32_t allocs = 0, fatal0 = g_fatal_count, u0 = heap_used();
+    for (int i = 0; i < 50; ++i) {
+        uint32_t b = heap_used();
+        { csp::Channel<uint32_t> c; csp::SignalChannel<> s; if (heap_used() > b) allocs++; }
+    }
+    printf("   [T17] 50 x (Channel + SignalChannel): %lu allocations, heap delta %ld B, fatal=%lu\r\n",
+           (unsigned long)allocs, (long)heap_used() - (long)u0, (unsigned long)(g_fatal_count - fatal0));
+    result("T17", (allocs == 0 && g_fatal_count == fatal0) ? 1 : 0, "rendezvous and signal channels use no RTOS heap");
+#else
+    result("T17", -1, "rendezvous and signal channels use no RTOS heap (2.0 only)");
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -996,7 +1039,7 @@ void runner(void*) {
     printf("backend: %s; library: %s\r\n", BACKEND_NAME, LIB_NAME);
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
-    test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
+    test_T5();  test_T6();  test_T17(); test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
