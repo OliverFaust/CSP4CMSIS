@@ -620,9 +620,13 @@ and `RelTimeoutGuard` use 0 B (T5, T6).
    analysis) still exists on `main` @ `c3e5dc3` (2026-09-01, `11.3.1-dev`). An issue is drafted, **not
    filed**: `docs/upstream/CMSIS-FreeRTOS_IS_IRQ_MASKED_Armv8.1-M.md`.
 
-## Formal model (`docs/formal/buffered_channel_v2.csp`, not checked)
+## Formal model (`docs/formal/buffered_channel_v2.csp`)
 
-The model is written for FDR4 and **has not been run**; the "expected" annotations are design intent.
+*Status update: the model was later checked with ProB 1.16.1; see "Review round 2", section 2. The text
+below describes the model as first written.*
+
+The model was written for FDR4 and was not run at that point; the "expected" annotations were design
+intent.
 1. **ALT reader vs. one final message, no successor.**
    - v1.0.0 protocol: expected to deadlock (the lost wakeup) and to fail `[FD=`.
    - The `6920d1c` draft: expected to fail `[FD=` with **divergence** (the livelock).
@@ -729,25 +733,53 @@ S, G as in the header of `buffered_channel.h`:
 - T13/T13b show **0 spins in all 48 sweeps**: 12 configurations × 2 tests × 2 sweeps.
 - The full suite passes in every configuration (see 3).
 
-## 2. FDR: model extended, **not run: FDR is not installed**
+## 2. Formal model: checked with **ProB 1.16.1** (FDR not used)
 
-**Status.** FDR4 is not installed on this machine: there is no `refines` or `fdr4` binary. No Haskell
-toolchain is installed either, so the open-source libcspm `cspmchecker` type checker cannot be used.
-FDR4's licence is limited to academic teaching and research, and the free academic licence is obtained
-by registering from inside FDR. I therefore did not install it for you. In the previous round, the
-option chosen was "write the model only". **There are no FDR results, so nothing can be reported
-verbatim.**
+**History.** FDR4 was not installed, and its licence needs the maintainer's registration, so the model
+was first committed unchecked. It was then checked with ProB (`probcli` 1.16.1-final, 716929f, SICStus
+4.9.0; Linux tarball from <https://prob.hhu.de>), which reads FDR-dialect CSP-M (commit `04a4a3d`).
 
-**To install and run:**
-1. Download FDR 4.2.7 for Linux x86-64 from <https://cocotec.io/fdr/>, following the page's installation
-   instructions (packages or a tarball).
-2. Start `fdr4` once and complete the academic licence registration when prompted.
-3. Check all assertions:
-   `refines ~/src/CSP4CMSIS/docs/formal/buffered_channel_v2.csp`
-   (or load the file in the `fdr4` GUI).
+**What changed while checking.**
+- **Positive control #1 failed at first:** `SYS_OLD` synchronised on `S1`, which lacks `backoff_tick`.
+  `STATE1` could then do `backoff_tick` forever, so the v1.0.0 system was wrongly deadlock free, and
+  assertion 2 failed only through that divergence. `SYS_OLD` now synchronises on `S1B`. This was a model
+  bug; FDR would have given the same result.
+- `st == 1 & alt & sg_send` became `st == 1 and alt & sg_send`: ProB groups the first form as
+  `(st == 1 & alt) & sg_send` and rejects it. The second form is valid in both dialects.
+- **Alphabet audit:** for every `SYS_*` system, ProB confirmed that no event outside the
+  synchronisation set occurs except the intended observables (`done`, `done_alt`, `done_blk`, `idle`,
+  `error`, `wdone2`, `sg_rdone`, `sg_sdone`). The audit flags the original `SYS_OLD` at once.
+- **Mutation controls (Part 1d):** m1 (token count read before registering) and m2 (registration
+  snapshot taken before the token release). Both deadlock, so the model distinguishes the orderings that
+  the final protocol depends on.
+- The unused channels `wflag_r`/`wflag_w` were removed.
 
-**What the model now covers** (`docs/formal/buffered_channel_v2.csp`, 23 assertions, each annotated with
-its expected result):
+**Results: all 25 assertions match their annotations.** The full table with counterexamples is in the
+model header.
+
+| # | Assertion | Expected / ProB |
+|---|---|---|
+| 1 | `SYS_OLD` deadlock free (positive control) | FAIL: `clear_flag, pending_chk.false, put_old, notify_old.false, register_old`, deadlock |
+| 2 | `DELIVERED [FD= SYS_OLD` | FAIL: `done` refused after the empty trace |
+| 3 | `DELIVERED [FD= SYS_DRAFT` (positive control) | FAIL: divergence (the `6920d1c` livelock) |
+| 4–6 | `SYS_NEW` (back-off): deadlock, delivery, no take-from-empty | PASS |
+| 7–12 | `SYS_C`, `SYS_C2` (final, `dd954a9`): same three properties | PASS |
+| 13, 14 | mutations m1, m2 deadlock free | FAIL: lost-wakeup deadlocks |
+| 15 | KeepNewest v1.0.0 | FAIL: `rd.2` |
+| 16, 17 | KeepNewest 2.0 `[T=`, `[FD=` | PASS |
+| 18, 19 | Block buffer: `BUFF`, per-writer FIFO | PASS |
+| 20, 21 | Rendezvous trust path | PASS |
+| 22 | Rendezvous, re-verifying | FAIL: deadlock |
+| 23 | Rendezvous trust path + stale flag | FAIL: `rdone.false` (known limitation) |
+| 24 / 25 | SyncChannel trust / re-verifying | PASS / FAIL: deadlock |
+
+**Reproduce:**
+`probcli docs/formal/buffered_channel_v2.csp -csp_assertion '<assertion without "assert">'`.
+The loop over all assertions is in the model header. ProB writes a parse cache, `*.csp.pl`, which is
+ignored by git.
+
+**What the model covers** (as of review round 2: 23 assertions; the mutation controls, #13 and #14, were
+added later):
 
 | Protocol | Systems | Expected |
 |---|---|---|

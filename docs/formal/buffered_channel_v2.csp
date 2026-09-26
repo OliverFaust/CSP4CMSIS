@@ -68,6 +68,7 @@
 --  * `st == 1 & alt & sg_send` -> `st == 1 and alt & sg_send` (ProB groups
 --    the first form as (st == 1 & alt) & sg_send and rejects it).
 --  * Part 1d (mutation controls m1, m2) added.
+--  * Unused channels wflag_r/wflag_w removed (all 25 results unchanged).
 --  * Alphabet audit: for every SYS_* system, no event outside its
 --    synchronisation set occurs other than the intended observables (done,
 --    done_alt, done_blk, idle, error, wdone2, sg_rdone, sg_sdone).
@@ -406,7 +407,6 @@ assert FIFO1 [T= SYS_BUF \ diff(Events, {bin.v, bout.v | v <- W1})
 channel rv_en_r, rv_en_w : Bool       -- enable(): ready? (else registered)
 channel rv_dis_r, rv_dis_w : Bool     -- disable(): hasWriterWaiting() / hasReaderWaiting()
 channel rv_act_r, rv_act_w : Bool     -- activate(): true = partner was an ALT, data moved now
-channel wflag_r, wflag_w              -- thread flag set (wake), per side
 channel wait_r, wait_w                -- osThreadFlagsWait, per side
 channel clr_r, clr_w
 channel stale_r
