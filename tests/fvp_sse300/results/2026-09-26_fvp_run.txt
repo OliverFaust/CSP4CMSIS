@@ -1,0 +1,68 @@
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5004
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5005
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5006
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5007
+
+Hello world
+
+=== CSP4CMSIS BufferedChannel verification (FVP, tick ~312.5 Hz) ===
+RESULT T0: PASS -- control: 10 values through Block BufferedChannel via ALT, sum=55 (expect 55)
+   [T2] BASEPRI before wakeUp=0xa0, after wakeUp (still inside section)=0x00, higher-priority waiter ran inside section=1
+RESULT T2: CONFIRMED -- osEventFlagsSet() with BASEPRI raised took the thread path and cleared BASEPRI (critical section ended early; context switch inside it)
+   [T4a] reader got 1 then 20; writer A done=0, writer B done=1, space free=1
+RESULT T4a: CONFIRMED -- second ALT writer overwrote the single alt_writer slot; first writer never woken
+   [T4b] unrelated ALT selected guard 0 (0 = instant timeout)
+RESULT T4b: CONFIRMED -- disable() of a never-enabled output guard cleared writer A's registration; A not woken although space is free
+   [T4c] writer A (sending 10) done=1; reader received 20
+RESULT T4c: CONFIRMED -- shared res_out_guard: A's ALT wrote the other writer's value
+   [T5] heap free=32288, queue handle=00000000; input() returned after 0 ticks with dest=0xdeadbeef; output() returned; pending()=0 space_available()=0
+RESULT T5: CONFIRMED -- NULL queue handle; blocking input() returns at once without writing dest, output() silently drops
+   [T6] RelTimeoutGuard: 72 bytes taken from heap while alive, 0 after destruction; Alternative (STATIC_ALLOCATION): 0 bytes; 1000 loop constructions -> 1000 heap allocations
+RESULT T6: CONFIRMED -- each RelTimeoutGuard construction allocates an osTimer from the RTOS heap, even with CSP4CMSIS_STATIC_ALLOCATION
+   [T7a] control (reader uses input()): writer woken=1; reader uses ALT: writer woken=0
+RESULT T7a: CONFIRMED -- a read via ALT never wakes a writer blocked in ALT on the same channel
+   [T1a] boundary kb=31823, swept k=30323..31873: EARLY=1493 LATE=52 BUG=6 ANOMALY=0
+   [T1a] BUG at k=31782..31788 (6 value(s) in 2 run(s)); k(victim stage at E1): 31782(2) 31783(2) 31785(2) 31786(2) 31787(2) 31788(2)
+   [T1a] repeat sweep: kb=31737 BUG=6 (31632..31787) -> differs from first sweep; k(stage): 31632(2) 31783(2) 31784(2) 31785(2) 31786(2) 31787(2)
+   [T1a] window ~ 6/31823 of a tick period (~188 ppm per tick-aligned wake-up)
+RESULT T1a: CONFIRMED -- ALT reader blocks with data queued (input-guard enable race)
+   [T1b] boundary kb=31823, swept k=30323..31873: EARLY=1490 LATE=54 BUG=7 ANOMALY=0
+   [T1b] BUG at k=31782..31795 (7 value(s) in 2 run(s)); k(victim stage at E1): 31782(2) 31783(2) 31784(2) 31785(2) 31786(2) 31787(2) 31795(2)
+   [T1b] repeat sweep: kb=31822 BUG=6 (31782..31787) -> differs from first sweep; k(stage): 31782(2) 31783(2) 31784(2) 31785(2) 31786(2) 31787(2)
+   [T1b] window ~ 7/31823 of a tick period (~219 ppm per tick-aligned wake-up)
+RESULT T1b: CONFIRMED -- ALT writer blocks with space free (output-guard enable race)
+   [T3] boundary kb=31830, swept k=30330..31880: EARLY=1476 LATE=53 BUG=22 ANOMALY=0
+   [T3] BUG at k=31772..31795 (22 value(s) in 3 run(s)); k(victim stage at E1): 31772(2) 31773(2) 31774(2) 31775(2) 31777(2) 31778(2) 31779(2) 31780(2) 31781(2) 31782(2) 31784(2) 31785(2) 31786(2) 31787(2) 31788(2) 31789(2)
+   [T3] repeat sweep: kb=31830 BUG=23 (31772..31795) -> differs from first sweep; k(stage): 31772(2) 31773(2) 31775(2) 31776(2) 31777(2) 31778(2) 31779(2) 31780(2) 31781(2) 31782(2) 31783(2) 31784(2) 31785(2) 31786(2) 31787(2) 31788(2)
+   [T3] window ~ 22/31830 of a tick period (~691 ppm per tick-aligned wake-up)
+RESULT T3: CONFIRMED -- KeepNewest: concurrent writer steals the freed slot, newest value lost
+   [T3] k=31772 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+   [T3] k=31773 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+   [T3] k=31774 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+   [T3] k=31775 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+   [T3] k=31777 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+   [T3] k=31778 stage=2: reader sees 2 200  (expected 100 and 200 both present)
+=== done; heap free=31704 min_ever=31704; runner stack min free=6760 of 8192 bytes ===
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
+Simulated time                          : 63.719303s
+User time at initialisation             : 0.233679s
+User time                               : 29.114456s
+System time at initialisation           : 0.160779s
+System time                             : 0.019264s
+Wall time at initialisation             : 0.681419s
+Wall time                               : 29.127951s
+Performance index                       : 2.19
+cpu0                                    : 218.75 MIPS (  6371861157 Inst)
+Memory highwater mark at initialisation : 0x1053f000 bytes ( 0.255 GB )
+Memory highwater mark                   : 0x10e08000 bytes ( 0.264 GB )
+-------------------------------------------------------------------------------
