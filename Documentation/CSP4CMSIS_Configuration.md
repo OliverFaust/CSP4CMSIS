@@ -35,7 +35,7 @@ control-block types yourself.
 nothing to do with whether your own application code allocates -- see the
 note on `operator new`/`operator delete` at the end of this document.
 
-## 3. `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (required if you use BufferedChannel or putFromISR())
+## 3. `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (always required)
 
 This is the one most worth reading carefully, because the obvious
 assumption about what it depends on is wrong.
@@ -79,9 +79,22 @@ threshold needs to sit:
 4. Confirm on real hardware -- flash and verify nothing that should stay
    responsive during a critical section stalls unexpectedly.
 
-If you're only using `RendezvousChannel`/ALT (not `BufferedChannel`, not
-`putFromISR()`), this define is not required -- `csp_critical.h` is only
-pulled in by the code paths that need it.
+**This define is required in every build**, whatever channels you use.
+Every channel kind and `Alternative::select()` protect their state with this
+critical section: buffered channels, rendezvous and signal channels (whose
+ALT state words and registrations are updated inside it), and the ALT
+scheduler itself. The library's own sources (`alternative.cpp`,
+`alt_channel_sync.cpp`) and `buffered_channel.h` (included by
+`csp4cmsis.h`) include `csp_critical.h`, which stops the build with
+`#error` if the define is missing. There is no default on purpose: a wrong
+value either masks interrupts that must never be delayed, or leaves an ISR
+that writes into a buffered channel unmasked.
+
+Pass the **unshifted** priority number (e.g. `5` on a device with 3
+priority bits), not the `BASEPRI` register value: `csp_critical.h` shifts it
+by `8 - __NVIC_PRIO_BITS` itself. Passing an already-shifted value such as
+`0xA0` makes `BASEPRI` 0 after the shift and turns every critical section
+into a no-op, silently.
 
 ## 4. `CSP4CMSIS_ISR_MAX_ELEMENT_SIZE` (optional, default 64)
 

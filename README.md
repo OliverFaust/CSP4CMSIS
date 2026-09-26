@@ -36,7 +36,7 @@ application-level concern, out of this library's scope.
   [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
   for what that means in practice.
 - **Portable critical sections.** Where the library needs to protect
-  internal state (`BufferedChannel`, `putFromISR()`), it uses a
+  internal state (every channel kind, ALT state, ISR writes), it uses a
   CMSIS-Core-based (`BASEPRI`) critical section rather than an RTOS-
   specific API — CMSIS-RTOS2 has no standardized critical-section
   primitive, so this is CSP4CMSIS's own portable mechanism.
