@@ -1,48 +1,121 @@
 // =============================================================================
-// BufferedChannel / ALT verification tests (BUFFERED_CHANNEL_ANALYSIS.md)
+// CSP4CMSIS BufferedChannel / ALT regression suite (Corstone-300 FVP)
 //
-// Target : Corstone-300 FVP (Cortex-M55), CMSIS-RTOS2 over FreeRTOS 11.3.0,
-//          CSP4CMSIS_STATIC_ALLOCATION, CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5.
-// Harness: helloworld_sse300 (branch csp4cmsis-wt-tests), which builds this
-//          file instead of application.cpp and compiles CSP4CMSIS from this
-//          repository's working tree. See tests/fvp_sse300/README.md.
+// Runs unchanged against
+//   * the v1.0.0 library  (internal BufferedChannel<T, P>(capacity), osMessageQueue)
+//   * the v2 library      (internal BufferedChannel<T, SIZE, P>, ring buffer)
+// and against both CMSIS-RTOS2 backends of the harness project
+//   * FreeRTOS 11.3.0 via ARM::CMSIS-FreeRTOS    (build type .FreeRTOS)
+//   * Keil RTX5 5.9.1 via ARM::CMSIS-RTX         (build type .RTX5)
 //
-// These are TESTS, not library code: they poke at csp::internal classes on
-// purpose. Timing notes: the FVP tick runs at ~312.5 Hz (not the configured
-// 100 Hz); all delays below are in ticks, and nothing depends on the absolute
-// tick length.
+// Every test prints   RESULT <id>: PASS | FAIL | SKIP -- <what is checked>
+// FAIL means the defect is present. SKIP means the test needs a v2-only hook.
+// The run ends with a SUMMARY line and EOT (0x04), which stops the FVP.
 //
-// Output: one "RESULT <id>: <verdict> ..." line per test, then EOT (0x04),
-// which ends the FVP run (mps3_board.uart0.shutdown_on_eot=1).
+// Test code, not library code: it uses csp::internal classes on purpose.
+// Timing: the FVP tick runs at ~312.5 Hz on both backends; only tick counts
+// are used. See README.md for the method and BUFFERED_CHANNEL_ANALYSIS.md.
 // =============================================================================
 #include "csp/csp4cmsis.h"
 #include "cmsis_os2.h"
 #include "RTE_Components.h"
 #include CMSIS_device_header
-#include "FreeRTOS.h"   // xPortGetFreeHeapSize()/StaticTask_t -- test-only
-#include "task.h"
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 
-using Block      = csp::internal::BufferedChannel<uint32_t, csp::BufferPolicy::Block>;
-using KeepNewest = csp::internal::BufferedChannel<uint32_t, csp::BufferPolicy::KeepNewest>;
+#if defined(RTE_CMSIS_RTOS2_FreeRTOS)
+  #include "FreeRTOS.h"
+  #define BACKEND_NAME "FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter)"
+  static uint32_t heap_used() { return (uint32_t)(configTOTAL_HEAP_SIZE - xPortGetFreeHeapSize()); }
+#elif defined(RTE_CMSIS_RTOS2_RTX5)
+  #include "rtx_os.h"
+  #define BACKEND_NAME "Keil RTX5 5.9.1"
+  // RTX5 dynamic memory pool: mem_head_t { uint32_t size; uint32_t used; } (rtx_memory.c)
+  static uint32_t heap_used() { return static_cast<const uint32_t*>(osRtxInfo.mem.common)[1]; }
+  extern "C" uint32_t osRtxErrorNotify(uint32_t code, void* object_id) {
+      printf("!! RTX5 osRtxErrorNotify(code=%lu, object=%p) -- halting\r\n", (unsigned long)code, object_id);
+      for (;;) { }
+  }
+#else
+  #error "unknown CMSIS-RTOS2 backend"
+#endif
+
+// ---------------------------------------------------------------------------
+// Library-version shim
+// ---------------------------------------------------------------------------
+#if defined(CSP4CMSIS_BUFFERED_CHANNEL_API) && (CSP4CMSIS_BUFFERED_CHANNEL_API >= 2)
+  #define LIB_V2 1
+  #define LIB_NAME "v2 API (ring buffer)"
+  template <typename T, size_t N, csp::BufferPolicy P>
+  using BChan = csp::internal::BufferedChannel<T, N, P>;
+#else
+  #define LIB_V2 0
+  #define LIB_NAME "v1 API (osMessageQueue)"
+  template <typename T, size_t N, csp::BufferPolicy P>
+  struct BChan : csp::internal::BufferedChannel<T, P> {
+      BChan() : csp::internal::BufferedChannel<T, P>(N) {}
+  };
+#endif
+
+using csp::BufferPolicy;
+template <size_t N> using BlockChan  = BChan<uint32_t, N, BufferPolicy::Block>;
+template <size_t N> using NewestChan = BChan<uint32_t, N, BufferPolicy::KeepNewest>;
+using In  = csp::Chanin<uint32_t>;
+using Out = csp::Chanout<uint32_t>;
+
+// v2 fatal-error hook (weak in the library). The test's version records the
+// message and parks the calling thread, so the runner can check it.
+static volatile uint32_t    g_fatal_count = 0;
+static const char* volatile g_fatal_msg   = nullptr;
+extern "C" void csp4cmsis_fatal_error(const char* msg) {
+    g_fatal_msg = msg; g_fatal_count = g_fatal_count + 1;
+    for (;;) osDelay(osWaitForever);
+}
+
+// ---------------------------------------------------------------------------
+// RTOS calls made with BASEPRI raised (i.e. inside a CSP critical section).
+// armlink $Sub$$/$Super$$ patching intercepts every call from other objects
+// (the library) to these CMSIS-RTOS2 functions on both backends.
+// ---------------------------------------------------------------------------
+static volatile uint32_t g_rtos_in_crit = 0;
+static const char* volatile g_rtos_in_crit_fn = nullptr;
+static inline void crit_check(const char* fn) {
+    if (__get_BASEPRI() != 0U) { g_rtos_in_crit = g_rtos_in_crit + 1; g_rtos_in_crit_fn = fn; }
+}
+extern "C" {
+#define WRAP(ret, name, params, args)                                  \
+    ret $Super$$##name params;                                         \
+    ret $Sub$$##name params { crit_check(#name); return $Super$$##name args; }
+WRAP(uint32_t,   osEventFlagsSet,        (osEventFlagsId_t e, uint32_t f), (e, f))
+WRAP(uint32_t,   osThreadFlagsSet,       (osThreadId_t t, uint32_t f), (t, f))
+WRAP(osStatus_t, osSemaphoreRelease,     (osSemaphoreId_t s), (s))
+WRAP(osStatus_t, osSemaphoreAcquire,     (osSemaphoreId_t s, uint32_t t), (s, t))
+WRAP(osStatus_t, osMessageQueuePut,      (osMessageQueueId_t q, const void* m, uint8_t p, uint32_t t), (q, m, p, t))
+WRAP(osStatus_t, osMessageQueueGet,      (osMessageQueueId_t q, void* m, uint8_t* p, uint32_t t), (q, m, p, t))
+WRAP(uint32_t,   osMessageQueueGetCount, (osMessageQueueId_t q), (q))
+WRAP(uint32_t,   osMessageQueueGetSpace, (osMessageQueueId_t q), (q))
+WRAP(osStatus_t, osMutexAcquire,         (osMutexId_t m, uint32_t t), (m, t))
+WRAP(osStatus_t, osMutexRelease,         (osMutexId_t m), (m))
+#undef WRAP
+}
 
 // ---------------------------------------------------------------------------
 // Infrastructure
 // ---------------------------------------------------------------------------
 namespace {
 
-constexpr uint32_t F_START = 0x1u;   // runner -> victim
-constexpr uint32_t F_ACK   = 0x2u;   // victim -> runner
-constexpr uint32_t T_ACK   = 30u;    // ticks to wait for a victim before calling it hung
+constexpr uint32_t F_START = 0x10000000u;   // runner -> victim (outside CSP4CMSIS's reserved bits)
+constexpr uint32_t F_ACK   = 0x20000000u;   // victim -> runner
+constexpr uint32_t T_ACK   = 30u;           // ticks before a victim counts as hung
 
 template <size_t WORDS>
 struct ThreadSlotN {
     alignas(8) uint32_t stack[WORDS];
-    StaticTask_t tcb;
+    csp::internal::csp_static_thread_storage_t tcb;
 };
-using ThreadSlot = ThreadSlotN<512>;      // 2 KB: workers
-using RunnerSlot = ThreadSlotN<2048>;     // 8 KB: runner (sweep bookkeeping + printf)
+using ThreadSlot = ThreadSlotN<512>;      // 2 KB workers
+using RunnerSlot = ThreadSlotN<2048>;     // 8 KB runner
 
 template <size_t WORDS>
 osThreadId_t spawn(osThreadFunc_t fn, void* arg, osPriority_t prio, ThreadSlotN<WORDS>& s, const char* name) {
@@ -54,33 +127,33 @@ osThreadId_t spawn(osThreadFunc_t fn, void* arg, osPriority_t prio, ThreadSlotN<
 }
 
 void spin(uint32_t k) { for (volatile uint32_t i = 0; i < k; ++i) { } }
-
+void park() { for (;;) osDelay(osWaitForever); }
 template <typename C> void drain(C& ch) { uint32_t x; while (ch.pending()) ch.input(&x); }
 
-void park() { for (;;) osDelay(osWaitForever); }
+uint32_t g_pass = 0, g_fail = 0, g_skip = 0;
+void result(const char* id, int verdict /*1 pass, 0 fail, -1 skip*/, const char* what) {
+    const char* v = verdict > 0 ? "PASS" : (verdict == 0 ? "FAIL" : "SKIP");
+    if (verdict > 0) g_pass++; else if (verdict == 0) g_fail++; else g_skip++;
+    printf("RESULT %s: %s -- %s\r\n", id, v, what);
+}
 
 // ---------------------------------------------------------------------------
-// Phase-sweep harness for window races (items 1 and 3).
-//
-// Per trial (runner = aggressor, higher priority than the victim):
-//   runner: reset(); osDelay(1)            -> now just after tick edge E0
-//           set START on victim; osDelay(1)-> victim runs, runner wakes at E1
-//   victim: spin(k); pre = probe(); victim_op(); ACK
-//   runner (preempts the victim at E1 wherever it is): aggressor_op();
-//           wait ACK (T_ACK ticks).
-// Outcome: EARLY = victim finished its critical code before E1 (pre == false)
-//          LATE  = aggressor acted before the victim started (pre == true)
-//          BUG   = hang (no ACK although stuck() confirms data/space is
-//                  available -> lost wakeup; rescued by one successor op), or
-//                  check() failed (lost value)
-// Increasing k moves the victim's position at E1 backwards through its code,
-// so sweeping k just below the EARLY/LATE boundary covers every instruction
-// offset of victim_op's vulnerable window.
+// Software interrupt: I2S_IRQn is unused on the FVP; the aggressor pends it
+// and the handler runs the ISR-side operation of the current test.
+// Priority 6 (of 0..7) is below CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5,
+// i.e. masked by CSP critical sections, as required for putFromISR().
+// ---------------------------------------------------------------------------
+void (* volatile g_isr_op)() = nullptr;
+void isr_init() { NVIC_SetPriority(I2S_IRQn, 6); NVIC_ClearPendingIRQ(I2S_IRQn); NVIC_EnableIRQ(I2S_IRQn); }
+void isr_fire() { NVIC_SetPendingIRQ(I2S_IRQn); __DSB(); __ISB(); }
+} // namespace
+extern "C" void I2S_Handler(void) { if (g_isr_op) g_isr_op(); }
+namespace {
+
+// ---------------------------------------------------------------------------
+// Phase-sweep harness (see README.md). Runner = higher-priority aggressor.
 // ---------------------------------------------------------------------------
 enum Outcome { EARLY = 0, LATE = 1, BUG = 2, ANOMALY = 3 };
-#ifndef TRACE_SWEEP
-#define TRACE_SWEEP 0
-#endif
 
 struct Case {
     const char* id;
@@ -88,34 +161,24 @@ struct Case {
     bool (*probe)();
     void (*victim_op)();
     void (*aggressor_op)();
-    bool (*stuck)();       // nullptr: op can't hang
+    bool (*stuck)();
     void (*rescue)();
-    bool (*check)();       // nullptr: no data-level check
+    bool (*check)();
     osThreadId_t victim;
     osThreadId_t runner;
 };
 
-volatile uint32_t g_k   = 0;
+volatile uint32_t g_k = 0, g_stage = 0, g_seen = 0;
 volatile bool     g_pre = false;
-// Victim progress marker, sampled by the aggressor at the instant it runs (E1):
-// 0 = spinning, 1 = probing, 2 = inside victim_op, 3 = op done, 4 = ACK sent.
-volatile uint32_t g_stage = 0, g_seen = 0;
-bool g_trace = TRACE_SWEEP;   // -DTRACE_SWEEP=1 for per-trial tracing
-// T3 only: queue content observed by check() in the trial just run.
-uint32_t g_content[4]; volatile uint32_t g_ncontent = 0;
 
 void victim_main(void* arg) {
     Case* c = static_cast<Case*>(arg);
     for (;;) {
         osThreadFlagsWait(F_START, osFlagsWaitAny, osWaitForever);
-        g_stage = 0;
-        spin(g_k);
-        g_stage = 1;
-        g_pre = c->probe();
-        g_stage = 2;
-        c->victim_op();
-        g_stage = 3;
-        osThreadFlagsSet(c->runner, F_ACK);
+        g_stage = 0; spin(g_k);
+        g_stage = 1; g_pre = c->probe();
+        g_stage = 2; c->victim_op();
+        g_stage = 3; osThreadFlagsSet(c->runner, F_ACK);
         g_stage = 4;
     }
 }
@@ -143,334 +206,368 @@ Outcome trial(Case& c, uint32_t k) {
     return o;
 }
 
-struct BugHit { uint32_t k, seen, n; uint32_t content[4]; };
-struct SweepResult { uint32_t kb, lo, hi, n[4], first_bug, last_bug, bug_runs; BugHit bug[32]; uint32_t nbug_k; };
+struct SweepResult { uint32_t kb, lo, hi, n[4], first_bug, last_bug; };
 
-// Binary search the EARLY/LATE boundary, then sweep [kb-below, kb+above].
 SweepResult& sweep(Case& c, uint32_t below, uint32_t above) {
     static SweepResult s; s = SweepResult{};
-    uint32_t lo = 0, hi = 400000;                  // trial(lo) != LATE, trial(hi) == LATE
+    uint32_t lo = 0, hi = 400000;
     while (hi - lo > 1) {
         uint32_t mid = lo + (hi - lo) / 2;
-        Outcome o = trial(c, mid);
-        if (g_trace) printf("   [%s] bsearch k=%lu -> %d (stage %lu)\r\n", c.id, (unsigned long)mid, (int)o, (unsigned long)g_seen);
-        if (o == LATE) hi = mid; else lo = mid;
+        if (trial(c, mid) == LATE) hi = mid; else lo = mid;
     }
-    s.kb = hi;
-    s.lo = (hi > below) ? hi - below : 0;
-    s.hi = hi + above;
+    s.kb = hi; s.lo = (hi > below) ? hi - below : 0; s.hi = hi + above;
     s.first_bug = s.last_bug = UINT32_MAX;
-    bool in_run = false;
     for (uint32_t k = s.lo; k <= s.hi; ++k) {
         Outcome o = trial(c, k);
         s.n[o]++;
-        if (g_trace && o != EARLY)
-            printf("   [%s] k=%lu -> %d (stage %lu, BASEPRI=0x%02lx)\r\n", c.id, (unsigned long)k, (int)o,
-                   (unsigned long)g_seen, (unsigned long)__get_BASEPRI());
-        if (o == BUG) {
-            if (s.first_bug == UINT32_MAX) s.first_bug = k;
-            s.last_bug = k;
-            if (s.nbug_k < 32) {
-                BugHit& h = s.bug[s.nbug_k++];
-                h.k = k; h.seen = g_seen; h.n = g_ncontent;
-                for (uint32_t i = 0; i < 4; ++i) h.content[i] = g_content[i];
-            }
-            if (!in_run) s.bug_runs++;
-        }
-        in_run = (o == BUG);
-        if (o == ANOMALY) { printf("   [%s] ANOMALY at k=%lu -- sweep aborted\r\n", c.id, (unsigned long)k); break; }
+        if (o == BUG) { if (s.first_bug == UINT32_MAX) s.first_bug = k; s.last_bug = k; }
+        if (o == ANOMALY) { printf("   [%s] ANOMALY at k=%lu (stage %lu) -- sweep aborted\r\n", c.id, (unsigned long)k, (unsigned long)g_seen); break; }
     }
+    printf("   [%s] kb=%lu k=%lu..%lu EARLY=%lu LATE=%lu BUG=%lu ANOMALY=%lu", c.id, (unsigned long)s.kb,
+           (unsigned long)s.lo, (unsigned long)s.hi, (unsigned long)s.n[EARLY], (unsigned long)s.n[LATE],
+           (unsigned long)s.n[BUG], (unsigned long)s.n[ANOMALY]);
+    if (s.n[BUG]) printf(" (BUG k=%lu..%lu)", (unsigned long)s.first_bug, (unsigned long)s.last_bug);
+    printf("\r\n");
     return s;
 }
 
-void report_sweep(const char* id, const char* what, const SweepResult& a, const SweepResult& b) {
-    printf("   [%s] boundary kb=%lu, swept k=%lu..%lu: EARLY=%lu LATE=%lu BUG=%lu ANOMALY=%lu\r\n", id,
-           (unsigned long)a.kb, (unsigned long)a.lo, (unsigned long)a.hi,
-           (unsigned long)a.n[EARLY], (unsigned long)a.n[LATE], (unsigned long)a.n[BUG], (unsigned long)a.n[ANOMALY]);
-    if (a.n[BUG]) {
-        printf("   [%s] BUG at k=%lu..%lu (%lu value(s) in %lu run(s)); k(victim stage at E1):", id,
-               (unsigned long)a.first_bug, (unsigned long)a.last_bug, (unsigned long)a.n[BUG], (unsigned long)a.bug_runs);
-        for (uint32_t i = 0; i < a.nbug_k && i < 16; ++i) printf(" %lu(%lu)", (unsigned long)a.bug[i].k, (unsigned long)a.bug[i].seen);
-        printf("\r\n");
-    }
-    bool same = (a.kb == b.kb) && (a.n[BUG] == b.n[BUG]) && (a.first_bug == b.first_bug) && (a.last_bug == b.last_bug);
-    printf("   [%s] repeat sweep: kb=%lu BUG=%lu (%lu..%lu) -> %s; k(stage):", id, (unsigned long)b.kb, (unsigned long)b.n[BUG],
-           (unsigned long)b.first_bug, (unsigned long)b.last_bug, same ? "same as first sweep" : "differs from first sweep");
-    for (uint32_t i = 0; i < b.nbug_k && i < 16; ++i) printf(" %lu(%lu)", (unsigned long)b.bug[i].k, (unsigned long)b.bug[i].seen);
-    printf("\r\n");
-    // Crude share of a tick in which an aggressor wake-up hits the window: window ~ n_bug
-    // spin iterations, tick ~ kb iterations (victim starts shortly after E0).
-    if (a.n[BUG] && a.kb)
-        printf("   [%s] window ~ %lu/%lu of a tick period (~%lu ppm per tick-aligned wake-up)\r\n", id,
-               (unsigned long)a.n[BUG], (unsigned long)a.kb, (unsigned long)((uint64_t)a.n[BUG] * 1000000u / a.kb));
-    printf("RESULT %s: %s -- %s\r\n", id, a.n[BUG] ? "CONFIRMED" : "NOT REPRODUCED", what);
+void sweep_verdict(Case& c, const char* what) {
+    static SweepResult a, b;
+    // The EARLY/LATE boundary search can land up to ~600 iterations below the
+    // true boundary (per-trial state shifts timing), so sweep well above kb.
+    a = sweep(c, 1500, 1000); b = sweep(c, 1500, 1000);
+    bool ok = a.n[BUG] == 0 && b.n[BUG] == 0 && a.n[ANOMALY] == 0 && b.n[ANOMALY] == 0
+              && a.n[EARLY] > 0 && a.n[LATE] > 0;            // both regimes covered
+    result(c.id, ok ? 1 : 0, what);
 }
 
 // ---------------------------------------------------------------------------
-// T0 -- control: plain buffered channel + ALT reader works.
+// T0 -- control: Block buffered channel read through ALT
 // ---------------------------------------------------------------------------
-Block* t0_ch; ThreadSlot t0_slot; volatile uint32_t t0_sum = 0, t0_n = 0;
-void t0_writer(void*) { for (uint32_t i = 1; i <= 10; ++i) { t0_ch->output(&i); osDelay(1); } park(); }
+BlockChan<4>* t0_ch; ThreadSlot t0_slot;
+void t0_writer(void*) { Out out(t0_ch); for (uint32_t i = 1; i <= 10; ++i) { out << i; osDelay(1); } park(); }
 void test_T0() {
-    static Block ch(4); t0_ch = &ch;
+    static BlockChan<4> ch; t0_ch = &ch;
     spawn(t0_writer, nullptr, osPriorityNormal, t0_slot, "T0w");
-    uint32_t v = 0;
-    csp::Alternative alt({ch.getInputGuard(v)});
-    for (int i = 0; i < 10; ++i) { alt.priSelect(); t0_sum += v; t0_n++; }
-    printf("RESULT T0: %s -- control: 10 values through Block BufferedChannel via ALT, sum=%lu (expect 55)\r\n",
-           (t0_n == 10 && t0_sum == 55) ? "PASS" : "FAIL", (unsigned long)t0_sum);
+    In in(&ch); uint32_t v = 0, sum = 0, n = 0;
+    csp::Alternative alt({in.getGuard(v)});
+    for (int i = 0; i < 10; ++i) { alt.priSelect(); sum += v; n++; }
+    result("T0", (n == 10 && sum == 55) ? 1 : 0, "control: 10 values through a Block BufferedChannel via ALT");
 }
 
 // ---------------------------------------------------------------------------
-// T1a -- item 1: lost wakeup, BufferedInputGuard::enable() (pending() before register)
+// T1a / T1b -- lost wakeup in ALT enable (input / output guard)
 // ---------------------------------------------------------------------------
-Block* t1a_ch; ThreadSlot t1a_slot; Case t1a;
+BlockChan<4>* t1a_ch; ThreadSlot t1a_slot; Case t1a;
 void t1a_reset() { drain(*t1a_ch); }
 bool t1a_probe() { return t1a_ch->pending(); }
 void t1a_victim() {
-    static uint32_t v;
-    static csp::Alternative alt({t1a_ch->getInputGuard(v)});   // built once, in the victim thread
+    static In in(t1a_ch); static uint32_t v;
+    static csp::Alternative alt({in.getGuard(v)});
     alt.priSelect();
-    drain(*t1a_ch);                                             // consume a rescue "kick", if any
+    drain(*t1a_ch);
 }
 void t1a_aggr()   { uint32_t v = 1; t1a_ch->output(&v); }
-bool t1a_stuck()  { return t1a_ch->pending(); }                 // data waiting, reader still blocked
-void t1a_rescue() { uint32_t kick = 0xFFFFFFFFu; t1a_ch->output(&kick); }  // "successor" message
+bool t1a_stuck()  { return t1a_ch->pending(); }
+void t1a_rescue() { uint32_t kick = 0xFFFFFFFFu; t1a_ch->output(&kick); }
 void test_T1a() {
-    static Block ch(4); t1a_ch = &ch;
+    static BlockChan<4> ch; t1a_ch = &ch;
     t1a = {"T1a", t1a_reset, t1a_probe, t1a_victim, t1a_aggr, t1a_stuck, t1a_rescue, nullptr, nullptr, osThreadGetId()};
-    t1a.victim = spawn(victim_main, &t1a, osPriorityLow, t1a_slot, "T1a_rd");
-    static SweepResult a, b; a = sweep(t1a, 1500, 50); b = sweep(t1a, 1500, 50);
-    report_sweep("T1a", "ALT reader blocks with data queued (input-guard enable race)", a, b);
+    t1a.victim = spawn(victim_main, &t1a, osPriorityLow, t1a_slot, "T1a");
+    sweep_verdict(t1a, "no lost wakeup when a writer preempts an ALT reader anywhere in select()");
 }
 
-// ---------------------------------------------------------------------------
-// T1b -- item 1: lost wakeup, BufferedOutputGuard::enable() (space check before register)
-// ---------------------------------------------------------------------------
-Block* t1b_ch; ThreadSlot t1b_slot; Case t1b;
-void t1b_reset() { drain(*t1b_ch); uint32_t one = 1; t1b_ch->output(&one); }   // capacity 1 -> full
+BlockChan<1>* t1b_ch; ThreadSlot t1b_slot; Case t1b;
+void t1b_reset() { drain(*t1b_ch); uint32_t one = 1; t1b_ch->output(&one); }
 bool t1b_probe() { return t1b_ch->space_available(); }
 void t1b_victim() {
-    static uint32_t w = 77;
-    static csp::Alternative alt({t1b_ch->getOutputGuard(w)});
+    static Out out(t1b_ch); static uint32_t w = 77;
+    static csp::Alternative alt({out.getGuard(w)});
     alt.priSelect();
 }
-void t1b_aggr()   { uint32_t x; t1b_ch->input(&x); }            // frees the slot
-bool t1b_stuck()  { return t1b_ch->space_available(); }         // space free, writer still blocked
-void t1b_rescue() { uint32_t f = 5, x; t1b_ch->output(&f); t1b_ch->input(&x); }  // successor read
+void t1b_aggr()   { uint32_t x; t1b_ch->input(&x); }
+bool t1b_stuck()  { return t1b_ch->space_available(); }
+void t1b_rescue() { uint32_t f = 5, x; t1b_ch->output(&f); t1b_ch->input(&x); }
 void test_T1b() {
-    static Block ch(1); t1b_ch = &ch;
+    static BlockChan<1> ch; t1b_ch = &ch;
     t1b = {"T1b", t1b_reset, t1b_probe, t1b_victim, t1b_aggr, t1b_stuck, t1b_rescue, nullptr, nullptr, osThreadGetId()};
-    t1b.victim = spawn(victim_main, &t1b, osPriorityLow, t1b_slot, "T1b_wr");
-    static SweepResult a, b; a = sweep(t1b, 1500, 50); b = sweep(t1b, 1500, 50);
-    report_sweep("T1b", "ALT writer blocks with space free (output-guard enable race)", a, b);
+    t1b.victim = spawn(victim_main, &t1b, osPriorityLow, t1b_slot, "T1b");
+    sweep_verdict(t1b, "no lost wakeup when a reader preempts an ALT writer anywhere in select()");
 }
 
 // ---------------------------------------------------------------------------
-// T2 -- item 2: wakeUp() (osEventFlagsSet) inside the BASEPRI critical section
-//       Replicates _notifyReader()/_notifyWriter() exactly:
-//         saved = csp_enter_critical(); alt->wakeUp(bit); csp_exit_critical(saved);
+// T2 -- no CMSIS-RTOS2 call while a CSP critical section is active
+// Workload covers every notification path: ALT reader woken by output(),
+// ALT writer woken by input(), KeepNewest overwrite, putFromISR() into a
+// buffered channel with an ALT reader, and rendezvous putFromISR().
 // ---------------------------------------------------------------------------
-csp::internal::AltScheduler* t2_sched; ThreadSlot t2_slot; volatile int t2_ran = 0;
-void t2_high(void*) {
-    osEventFlagsWait(t2_sched->getEventGroupHandle(), 0x1u, osFlagsWaitAny, osWaitForever);
-    t2_ran = 1;
+BlockChan<1>* t2_b; NewestChan<1>* t2_n; csp::Channel<uint32_t>* t2_r;
+ThreadSlot t2_s1, t2_s2, t2_s3, t2_s4;
+volatile uint32_t t2_got = 0;
+void t2_alt_reader(void*) {            // ALT reader on the Block channel, 2 rounds
+    In in(t2_b); uint32_t v; csp::Alternative alt({in.getGuard(v)});
+    for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
     park();
 }
+void t2_alt_writer(void*) {            // ALT writer on the (full) Block channel
+    Out out(t2_b); uint32_t w = 7; csp::Alternative alt({out.getGuard(w)});
+    alt.priSelect(); park();
+}
+void t2_newest_reader(void*) {         // ALT reader on KeepNewest, 2 rounds
+    In in(t2_n); uint32_t v; csp::Alternative alt({in.getGuard(v)});
+    for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
+    park();
+}
+void t2_rv_reader(void*) { uint32_t v; csp::Chanin<uint32_t> in = t2_r->reader(); in >> v; t2_got = t2_got + v; park(); }
+void t2_isr_buffered() { uint32_t v = 1000; t2_b->putFromISR(v); }
+void t2_isr_newest()   { uint32_t v = 2000; t2_n->putFromISR(v); }
+void t2_isr_rv()       { uint32_t v = 3000; Out out = t2_r->writer(); out.putFromISR(v); }
 void test_T2() {
-    static csp::internal::AltScheduler sched; t2_sched = &sched;
-    spawn(t2_high, nullptr, osPriorityRealtime, t2_slot, "T2hi");   // above the runner; blocks at once
-    osDelay(2);
-    uint32_t saved  = csp::internal::csp_enter_critical();
-    uint32_t bp_in  = __get_BASEPRI();
-    t2_sched->wakeUp(0x1u);
-    uint32_t bp_out = __get_BASEPRI();
-    int      ran    = t2_ran;                                        // did the woken thread run INSIDE the section?
-    csp::internal::csp_exit_critical(saved);
-    printf("   [T2] BASEPRI before wakeUp=0x%02lx, after wakeUp (still inside section)=0x%02lx, "
-           "higher-priority waiter ran inside section=%d\r\n", (unsigned long)bp_in, (unsigned long)bp_out, ran);
-    bool confirmed = (bp_in != 0) && (bp_out == 0) && ran;
-    printf("RESULT T2: %s -- osEventFlagsSet() with BASEPRI raised took the thread path and cleared BASEPRI "
-           "(critical section ended early; context switch inside it)\r\n", confirmed ? "CONFIRMED" : "NOT REPRODUCED");
+    static BlockChan<1> b; static NewestChan<1> n; static csp::Channel<uint32_t> r;
+    t2_b = &b; t2_n = &n; t2_r = &r;
+    g_rtos_in_crit = 0; g_rtos_in_crit_fn = nullptr;
+    // (1) ALT reader woken by task output(), then by putFromISR()
+    spawn(t2_alt_reader, nullptr, osPriorityAboveNormal, t2_s1, "T2ar");
+    osDelay(2); { uint32_t v = 1; b.output(&v); } osDelay(2);
+    g_isr_op = t2_isr_buffered; isr_fire(); osDelay(2);
+    // (2) ALT writer woken by task input()
+    { uint32_t v = 3; b.output(&v); }                        // full again
+    spawn(t2_alt_writer, nullptr, osPriorityAboveNormal, t2_s2, "T2aw"); osDelay(2);
+    { uint32_t x; b.input(&x); } osDelay(2); drain(b);
+    // (3) KeepNewest: ALT reader woken by task output() (overwrite path first), then by ISR
+    spawn(t2_newest_reader, nullptr, osPriorityAboveNormal, t2_s3, "T2nr");
+    osDelay(2); { uint32_t v = 10, w = 20; n.output(&v); n.output(&w); } osDelay(2);
+    g_isr_op = t2_isr_newest; isr_fire(); osDelay(2);
+    // (4) rendezvous putFromISR() to a blocked reader
+    spawn(t2_rv_reader, nullptr, osPriorityAboveNormal, t2_s4, "T2rv"); osDelay(2);
+    g_isr_op = t2_isr_rv; isr_fire(); osDelay(2);
+    g_isr_op = nullptr;
+    printf("   [T2] RTOS calls with BASEPRI raised: %lu (last: %s); workload sum=%lu\r\n",
+           (unsigned long)g_rtos_in_crit, g_rtos_in_crit_fn ? g_rtos_in_crit_fn : "-", (unsigned long)t2_got);
+    result("T2", g_rtos_in_crit == 0 ? 1 : 0, "no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)");
 }
 
 // ---------------------------------------------------------------------------
-// T3 -- item 3: KeepNewest "drop oldest, put newest" is two queue operations
-//       (capacity 2, full with {1,2}; victim writes 100, aggressor writes 200;
-//        every serial order keeps both 100 and 200)
+// T3 / T3i -- KeepNewest atomicity: task vs task, task vs ISR
+// capacity 2, full {1,2}; victim writes 100, aggressor 200; both must survive
 // ---------------------------------------------------------------------------
-KeepNewest* t3_ch; ThreadSlot t3_slot; Case t3; volatile bool t3_aggr_done = false;
+NewestChan<2>* t3_ch; ThreadSlot t3_slot, t3i_slot; Case t3, t3i;
+volatile bool t3_aggr_done = false;
 void t3_reset() { drain(*t3_ch); uint32_t a = 1, b = 2; t3_ch->output(&a); t3_ch->output(&b); t3_aggr_done = false; }
 bool t3_probe() { return t3_aggr_done; }
-void t3_victim() { uint32_t v = 100; t3_ch->output(&v); }
+void t3_victim() { static Out out(t3_ch); out << 100u; }
 void t3_aggr()   { uint32_t v = 200; t3_ch->output(&v); t3_aggr_done = true; }
+void t3_isr()    { uint32_t v = 200; t3_ch->putFromISR(v); t3_aggr_done = true; }
+void t3i_aggr()  { g_isr_op = t3_isr; isr_fire(); }
 bool t3_check() {
-    bool has100 = false, has200 = false; uint32_t x; g_ncontent = 0;
-    while (t3_ch->pending()) { t3_ch->input(&x); if (g_ncontent < 4) g_content[g_ncontent++] = x; has100 |= (x == 100); has200 |= (x == 200); }
+    bool has100 = false, has200 = false; uint32_t x;
+    while (t3_ch->pending()) { t3_ch->input(&x); has100 |= (x == 100); has200 |= (x == 200); }
     return has100 && has200;
 }
 void test_T3() {
-    static KeepNewest ch(2); t3_ch = &ch;
-    t3 = {"T3", t3_reset, t3_probe, t3_victim, t3_aggr, nullptr, nullptr, t3_check, nullptr, osThreadGetId()};
-    t3.victim = spawn(victim_main, &t3, osPriorityLow, t3_slot, "T3_wr");
-    static SweepResult a, b; a = sweep(t3, 1500, 50); b = sweep(t3, 1500, 50);
-    report_sweep("T3", "KeepNewest: concurrent writer steals the freed slot, newest value lost", a, b);
-    for (uint32_t i = 0; i < a.nbug_k && i < 6; ++i) {
-        printf("   [T3] k=%lu stage=%lu: reader sees", (unsigned long)a.bug[i].k, (unsigned long)a.bug[i].seen);
-        for (uint32_t j = 0; j < a.bug[i].n; ++j) printf(" %lu", (unsigned long)a.bug[i].content[j]);
-        printf("  (expected 100 and 200 both present)\r\n");
-    }
+    static NewestChan<2> ch; t3_ch = &ch;
+    t3  = {"T3",  t3_reset, t3_probe, t3_victim, t3_aggr,  nullptr, nullptr, t3_check, nullptr, osThreadGetId()};
+    t3.victim = spawn(victim_main, &t3, osPriorityLow, t3_slot, "T3");
+    sweep_verdict(t3, "KeepNewest keeps the newest value of every writer (task vs task)");
+}
+void test_T3i() {
+    t3i = {"T3i", t3_reset, t3_probe, t3_victim, t3i_aggr, nullptr, nullptr, t3_check, nullptr, osThreadGetId()};
+    t3i.victim = spawn(victim_main, &t3i, osPriorityLow, t3i_slot, "T3i");
+    sweep_verdict(t3i, "KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)");
+    g_isr_op = nullptr;
 }
 
 // ---------------------------------------------------------------------------
-// T4a -- item 4: two ALT writers on a full Block channel; single registration slot
-// T4b -- item 4/7: an unrelated ALT's disable() wipes another writer's registration
-// T4c -- item 7: shared res_out_guard -- second getOutputGuard() re-targets the first writer
+// T4a -- two ALT writers on one channel: either both are served, or the
+//        second is rejected by the v2 assert; never a silent hang
+// T4b -- an unrelated ALT must not cancel another writer's registration
+// T4c -- guard state per writer: a second writer's getGuard() must not
+//        re-target a blocked writer's ALT
 // ---------------------------------------------------------------------------
-Block* t4_ch; ThreadSlot t4_sa, t4_sb; volatile int t4_doneA = 0, t4_doneB = 0;
-void t4_writerA(void*) { uint32_t a = 10; csp::Alternative alt({t4_ch->getOutputGuard(a)}); alt.priSelect(); t4_doneA = 1; park(); }
-void t4_writerB(void*) { osDelay(2); uint32_t b = 20; csp::Alternative alt({t4_ch->getOutputGuard(b)}); alt.priSelect(); t4_doneB = 1; park(); }
+BlockChan<1>* t4_ch; ThreadSlot t4_sa, t4_sb; volatile int t4_doneA = 0, t4_doneB = 0;
+void t4_writerA(void*) { Out out(t4_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4_doneA = 1; park(); }
+void t4_writerB(void*) { osDelay(2); Out out(t4_ch); uint32_t b = 20; csp::Alternative alt({out.getGuard(b)}); alt.priSelect(); t4_doneB = 1; park(); }
 void test_T4a() {
-    static Block ch(1); t4_ch = &ch; uint32_t x = 1; ch.output(&x);       // full
-    spawn(t4_writerA, nullptr, osPriorityNormal, t4_sa, "T4a_A");
-    spawn(t4_writerB, nullptr, osPriorityNormal, t4_sb, "T4a_B");
-    osDelay(6);                                                           // A and B both blocked in ALT
-    uint32_t v1, v2; ch.input(&v1); osDelay(3); ch.input(&v2); osDelay(10);
-    bool confirmed = (t4_doneB == 1) && (t4_doneA == 0) && ch.space_available() && !ch.pending();
-    printf("   [T4a] reader got %lu then %lu; writer A done=%d, writer B done=%d, space free=%d\r\n",
-           (unsigned long)v1, (unsigned long)v2, t4_doneA, t4_doneB, (int)ch.space_available());
-    printf("RESULT T4a: %s -- second ALT writer overwrote the single alt_writer slot; first writer never woken\r\n",
-           confirmed ? "CONFIRMED" : "NOT REPRODUCED");
+    static BlockChan<1> ch; t4_ch = &ch; uint32_t x = 1; ch.output(&x);
+    uint32_t fatal0 = g_fatal_count;
+    spawn(t4_writerA, nullptr, osPriorityNormal, t4_sa, "T4aA");
+    spawn(t4_writerB, nullptr, osPriorityNormal, t4_sb, "T4aB");
+    osDelay(6);
+    bool rejected = g_fatal_count != fatal0;
+    uint32_t v1 = 0, v2 = 0; ch.input(&v1); osDelay(3);
+    if (ch.pending()) ch.input(&v2);
+    osDelay(3);
+    if (!rejected && ch.pending()) { uint32_t v3; ch.input(&v3); osDelay(3); }
+    printf("   [T4a] second ALT writer rejected by assert=%d (%s); A done=%d, B done=%d\r\n", (int)rejected,
+           rejected && g_fatal_msg ? g_fatal_msg : "-", t4_doneA, t4_doneB);
+    bool ok = rejected ? (t4_doneA == 1) : (t4_doneA == 1 && t4_doneB == 1);
+    result("T4a", ok ? 1 : 0, "two ALT writers: both served or the second rejected by assert, never a silent hang");
 }
 
-Block* t4b_ch; ThreadSlot t4b_sa; volatile int t4b_doneA = 0;
-void t4b_writerA(void*) { uint32_t a = 10; csp::Alternative alt({t4b_ch->getOutputGuard(a)}); alt.priSelect(); t4b_doneA = 1; park(); }
+BlockChan<1>* t4b_ch; ThreadSlot t4b_sa; volatile int t4b_doneA = 0;
+void t4b_writerA(void*) { Out out(t4b_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4b_doneA = 1; park(); }
 void test_T4b() {
-    static Block ch(1); t4b_ch = &ch; uint32_t x = 1; ch.output(&x);     // full
-    spawn(t4b_writerA, nullptr, osPriorityNormal, t4b_sa, "T4b_A");
-    osDelay(3);                                                           // A registered, blocked
-    {   // unrelated writer process: ALT {instant timeout, output} -- timeout wins, output guard never enabled
-        uint32_t b = 20;
+    static BlockChan<1> ch; t4b_ch = &ch; uint32_t x = 1; ch.output(&x);
+    spawn(t4b_writerA, nullptr, osPriorityNormal, t4b_sa, "T4bA");
+    osDelay(3);
+    {   // unrelated ALT: timeout guard ready first -> output guard never enabled
+        static Out outB(&ch); uint32_t b = 20;
         static csp::RelTimeoutGuard instant(csp::Time(0));
-        csp::Alternative alt({instant.internal_guard_ptr, ch.getOutputGuard(b)});
-        int sel = alt.priSelect();
-        printf("   [T4b] unrelated ALT selected guard %d (0 = instant timeout)\r\n", sel);
+        csp::Alternative alt({instant.internal_guard_ptr, outB.getGuard(b)});
+        (void)alt.priSelect();
     }
-    uint32_t v; ch.input(&v); osDelay(10);                                // frees the slot
-    bool confirmed = (t4b_doneA == 0) && ch.space_available();
-    printf("RESULT T4b: %s -- disable() of a never-enabled output guard cleared writer A's registration; "
-           "A not woken although space is free\r\n", confirmed ? "CONFIRMED" : "NOT REPRODUCED");
+    uint32_t v; ch.input(&v); osDelay(5);
+    result("T4b", t4b_doneA == 1 ? 1 : 0, "an ALT that never enabled a guard does not cancel another writer's registration");
 }
 
-Block* t4c_ch; ThreadSlot t4c_sa; volatile int t4c_doneA = 0;
-void t4c_writerA(void*) { uint32_t a = 10; csp::Alternative alt({t4c_ch->getOutputGuard(a)}); alt.priSelect(); t4c_doneA = 1; park(); }
+BlockChan<1>* t4c_ch; ThreadSlot t4c_sa; volatile int t4c_doneA = 0;
+void t4c_writerA(void*) { Out out(t4c_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4c_doneA = 1; park(); }
 void test_T4c() {
-    static Block ch(1); t4c_ch = &ch; uint32_t x = 1; ch.output(&x);     // full
-    spawn(t4c_writerA, nullptr, osPriorityNormal, t4c_sa, "T4c_A");
-    osDelay(3);                                                           // A registered, blocked, target = &a (10)
-    static uint32_t b = 20;
-    (void)ch.getOutputGuard(b);   // another writer merely *builds* its ALT guard (e.g. Alternative ctor)
-    uint32_t v1, v2; ch.input(&v1); osDelay(3);                           // wakes A (still registered)
-    ch.input(&v2);
-    printf("   [T4c] writer A (sending 10) done=%d; reader received %lu\r\n", t4c_doneA, (unsigned long)v2);
-    printf("RESULT T4c: %s -- shared res_out_guard: A's ALT wrote the other writer's value\r\n",
-           (t4c_doneA == 1 && v2 == 20) ? "CONFIRMED" : "NOT REPRODUCED");
+    static BlockChan<1> ch; t4c_ch = &ch; uint32_t x = 1; ch.output(&x);
+    spawn(t4c_writerA, nullptr, osPriorityNormal, t4c_sa, "T4cA");
+    osDelay(3);
+    static Out outB(&ch); static uint32_t b = 20;
+    (void)outB.getGuard(b);                        // another writer builds its guard
+    uint32_t v1, v2 = 0; ch.input(&v1); osDelay(3);
+    if (ch.pending()) ch.input(&v2);
+    printf("   [T4c] writer A (sends 10) done=%d; reader received %lu\r\n", t4c_doneA, (unsigned long)v2);
+    result("T4c", (t4c_doneA == 1 && v2 == 10) ? 1 : 0, "guard state is per writer: A's ALT sends A's value");
 }
 
 // ---------------------------------------------------------------------------
-// T5 -- item 5: osMessageQueueNew() failure is not checked
+// T5 -- a buffered channel is either valid after construction or construction
+//       fails loudly; never a silently dead channel. 8200 x 4 B > 32 KB heap
+//       (v1 queue) -- in v2 the storage is static.
 // ---------------------------------------------------------------------------
 void test_T5() {
-    size_t free0 = xPortGetFreeHeapSize();
-    static Block big(20000);                          // 80 KB of messages > 32 KB FreeRTOS heap
-    uint32_t dest = 0xDEADBEEFu, src = 42;
-    uint32_t t0 = osKernelGetTickCount();
-    big.input(&dest);                                 // Block policy: "waits forever" for data
-    big.output(&src);                                 // Block policy: "waits forever" for space
-    uint32_t dt = osKernelGetTickCount() - t0;
-    printf("   [T5] heap free=%u, queue handle=%p; input() returned after %lu ticks with dest=0x%08lx; "
-           "output() returned; pending()=%d space_available()=%d\r\n", (unsigned)free0, (void*)big.getQueueHandle(),
-           (unsigned long)dt, (unsigned long)dest, (int)big.pending(), (int)big.space_available());
-    bool confirmed = big.getQueueHandle() == nullptr && dest == 0xDEADBEEFu;
-    printf("RESULT T5: %s -- NULL queue handle; blocking input() returns at once without writing dest, "
-           "output() silently drops\r\n", confirmed ? "CONFIRMED" : "NOT REPRODUCED");
+    uint32_t used0 = heap_used(), fatal0 = g_fatal_count;
+    static BlockChan<8200> big;
+    bool valid = !big.pending() && big.space_available();
+    printf("   [T5] after construction: pending=%d space_available=%d fatal=%lu heap delta=%ld\r\n",
+           (int)big.pending(), (int)big.space_available(), (unsigned long)(g_fatal_count - fatal0),
+           (long)heap_used() - (long)used0);
+    result("T5", (valid || g_fatal_count != fatal0) ? 1 : 0, "large channel is valid (or construction fails loudly)");
 }
 
 // ---------------------------------------------------------------------------
-// T6 -- item 6: RelTimeoutGuard/TimerGuard allocate from the RTOS heap per construction
+// T6 -- no RTOS heap for timeout guards / Alternatives (STATIC_ALLOCATION)
 // ---------------------------------------------------------------------------
 void test_T6() {
-    size_t f0 = xPortGetFreeHeapSize(), f_in = 0, f_alt = 0;
-    {
-        csp::RelTimeoutGuard g(csp::Time(5));
-        f_in = xPortGetFreeHeapSize();
-    }
-    size_t f1 = xPortGetFreeHeapSize();
-    {
-        uint32_t v; static Block ch(1);
-        size_t before = xPortGetFreeHeapSize();
-        csp::Alternative alt({ch.getInputGuard(v)});   // AltScheduler -> osEventFlagsNew (static cb_mem)
-        f_alt = before - xPortGetFreeHeapSize();
-    }
-    uint32_t allocs = 0;
-    for (int i = 0; i < 1000; ++i) {                    // "timeout per loop iteration" pattern
-        size_t b = xPortGetFreeHeapSize();
-        csp::RelTimeoutGuard g(csp::Time(5));
-        if (xPortGetFreeHeapSize() < b) allocs++;
-    }
-    printf("   [T6] RelTimeoutGuard: %u bytes taken from heap while alive, %u after destruction; "
-           "Alternative (STATIC_ALLOCATION): %u bytes; 1000 loop constructions -> %lu heap allocations\r\n",
-           (unsigned)(f0 - f_in), (unsigned)(f0 - f1), (unsigned)f_alt, (unsigned long)allocs);
-    printf("RESULT T6: %s -- each RelTimeoutGuard construction allocates an osTimer from the RTOS heap, "
-           "even with CSP4CMSIS_STATIC_ALLOCATION\r\n", (f0 > f_in && allocs == 1000) ? "CONFIRMED" : "NOT REPRODUCED");
+    uint32_t u0 = heap_used(), u_in = 0, u_alt = 0, allocs = 0;
+    { csp::RelTimeoutGuard g(csp::Time(5)); u_in = heap_used(); }
+    { static BlockChan<1> ch; static In in(&ch); uint32_t v; uint32_t b = heap_used();
+      csp::Alternative alt({in.getGuard(v)}); u_alt = heap_used() - b; }
+    for (int i = 0; i < 200; ++i) { uint32_t b = heap_used(); csp::RelTimeoutGuard g(csp::Time(5)); if (heap_used() > b) allocs++; }
+    printf("   [T6] RelTimeoutGuard: %lu B heap while alive; Alternative: %lu B; 200 loop constructions -> %lu allocations\r\n",
+           (unsigned long)(u_in - u0), (unsigned long)u_alt, (unsigned long)allocs);
+    result("T6", (u_in == u0 && u_alt == 0 && allocs == 0) ? 1 : 0, "RelTimeoutGuard and Alternative use no RTOS heap");
 }
 
 // ---------------------------------------------------------------------------
-// T7a -- item 7: BufferedInputGuard::activate() does not notify an ALT writer
-//        (with control: the same sequence using plain input())
+// T7a -- a read via ALT wakes a writer blocked in ALT (control: plain input)
 // ---------------------------------------------------------------------------
-Block* t7_ch; ThreadSlot t7_s1, t7_s2; volatile int t7_done = 0;
-void t7_writer(void*) { uint32_t w = 10; csp::Alternative alt({t7_ch->getOutputGuard(w)}); alt.priSelect(); t7_done = 1; park(); }
+BlockChan<1>* t7_ch; ThreadSlot t7_s1, t7_s2; volatile int t7_done = 0;
+void t7_writer(void*) { Out out(t7_ch); uint32_t w = 10; csp::Alternative alt({out.getGuard(w)}); alt.priSelect(); t7_done = 1; park(); }
 bool t7_run(bool reader_uses_alt, ThreadSlot& slot) {
-    static Block chA(1), chB(1);
-    Block& ch = reader_uses_alt ? chA : chB; t7_ch = &ch; t7_done = 0;
-    uint32_t x = 1; ch.output(&x);                         // full
-    spawn(t7_writer, nullptr, osPriorityNormal, slot, reader_uses_alt ? "T7_alt" : "T7_ctl");
-    osDelay(3);                                            // writer registered, blocked
+    static BlockChan<1> chA, chB;
+    BlockChan<1>& ch = reader_uses_alt ? chA : chB; t7_ch = &ch; t7_done = 0;
+    uint32_t x = 1; ch.output(&x);
+    spawn(t7_writer, nullptr, osPriorityNormal, slot, reader_uses_alt ? "T7alt" : "T7ctl");
+    osDelay(3);
     uint32_t r = 0;
-    if (reader_uses_alt) { csp::Alternative alt({ch.getInputGuard(r)}); alt.priSelect(); }
+    if (reader_uses_alt) { static In in(&chA); csp::Alternative alt({in.getGuard(r)}); alt.priSelect(); }
     else                 { ch.input(&r); }
-    osDelay(10);
+    osDelay(5);
     return t7_done == 1;
 }
 void test_T7a() {
-    bool ctl = t7_run(false, t7_s1);
-    bool alt = t7_run(true,  t7_s2);
-    printf("   [T7a] control (reader uses input()): writer woken=%d; reader uses ALT: writer woken=%d\r\n", ctl, alt);
-    printf("RESULT T7a: %s -- a read via ALT never wakes a writer blocked in ALT on the same channel\r\n",
-           (ctl && !alt) ? "CONFIRMED" : "NOT REPRODUCED");
+    bool ctl = t7_run(false, t7_s1), alt = t7_run(true, t7_s2);
+    printf("   [T7a] writer woken: reader uses input()=%d, reader uses ALT=%d\r\n", ctl, alt);
+    result("T7a", (ctl && alt) ? 1 : 0, "a read via ALT wakes a writer blocked in ALT");
+}
+
+// ---------------------------------------------------------------------------
+// T8 -- any number of blocking writers (plain output) on one channel
+// ---------------------------------------------------------------------------
+BlockChan<2>* t8_ch; ThreadSlot t8_s[3]; volatile uint32_t t8_done = 0;
+void t8_writer(void* arg) {
+    uint32_t base = (uint32_t)(uintptr_t)arg; Out out(t8_ch);
+    for (uint32_t i = 1; i <= 20; ++i) out << (base + i);
+    t8_done = t8_done + 1; park();
+}
+void test_T8() {
+    static BlockChan<2> ch; t8_ch = &ch;
+    for (uint32_t w = 0; w < 3; ++w) spawn(t8_writer, (void*)(uintptr_t)(w * 1000), osPriorityNormal, t8_s[w], "T8w");
+    uint64_t sum = 0; uint32_t x;
+    for (int i = 0; i < 60; ++i) { ch.input(&x); sum += x; }
+    osDelay(3);
+    const uint64_t expect = 3 * 210 + 20 * (0 + 1000 + 2000);
+    printf("   [T8] 3 writers x 20 values: sum=%llu (expect %llu), writers done=%lu\r\n",
+           (unsigned long long)sum, (unsigned long long)expect, (unsigned long)t8_done);
+    result("T8", (sum == expect && t8_done == 3) ? 1 : 0, "three blocking writers on one Block channel, no loss");
+}
+
+// ---------------------------------------------------------------------------
+// T9 -- stale ALT wakeup (v2): a flag for guard 0 without data must not make
+//       select() return; real data afterwards must be delivered.
+// ---------------------------------------------------------------------------
+#if LIB_V2
+BlockChan<1>* t9_ch; ThreadSlot t9_s; volatile uint32_t t9_ret = 0, t9_val = 0; osThreadId_t t9_tid;
+void t9_reader(void*) {
+    In in(t9_ch); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)});
+    alt.priSelect(); t9_val = v; t9_ret = t9_ret + 1; park();
+}
+#endif
+void test_T9() {
+#if LIB_V2
+    static BlockChan<1> ch; t9_ch = &ch;
+    t9_tid = spawn(t9_reader, nullptr, osPriorityNormal, t9_s, "T9");
+    osDelay(3);
+    osThreadFlagsSet(t9_tid, csp::internal::altFlag(0));   // stale wakeup, no data
+    osDelay(5);
+    uint32_t early = t9_ret;
+    uint32_t v = 42; ch.output(&v); osDelay(3);
+    printf("   [T9] returns after stale flag=%lu; after real data: returns=%lu value=%lu\r\n",
+           (unsigned long)early, (unsigned long)t9_ret, (unsigned long)t9_val);
+    result("T9", (early == 0 && t9_ret == 1 && t9_val == 42) ? 1 : 0, "stale ALT wakeup is re-verified, not selected");
+#else
+    result("T9", -1, "stale ALT wakeup re-verification (needs v2 altFlag())");
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// T10 -- a second ALTing reader on one channel is rejected (assert)
+// ---------------------------------------------------------------------------
+BlockChan<1>* t10_ch; ThreadSlot t10_s1, t10_s2; volatile int t10_done1 = 0, t10_done2 = 0;
+void t10_r1(void*) { In in(t10_ch); uint32_t v; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t10_done1 = 1; park(); }
+void t10_r2(void*) { osDelay(2); In in(t10_ch); uint32_t v; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t10_done2 = 1; park(); }
+void test_T10() {
+    static BlockChan<1> ch; t10_ch = &ch;
+    uint32_t fatal0 = g_fatal_count;
+    spawn(t10_r1, nullptr, osPriorityNormal, t10_s1, "T10a");
+    spawn(t10_r2, nullptr, osPriorityNormal, t10_s2, "T10b");
+    osDelay(5);
+    bool rejected = g_fatal_count != fatal0;
+    uint32_t v = 5; ch.output(&v); osDelay(3);
+    printf("   [T10] second ALT reader rejected=%d (%s); reader1 done=%d reader2 done=%d\r\n", (int)rejected,
+           rejected && g_fatal_msg ? g_fatal_msg : "-", t10_done1, t10_done2);
+    result("T10", (rejected && t10_done1 == 1) ? 1 : 0, "a second ALTing reader is rejected by assert; the first is served");
 }
 
 // ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
-    printf("\r\n=== CSP4CMSIS BufferedChannel verification (FVP, tick ~312.5 Hz) ===\r\n");
-    test_T0();
-    test_T2();
-    test_T4a();
-    test_T4b();
-    test_T4c();
-    test_T5();
-    test_T6();
-    test_T7a();
-    test_T1a();
-    test_T1b();
-    test_T3();
-    printf("=== done; heap free=%u min_ever=%u; runner stack min free=%lu of %u bytes ===\r\n",
-           (unsigned)xPortGetFreeHeapSize(), (unsigned)xPortGetMinimumEverFreeHeapSize(),
-           (unsigned long)osThreadGetStackSpace(osThreadGetId()), (unsigned)sizeof(runner_slot.stack));
+    printf("\r\n=== CSP4CMSIS BufferedChannel regression suite ===\r\n");
+    printf("backend: %s; library: %s\r\n", BACKEND_NAME, LIB_NAME);
+    isr_init();
+    test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
+    test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
+    test_T1a(); test_T1b(); test_T3();  test_T3i();
+    printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
+           (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
+           (unsigned long)osThreadGetStackSpace(osThreadGetId()));
     printf("\x04");
-    fflush(stdout);   // stdout is buffered: without this the EOT never reaches the UART
+    fflush(stdout);
     park();
 }
 
