@@ -803,6 +803,86 @@ void test_T15() {
 }
 
 // ---------------------------------------------------------------------------
+// T16 family -- defects found by reading the code in review round 3.
+// FAIL = the defect is present. The library is unchanged.
+// ---------------------------------------------------------------------------
+const char* volatile g_current_test = "-";
+
+// T16s -- SignalChannel putFromISR() to a receiver blocked in input(): it
+// must release the receiver (or return false).
+csp::SignalChannel<>* t16s_sig; ThreadSlot t16s_s; volatile int t16s_done = 0; volatile bool t16s_ok = false;
+void t16s_receiver(void*) { t16s_sig->getInternal()->input(nullptr); t16s_done = 1; park(); }
+void t16s_isr() { t16s_ok = t16s_sig->getInternal()->putFromISR(); }
+void test_T16s() {
+    static csp::SignalChannel<> sig; t16s_sig = &sig; g_current_test = "T16s";
+    spawn(t16s_receiver, nullptr, osPriorityNormal, t16s_s, "T16s");
+    osDelay(3);                                          // receiver blocked in input()
+    g_isr_op = t16s_isr; isr_fire(); osDelay(3); g_isr_op = nullptr;
+    osDelay(40);                                         // > 3 of input()'s 100 ms polling slices
+    printf("   [T16s] putFromISR returned %d; blocked receiver released=%d\r\n", (int)t16s_ok, t16s_done);
+    result("T16s", (t16s_ok == (t16s_done == 1)) ? 1 : 0,
+           "signal putFromISR() releases a blocked receiver (or returns false)");
+}
+
+// T16n -- KeepNewest rendezvous: output() while a reader waits in an ALT.
+// The reader is waiting, so the value must be taken (API: "data is captured
+// only if a receiver is already waiting").
+csp::SamplingChannel<uint32_t, BufferPolicy::KeepNewest>* t16n_ch; ThreadSlot t16n_s;
+volatile int t16n_sel = -2; volatile uint32_t t16n_msg = 0;
+void t16n_reader(void*) {
+    In in = t16n_ch->reader(); uint32_t msg = T15_SENT;
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt({in.getGuard(msg), to.internal_guard_ptr});
+    int s = alt.priSelect(); t16n_msg = msg; t16n_sel = s; park();
+}
+void test_T16n() {
+    static csp::SamplingChannel<uint32_t, BufferPolicy::KeepNewest> ch; t16n_ch = &ch; g_current_test = "T16n";
+    spawn(t16n_reader, nullptr, osPriorityNormal, t16n_s, "T16n");
+    osDelay(3);                                          // reader waits in its ALT
+    Out out = ch.writer(); out << 4321u;                 // non-blocking (KeepNewest)
+    osDelay(60);                                         // past the reader's timeout
+    printf("   [T16n] reader selected %d (0 = channel, 1 = timeout), value %s0x%lx\r\n", t16n_sel,
+           t16n_msg == T15_SENT ? "UNCHANGED " : "", (unsigned long)t16n_msg);
+    if (t16n_sel == 0 && t16n_msg == T15_SENT) printf("   [T16n] rendezvous reported without data transfer; the value was dropped\r\n");
+    result("T16n", (t16n_sel == 0 && t16n_msg == 4321u) ? 1 : 0,
+           "KeepNewest rendezvous output() to a waiting ALT reader delivers the value");
+}
+
+// T16a (sweep) -- rendezvous putFromISR() vs a plain reader entering input().
+// The task path protects AltChanSyncBase with the mutex, putFromISR() with
+// BASEPRI; they do not exclude each other. registerWaitingTask() stores
+// waiting_in_task, THEN non_alt_in_data_ptr: an ISR in between copies to the
+// old (null) pointer and wakes the reader, which returns without the value.
+// Victim: plain reader (input()). Aggressor at E1: ISR putFromISR(v); if it
+// reports false (no reader yet), the runner delivers a kick value instead.
+// Correct: putFromISR() true -> reader got v; false -> reader got the kick.
+csp::Channel<uint32_t>* t16a_ch; ThreadSlot t16a_s; Case t16a;
+constexpr uint32_t T16A_KICK = 0x0B0B0B0Bu;
+volatile uint32_t t16a_val = 0, t16a_got = 0, t16a_bad = 0, t16a_word0_changed = 0;
+volatile bool t16a_isr_ok = false, t16a_isr_done = false;
+void t16a_reset()  { t16a_val = t16a_val + 1; t16a_got = T15_SENT; t16a_isr_ok = false; t16a_isr_done = false; }
+bool t16a_probe()  { return t16a_isr_done; }
+void t16a_victim() { static In in = t16a_ch->reader(); uint32_t v = T15_SENT; in >> v; t16a_got = v; }
+void t16a_isr()    { Out out = t16a_ch->writer(); uint32_t v = t16a_val; t16a_isr_ok = out.putFromISR(v); t16a_isr_done = true; }
+void t16a_aggr()   {
+    g_isr_op = t16a_isr; isr_fire(); g_isr_op = nullptr;
+    if (!t16a_isr_ok) { Out out = t16a_ch->writer(); out << T16A_KICK; }   // no reader yet: rendezvous normally
+}
+bool t16a_check()  {
+    bool ok = t16a_isr_ok ? (t16a_got == t16a_val) : (t16a_got == T16A_KICK);
+    if (!ok) t16a_bad = t16a_bad + 1;
+    return ok;
+}
+void test_T16a() {
+    static csp::Channel<uint32_t> ch; t16a_ch = &ch; g_current_test = "T16a";
+    t16a = {"T16a", t16a_reset, t16a_probe, t16a_victim, t16a_aggr, nullptr, nullptr, t16a_check, nullptr, osThreadGetId()};
+    t16a.victim = spawn(victim_main, &t16a, osPriorityLow, t16a_s, "T16a");
+    sweep_verdict(t16a, "rendezvous putFromISR() vs a reader entering input(): value delivered or false returned");
+    printf("   [T16a] trials with putFromISR()==true but the value not received: %lu\r\n", (unsigned long)t16a_bad);
+    g_isr_op = nullptr;
+}
+
+// ---------------------------------------------------------------------------
 // T14 -- objects constructed at namespace scope, i.e. during C++ static
 // initialisation, BEFORE main() and osKernelInitialize(). The probe records
 // what the backend allows then (raw CMSIS-RTOS2 calls, no library code);
@@ -851,8 +931,8 @@ void runner(void*) {
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
-    test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s();
-    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15();
+    test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
+    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));
@@ -862,6 +942,15 @@ void runner(void*) {
 }
 
 } // namespace
+
+// A fault (e.g. T16a's copy through a null pointer) ends the run with a report
+// instead of hanging in the startup file's default handler.
+extern "C" void HardFault_Handler(void) {
+    printf("!! HardFault during %s: CFSR=0x%08lx HFSR=0x%08lx BFAR=0x%08lx MMFAR=0x%08lx\r\n", g_current_test,
+           (unsigned long)SCB->CFSR, (unsigned long)SCB->HFSR, (unsigned long)SCB->BFAR, (unsigned long)SCB->MMFAR);
+    printf("SUMMARY: aborted by HardFault\r\n\x04");
+    for (;;) { }
+}
 
 extern "C" void csp_app_main_init(void) {
     spawn(runner, nullptr, osPriorityHigh, runner_slot, "runner");

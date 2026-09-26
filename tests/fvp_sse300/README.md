@@ -15,19 +15,21 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 ## Current results (`results/`)
 
-The same 23-test suite was run everywhere:
+The same 26-test suite was run everywhere:
 
 | Library | Configurations | Result |
 |---|---|---|
-| 2.0, `buffered-channel-v2` (library code of `dd954a9`, unchanged since) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=20 FAIL=3 SKIP=0 in all 12.** The three failures are T15i, T15s and T15, the known rendezvous/signal limitations (see below). T13/T13b: 0 spins in every sweep |
-| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=7 FAIL=15 SKIP=1 on both |
+| 2.0, `buffered-channel-v2` @ `57799f5` (library code: `dd954a9` + DSB/ISB `cbdc9bc` + ISR size limit `4ab6647`) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=21 FAIL=5 SKIP=0 in all 12.** The failures are T15i, T15s, T15, T16s and T16n, the known rendezvous/signal defects (see below). T13/T13b: 0 spins in every sweep |
+| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 
-- On v1.0.0, only T0, T8, T11, T12, T13, T13b and T14 pass. T9 needs a v2-only hook.
-- **T15i, T15s and T15 fail on v1.0.0 too:** the defects are not a 2.0 regression. Analysis and a checked
-  fix model are in `BUFFERED_CHANNEL_ANALYSIS.md` (review round 3) and
-  `docs/formal/rendezvous_commit_record.csp`.
+- On v1.0.0, only T0, T8, T11, T12, T13, T13b, T14 and T16a pass. T9 needs a v2-only hook.
+- **T15i, T15s, T15, T16s and T16n fail on v1.0.0 too:** long-standing defects, not 2.0 regressions.
+  Analysis: `BUFFERED_CHANNEL_ANALYSIS.md` (review rounds 3 and 4); design models in `docs/formal/`.
 - **T15 per configuration:** 61–120 bad trials per two sweeps. Each bad trial is exactly one SILENT and one
   PHANTOM selection.
+- **T16a passes but does NOT show the defect is absent.** The race window is 1–2 instructions with Arm
+  Compiler and does not exist with GCC `-O2` (the stores are reordered). The sweep moves the interrupt in
+  steps of about 10 cycles, and the FVP is not cycle-accurate. T16a is kept as a guard for hardware runs.
 
 Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
 AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's
@@ -136,6 +138,9 @@ done; wait
 | T14 | a BufferedChannel constructed at namespace scope (before `main()`) works. It also reports the kernel state and static/dynamic `osSemaphoreNew()` results during C++ static initialisation |
 | T15i | a rendezvous `putFromISR()` to a waiting ALT reader either delivers the value or returns false. (Today it returns true, and the reader's `select()` returns the channel guard with its destination unchanged.) |
 | T15s | `SignalChannel` ALT receiver {X, signal}: a signal that arrives while the receiver takes X (the lower index) is received by the next `select()`, and the sender completes. (Today `unregisterAltIn()` resets the channel, so the signal is lost and the sender blocks for good.) |
+| T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
+| T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
+| T16a | *sweep*, rendezvous `putFromISR()` against a plain reader entering `input()`. The task path locks with the mutex, the ISR path with BASEPRI; an ISR between the two stores of `registerWaitingTask()` copies through a null pointer. Correct: `putFromISR()` true → the reader has the value; false → the runner's kick value. (Passes on the FVP; see "Current results".) A `HardFault_Handler` in the test file reports CFSR/HFSR/BFAR and ends the run if a fault happens |
 | T15 | *sweep*, ALT-vs-ALT rendezvous: the ALT writer (the victim) completes the transfer in `activate()` and wakes the ALT reader only after releasing the mutex. If the reader has meanwhile taken X and started a new `select()`, the late flag lands in the new round. Per trial, **PHANTOM** = C returned with its destination unchanged, **SILENT** = X returned although C's data was written. This is the implementation form of CSP-M assertion 23 |
 
 ### T2 method
@@ -153,7 +158,7 @@ The workload drives every notification path:
 - a KeepNewest overwrite plus an ISR write;
 - a rendezvous `putFromISR()`.
 
-### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b, T15)
+### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b, T15, T16a)
 
 1. The runner is the higher-priority aggressor. It aligns to a tick edge E0, releases the victim, and
    sleeps until the next edge E1.

@@ -1,14 +1,14 @@
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5004
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5028
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5029
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5005
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5030
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5006
-
-
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5007
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5031
 
 Hello world
 
@@ -47,44 +47,53 @@ RESULT T15i: FAIL -- rendezvous putFromISR() to an ALT reader delivers the value
    [T15s] select 1 -> 0 (0 = X); select 2 -> 2 (1 = signal, 2 = timeout); sender completed=0
    [T15s] signal lost: the sender is blocked for good
 RESULT T15s: FAIL -- a signal that arrives while the ALT receiver takes another guard is not lost
-   [T1a] kb=51043 k=49543..52043 EARLY=1503 LATE=998 BUG=0 ANOMALY=0
-   [T1a] kb=51049 k=49549..52049 EARLY=1458 LATE=1043 BUG=0 ANOMALY=0
+   [T16s] putFromISR returned 1; blocked receiver released=0
+RESULT T16s: FAIL -- signal putFromISR() releases a blocked receiver (or returns false)
+   [T16n] reader selected 0 (0 = channel, 1 = timeout), value UNCHANGED 0xdeadbeef
+   [T16n] rendezvous reported without data transfer; the value was dropped
+RESULT T16n: FAIL -- KeepNewest rendezvous output() to a waiting ALT reader delivers the value
+   [T1a] kb=51041 k=49541..52041 EARLY=1503 LATE=998 BUG=0 ANOMALY=0
+   [T1a] kb=51022 k=49522..52022 EARLY=1450 LATE=1051 BUG=0 ANOMALY=0
 RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=51039 k=49539..52039 EARLY=1468 LATE=1033 BUG=0 ANOMALY=0
-   [T1b] kb=51042 k=49542..52042 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1b] kb=50969 k=49469..51969 EARLY=1506 LATE=995 BUG=0 ANOMALY=0
+   [T1b] kb=51041 k=49541..52041 EARLY=1503 LATE=998 BUG=0 ANOMALY=0
 RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=51043 k=49543..52043 EARLY=1503 LATE=998 BUG=0 ANOMALY=0
-   [T3] kb=51043 k=49543..52043 EARLY=1465 LATE=1036 BUG=0 ANOMALY=0
+   [T3] kb=51042 k=49542..52042 EARLY=1502 LATE=999 BUG=0 ANOMALY=0
+   [T3] kb=51036 k=49536..52036 EARLY=1437 LATE=1064 BUG=0 ANOMALY=0
 RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
-   [T3i] kb=51036 k=49536..52036 EARLY=1475 LATE=1026 BUG=0 ANOMALY=0
-   [T3i] kb=51043 k=49543..52043 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T3i] kb=51043 k=49543..52043 EARLY=1431 LATE=1070 BUG=0 ANOMALY=0
+   [T3i] kb=51042 k=49542..52042 EARLY=1502 LATE=999 BUG=0 ANOMALY=0
 RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
-   [T13] kb=51044 k=49544..52044 EARLY=1504 LATE=997 BUG=0 ANOMALY=0
-   [T13] kb=51033 k=49533..52033 EARLY=1478 LATE=1023 BUG=0 ANOMALY=0
+   [T13] kb=51044 k=49544..52044 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13] kb=51172 k=49672..52172 EARLY=1302 LATE=1199 BUG=0 ANOMALY=0
 RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
    [T13] spins detected: 0
-   [T13b] kb=51042 k=49542..52042 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
-   [T13b] kb=51036 k=49536..52036 EARLY=1471 LATE=1030 BUG=0 ANOMALY=0
+   [T13b] kb=51043 k=49543..52043 EARLY=1502 LATE=999 BUG=0 ANOMALY=0
+   [T13b] kb=51036 k=49536..52036 EARLY=1439 LATE=1062 BUG=0 ANOMALY=0
 RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
    [T13b] spins detected: 0
-   [T15] kb=51049 k=49549..52049 EARLY=1444 LATE=1005 BUG=52 ANOMALY=0 (BUG k=50416..50904)
-   [T15] kb=51043 k=49543..52043 EARLY=1451 LATE=997 BUG=53 ANOMALY=0 (BUG k=50849..50901)
+   [T15] kb=51043 k=49543..52043 EARLY=1445 LATE=1002 BUG=54 ANOMALY=0 (BUG k=50520..50918)
+   [T15] kb=51046 k=49546..52046 EARLY=1444 LATE=1004 BUG=53 ANOMALY=0 (BUG k=50549..50904)
 RESULT T15: FAIL -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
-   [T15] bad trials=105: PHANTOM (C selected, no data)=105, SILENT (X selected, C data written)=105
-SUMMARY: PASS=20 FAIL=3 SKIP=0; heap used=888 B; runner stack min free=7520 B
+   [T15] bad trials=107: PHANTOM (C selected, no data)=107, SILENT (X selected, C data written)=107
+   [T16a] kb=51043 k=49543..52043 EARLY=1502 LATE=999 BUG=0 ANOMALY=0
+   [T16a] kb=50706 k=49206..51706 EARLY=1768 LATE=733 BUG=0 ANOMALY=0
+RESULT T16a: PASS -- rendezvous putFromISR() vs a reader entering input(): value delivered or false returned
+   [T16a] trials with putFromISR()==true but the value not received: 0
+SUMMARY: PASS=21 FAIL=5 SKIP=0; heap used=1336 B; runner stack min free=7504 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 259.305152s
-User time at initialisation             : 0.234173s
-User time                               : 107.602637s
-System time at initialisation           : 0.149750s
-System time                             : 0.045276s
-Wall time at initialisation             : 0.374800s
-Wall time                               : 107.604462s
-Performance index                       : 2.41
-cpu0                                    : 240.98 MIPS ( 25930175129 Inst)
-Memory highwater mark at initialisation : 0x10608000 bytes ( 0.256 GB )
-Memory highwater mark                   : 0x110c7000 bytes ( 0.266 GB )
+Simulated time                          : 291.983104s
+User time at initialisation             : 0.348181s
+User time                               : 122.622671s
+System time at initialisation           : 0.225117s
+System time                             : 0.064889s
+Wall time at initialisation             : 0.756093s
+Wall time                               : 122.701532s
+Performance index                       : 2.38
+cpu0                                    : 237.96 MIPS ( 29197907603 Inst)
+Memory highwater mark at initialisation : 0x105b6000 bytes ( 0.256 GB )
+Memory highwater mark                   : 0x1108e000 bytes ( 0.266 GB )
 -------------------------------------------------------------------------------
