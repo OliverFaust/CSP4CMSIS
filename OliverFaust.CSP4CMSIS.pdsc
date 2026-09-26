@@ -68,7 +68,7 @@
   <components>
     <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="1.0.0" condition="CSP4CMSIS Core">
       <description>
-        CSP4CMSIS core library -- channels (rendezvous, buffered, overwriting),
+        CSP4CMSIS core library -- channels (rendezvous; buffered with Block/KeepNewest/KeepOldest policies),
         ALT/select, process/thread wrapping, and critical sections. Requires
         three project-level preprocessor defines -- see
         Documentation/CSP4CMSIS_Configuration.md, included below, before
@@ -100,7 +100,6 @@
         <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
         <file category="header" name="csp4cmsis/inc/csp/csp_critical.h"/>
         <file category="header" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/overwriting_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/process.h"/>
         <file category="header" name="csp4cmsis/inc/csp/public_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/public_task.h"/>

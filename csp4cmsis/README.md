@@ -24,7 +24,7 @@ This library enables embedded developers to move away from complex mutex/semapho
 * **`process.h`**: Defines the `CSProcess` base class for creating concurrent actors.
 * **`channel_base.h` / `rendezvous_channel.h`**: Synchronous communication pipes.
 * **`alt.h`**: Implements the `Alternative` mechanism for non-deterministic input multiplexing (similar to `select` in Go).
-* **`buffered_channel.h` / `overwriting_channel.h`**: Specialized channels for asynchronous or lossy data flow.
+* **`buffered_channel.h`**: Buffered channels for asynchronous or lossy data flow (`BufferPolicy::Block`, `KeepNewest`, `KeepOldest`).
 * **`barrier.h`**: Multi-process synchronization points.
 
 ### `src/` (Implementation)
