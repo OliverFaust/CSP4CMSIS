@@ -42,8 +42,25 @@
 //    updated count.
 //  * putFromISR(): never blocks; Block policy fails if full. ISR priority
 //    must be numerically >= CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY
-//    (masked by the critical section). The element copy runs with BASEPRI
-//    raised, i.e. interrupt latency grows with sizeof(T).
+//    (masked by the critical section).
+//
+// Masked copy -- interrupt latency:
+//    Every element copy (output(), input(), putFromISR(), ALT activate())
+//    runs INSIDE the CSP critical section, i.e. with BASEPRI raised: all
+//    interrupts at or below CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY are
+//    held off for the duration of one memcpy of sizeof(T) bytes, plus a
+//    constant overhead. Interrupts above that priority are not affected.
+//    For small elements (<= 64 bytes) this is comparable to an RTOS queue
+//    operation (FreeRTOS also copies inside its own critical section).
+//    For large elements, do NOT buffer the payload: keep payloads in a
+//    statically allocated pool and send an index or pointer instead, e.g.
+//      static Frame pool[N];                              // payloads
+//      SamplingBufferedChannel<uint8_t, N> filled;        // ISR -> task: index
+//      SamplingBufferedChannel<uint8_t, N> free_slots;    // task -> ISR: index
+//    so the masked copy is one byte; ownership of pool[i] moves with its
+//    index. (An ISR cannot block on input(), so it must only use indices it
+//    already owns -- e.g. a pre-assigned ping-pong pair -- until a
+//    non-blocking ISR read is added.)
 // =============================================================================
 
 #include "cmsis_os2.h"
