@@ -669,6 +669,140 @@ void test_T12() {
 }
 
 // ---------------------------------------------------------------------------
+// T15 family -- rendezvous / signal "trust the wakeup" path (CSP-M model,
+// assertion 23: a flag that no partner produced for the current select()
+// round makes a rendezvous guard complete without a data transfer).
+// FAIL = the defect is present. Analysis only; the library is unchanged.
+// ---------------------------------------------------------------------------
+constexpr uint32_t T15_SENT = 0xDEADBEEFu;   // "nothing received" marker
+
+// T15i -- rendezvous putFromISR() to a waiting ALT reader: the ISR reports
+// success, the reader's select() returns the channel guard. Correct: the
+// reader has the ISR's value (or putFromISR() returns false and the reader
+// times out).
+csp::Channel<uint32_t>* t15i_ch; ThreadSlot t15i_s;
+volatile int t15i_sel = -2; volatile uint32_t t15i_msg = 0; volatile bool t15i_isr_ok = false;
+void t15i_reader(void*) {
+    In in = t15i_ch->reader(); uint32_t msg = T15_SENT;
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt({in.getGuard(msg), to.internal_guard_ptr});
+    int s = alt.priSelect(); t15i_msg = msg; t15i_sel = s; park();
+}
+void t15i_isr() { Out out = t15i_ch->writer(); t15i_isr_ok = out.putFromISR(1234u); }
+void test_T15i() {
+    static csp::Channel<uint32_t> ch; t15i_ch = &ch;
+    spawn(t15i_reader, nullptr, osPriorityNormal, t15i_s, "T15i");
+    osDelay(3);                                          // reader waits in its ALT
+    g_isr_op = t15i_isr; isr_fire(); osDelay(3); g_isr_op = nullptr;
+    osDelay(60);                                         // past the reader's timeout
+    bool phantom = t15i_sel == 0 && t15i_msg == T15_SENT;
+    bool ok = (t15i_isr_ok && t15i_sel == 0 && t15i_msg == 1234u) || (!t15i_isr_ok && t15i_sel == 1);
+    printf("   [T15i] putFromISR returned %d; reader selected %d (0 = channel, 1 = timeout), value %s%lx%s\r\n",
+           (int)t15i_isr_ok, t15i_sel, t15i_msg == T15_SENT ? "UNCHANGED (0x" : "0x", (unsigned long)t15i_msg,
+           t15i_msg == T15_SENT ? ")" : "");
+    if (phantom) printf("   [T15i] rendezvous reported without data transfer; the ISR's value is lost\r\n");
+    result("T15i", ok ? 1 : 0, "rendezvous putFromISR() to an ALT reader delivers the value (or reports failure)");
+}
+
+// T15s -- SignalChannel ALT receiver {X (buffered, index 0), signal (index 1)}.
+// X becomes ready and a sender signals before the receiver runs; the receiver
+// takes X (lower index). The signal must still be received by the next
+// select(), and the sender must complete.
+BlockChan<1>* t15s_x; csp::SignalChannel<>* t15s_sig; ThreadSlot t15s_rs, t15s_ss;
+osThreadId_t t15s_sender_tid; volatile int t15s_sel1 = -2, t15s_sel2 = -2, t15s_sent = 0;
+void t15s_receiver(void*) {
+    In xin(t15s_x); uint32_t xv = 0;
+    auto* sig = t15s_sig->getInternal();
+    csp::Alternative alt1({xin.getGuard(xv), sig->getInputGuard()});
+    t15s_sel1 = alt1.priSelect();
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt2({xin.getGuard(xv), sig->getInputGuard(), to.internal_guard_ptr});
+    t15s_sel2 = alt2.priSelect();
+    park();
+}
+void t15s_sender(void*) {
+    osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever);
+    t15s_sig->getInternal()->output(nullptr);
+    t15s_sent = 1; park();
+}
+void test_T15s() {
+    static BlockChan<1> x; static csp::SignalChannel<> sig; t15s_x = &x; t15s_sig = &sig;
+    spawn(t15s_receiver, nullptr, osPriorityNormal, t15s_rs, "T15sR");
+    t15s_sender_tid = spawn(t15s_sender, nullptr, osPriorityAboveNormal, t15s_ss, "T15sS");
+    osDelay(3);                                          // receiver waits on both guards
+    uint32_t one = 1; x.output(&one);                    // X ready (receiver not running yet)
+    osThreadFlagsSet(t15s_sender_tid, F_GO);             // sender signals once the runner sleeps
+    osDelay(80);                                         // receiver: 2 selects, the second may time out
+    printf("   [T15s] select 1 -> %d (0 = X); select 2 -> %d (1 = signal, 2 = timeout); sender completed=%d\r\n",
+           t15s_sel1, t15s_sel2, t15s_sent);
+    if (t15s_sel2 == 2 && !t15s_sent) printf("   [T15s] signal lost: the sender is blocked for good\r\n");
+    result("T15s", (t15s_sel1 == 0 && t15s_sel2 == 1 && t15s_sent == 1) ? 1 : 0,
+           "a signal that arrives while the ALT receiver takes another guard is not lost");
+}
+
+// T15 (sweep) -- stale rendezvous wakeup from an earlier round. Target: ALT
+// reader TA {C (rendezvous, index 0), X (buffered, index 1)}, looping; it
+// resets its C destination to T15_SENT before every select(). Victim: ALT
+// writer on C (low priority), which completes the ALT-vs-ALT rendezvous in
+// its activate(): copy, clear TA's registration, release the mutex, THEN
+// wake TA. Aggressor (runner at E1): X.output(). Priorities: runner > TA >
+// victim. If the victim is preempted between its copy and its wake, TA takes
+// X, starts a new select(), and the victim's late flag then lands in that
+// round. Checked per trial, from TA's log:
+//   PHANTOM: select() returned C with the destination unchanged (T15_SENT)
+//   SILENT : select() returned X although C's data had been written
+// Correct: exactly one C with the victim's value, one X, neither of the above.
+csp::Channel<uint32_t>* t15_ch; BlockChan<1>* t15_x; ThreadSlot t15_ts, t15_vs; Case t15;
+struct T15Entry { int sel; uint32_t msg; };
+volatile T15Entry t15_log[8]; volatile uint32_t t15_n = 0;
+volatile uint32_t t15_w = 0; volatile bool t15_aggr_done = false;
+uint32_t t15_phantoms = 0, t15_silents = 0, t15_badtrials = 0;
+void t15_target(void*) {
+    In in = t15_ch->reader(); In xin(t15_x);
+    static uint32_t msg, xv;
+    csp::Alternative alt({in.getGuard(msg), xin.getGuard(xv)});
+    for (;;) {
+        msg = T15_SENT;
+        int s = alt.priSelect();
+        uint32_t n = t15_n;
+        if (n < 8) { t15_log[n].sel = s; t15_log[n].msg = msg; }
+        t15_n = n + 1;
+    }
+}
+void t15_reset()  { t15_n = 0; t15_aggr_done = false; t15_w = t15_w + 1; }
+bool t15_probe()  { return t15_aggr_done; }
+void t15_victim() {
+    static Out out = t15_ch->writer(); static uint32_t w;
+    static csp::Alternative alt({out.getGuard(w)});
+    w = t15_w;
+    alt.priSelect();
+}
+void t15_aggr()   { uint32_t one = 1; t15_x->output(&one); t15_aggr_done = true; }
+bool t15_check() {
+    osDelay(2);                                          // let TA finish (it runs above the victim)
+    uint32_t n = t15_n, ph = 0, si = 0, c_ok = 0, x_n = 0;
+    for (uint32_t i = 0; i < n && i < 8; ++i) {
+        if (t15_log[i].sel == 0) { if (t15_log[i].msg == T15_SENT) ph++; else if (t15_log[i].msg == t15_w) c_ok++; }
+        else if (t15_log[i].sel == 1) { x_n++; if (t15_log[i].msg != T15_SENT) si++; }
+    }
+    t15_phantoms += ph; t15_silents += si;
+    bool ok = n == 2 && c_ok == 1 && x_n == 1 && ph == 0 && si == 0;
+    if (!ok) t15_badtrials++;
+    return ok;
+}
+void test_T15() {
+    static csp::Channel<uint32_t> ch; static BlockChan<1> x; t15_ch = &ch; t15_x = &x;
+    t15_phantoms = t15_silents = t15_badtrials = 0;
+    t15 = {"T15", t15_reset, t15_probe, t15_victim, t15_aggr, nullptr, nullptr, t15_check, nullptr, osThreadGetId()};
+    spawn(t15_target, nullptr, osPriorityAboveNormal, t15_ts, "T15A");
+    osDelay(2);                                          // TA waiting in its first select()
+    t15.victim = spawn(victim_main, &t15, osPriorityLow, t15_vs, "T15V");
+    sweep_verdict(t15, "no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)");
+    printf("   [T15] bad trials=%lu: PHANTOM (C selected, no data)=%lu, SILENT (X selected, C data written)=%lu\r\n",
+           (unsigned long)t15_badtrials, (unsigned long)t15_phantoms, (unsigned long)t15_silents);
+}
+
+// ---------------------------------------------------------------------------
 // T14 -- objects constructed at namespace scope, i.e. during C++ static
 // initialisation, BEFORE main() and osKernelInitialize(). The probe records
 // what the backend allows then (raw CMSIS-RTOS2 calls, no library code);
@@ -717,8 +851,8 @@ void runner(void*) {
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
-    test_T11(); test_T12(); test_T14();
-    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b();
+    test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s();
+    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));

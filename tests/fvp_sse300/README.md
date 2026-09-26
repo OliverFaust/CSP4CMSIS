@@ -15,21 +15,28 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 ## Current results (`results/`)
 
-The same 20-test suite was run everywhere:
+The same 23-test suite was run everywhere:
 
 | Library | Configurations | Result |
 |---|---|---|
-| 2.0, `buffered-channel-v2` @ `17cead1` (library code of `dd954a9`) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=20 FAIL=0 SKIP=0 in all 12**; T13/T13b 0 spins in every sweep |
-| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=7 FAIL=12 SKIP=1 on both |
+| 2.0, `buffered-channel-v2` (library code of `dd954a9`, unchanged since) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=20 FAIL=3 SKIP=0 in all 12.** The three failures are T15i, T15s and T15, the known rendezvous/signal limitations (see below). T13/T13b: 0 spins in every sweep |
+| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=7 FAIL=15 SKIP=1 on both |
 
-On v1.0.0, only T0, T8, T11, T12, T13, T13b and T14 pass. T9 needs a v2-only hook.
+- On v1.0.0, only T0, T8, T11, T12, T13, T13b and T14 pass. T9 needs a v2-only hook.
+- **T15i, T15s and T15 fail on v1.0.0 too:** the defects are not a 2.0 regression. Analysis and a checked
+  fix model are in `BUFFERED_CHANNEL_ANALYSIS.md` (review round 3) and
+  `docs/formal/rendezvous_commit_record.csp`.
+- **T15 per configuration:** 61–120 bad trials per two sweeps. Each bad trial is exactly one SILENT and one
+  PHANTOM selection.
 
 Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
 AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's
 `--wrap` detector and the race sweeps stay sensitive there.
 
-History: `6920d1c` failed T13/T13b (livelock); `a34d608` fixed it with a one-tick back-off; `dd954a9`
-replaced the back-off with semaphore-count readiness.
+History:
+- `6920d1c` failed T13/T13b (livelock);
+- `a34d608` fixed it with a one-tick back-off;
+- `dd954a9` replaced the back-off with semaphore-count readiness.
 
 ## Harness
 
@@ -127,6 +134,9 @@ done; wait
 | T13 | *sweep*: no livelock when a high-priority ALT reader meets a preempted low-priority blocking writer (separate aggressor thread; the runner detects spinning and rescues by lowering the aggressor's priority) |
 | T13b | *sweep*: the same for a high-priority ALT writer vs a preempted low-priority blocking reader |
 | T14 | a BufferedChannel constructed at namespace scope (before `main()`) works. It also reports the kernel state and static/dynamic `osSemaphoreNew()` results during C++ static initialisation |
+| T15i | a rendezvous `putFromISR()` to a waiting ALT reader either delivers the value or returns false. (Today it returns true, and the reader's `select()` returns the channel guard with its destination unchanged.) |
+| T15s | `SignalChannel` ALT receiver {X, signal}: a signal that arrives while the receiver takes X (the lower index) is received by the next `select()`, and the sender completes. (Today `unregisterAltIn()` resets the channel, so the signal is lost and the sender blocks for good.) |
+| T15 | *sweep*, ALT-vs-ALT rendezvous: the ALT writer (the victim) completes the transfer in `activate()` and wakes the ALT reader only after releasing the mutex. If the reader has meanwhile taken X and started a new `select()`, the late flag lands in the new round. Per trial, **PHANTOM** = C returned with its destination unchanged, **SILENT** = X returned although C's data was written. This is the implementation form of CSP-M assertion 23 |
 
 ### T2 method
 
@@ -143,7 +153,7 @@ The workload drives every notification path:
 - a KeepNewest overwrite plus an ISR write;
 - a rendezvous `putFromISR()`.
 
-### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b)
+### Phase-sweep method (T1a, T1b, T3, T3i, T13, T13b, T15)
 
 1. The runner is the higher-priority aggressor. It aligns to a tick edge E0, releases the victim, and
    sleeps until the next edge E1.
@@ -162,6 +172,8 @@ The workload drives every notification path:
 
 - Worker threads have 1 KB static stacks and the runner has 8 KB. T5's 32 KB static channel must fit the
   harness's 124.5 KB `RW_RAM0`.
+- T15 priorities: runner > ALT reader (target) > ALT writer (victim). `check()` waits 2 ticks so that the
+  target has finished before its log is read.
 - Test threads are never deleted. Threads that are expected to hang (on v1.0.0) stay blocked forever.
 - `csp4cmsis_fatal_error()` is overridden: the test records the message and parks the calling thread.
 - RTX5: `osRtxErrorNotify()` is overridden to print the error code before halting.

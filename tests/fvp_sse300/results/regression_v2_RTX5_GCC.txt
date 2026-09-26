@@ -1,14 +1,14 @@
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5007
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5004
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5005
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5009
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5006
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5012
-
-
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5013
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5007
 
 Hello world
 
@@ -41,40 +41,50 @@ RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in or
    [T14] before main(): kernel state=Ready; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
    [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
 RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
-   [T1a] kb=26562 k=25062..27562 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T1a] kb=26562 k=25062..27562 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T15i] putFromISR returned 1; reader selected 0 (0 = channel, 1 = timeout), value UNCHANGED (0xdeadbeef)
+   [T15i] rendezvous reported without data transfer; the ISR's value is lost
+RESULT T15i: FAIL -- rendezvous putFromISR() to an ALT reader delivers the value (or reports failure)
+   [T15s] select 1 -> 0 (0 = X); select 2 -> 2 (1 = signal, 2 = timeout); sender completed=0
+   [T15s] signal lost: the sender is blocked for good
+RESULT T15s: FAIL -- a signal that arrives while the ALT receiver takes another guard is not lost
+   [T1a] kb=26560 k=25060..27560 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T1a] kb=26558 k=25058..27558 EARLY=1488 LATE=1013 BUG=0 ANOMALY=0
 RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=26562 k=25062..27562 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
-   [T1b] kb=26537 k=25037..27537 EARLY=1524 LATE=977 BUG=0 ANOMALY=0
+   [T1b] kb=26560 k=25060..27560 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1b] kb=26558 k=25058..27558 EARLY=1488 LATE=1013 BUG=0 ANOMALY=0
 RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T3] kb=26562 k=25062..27562 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T3] kb=26366 k=24866..27366 EARLY=1695 LATE=806 BUG=0 ANOMALY=0
+   [T3] kb=26558 k=25058..27558 EARLY=1489 LATE=1012 BUG=0 ANOMALY=0
 RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
-   [T3i] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T3i] kb=26563 k=25063..27563 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T3i] kb=26561 k=25061..27561 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T3i] kb=26558 k=25058..27558 EARLY=1490 LATE=1011 BUG=0 ANOMALY=0
 RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
-   [T13] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T13] kb=26562 k=25062..27562 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T13] kb=26561 k=25061..27561 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13] kb=26558 k=25058..27558 EARLY=1489 LATE=1012 BUG=0 ANOMALY=0
 RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
    [T13] spins detected: 0
-   [T13b] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T13b] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13b] kb=26561 k=25061..27561 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T13b] kb=26562 k=25062..27562 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
 RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
    [T13b] spins detected: 0
-SUMMARY: PASS=20 FAIL=0 SKIP=0; heap used=200 B; runner stack min free=7520 B
+   [T15] kb=26366 k=24866..27366 EARLY=1648 LATE=805 BUG=48 ANOMALY=0 (BUG k=26374..26422)
+   [T15] kb=26561 k=25061..27561 EARLY=1452 LATE=1001 BUG=48 ANOMALY=0 (BUG k=25605..26421)
+RESULT T15: FAIL -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
+   [T15] bad trials=96: PHANTOM (C selected, no data)=96, SILENT (X selected, C data written)=96
+SUMMARY: PASS=20 FAIL=3 SKIP=0; heap used=368 B; runner stack min free=7520 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 194.497562s
-User time at initialisation             : 0.204090s
-User time                               : 45.932489s
-System time at initialisation           : 0.152067s
-System time                             : 0.019961s
-Wall time at initialisation             : 0.345579s
-Wall time                               : 45.955349s
-Performance index                       : 4.23
-cpu0                                    : 423.23 MIPS ( 19449694952 Inst)
-Memory highwater mark at initialisation : 0x10573000 bytes ( 0.255 GB )
-Memory highwater mark                   : 0x11020000 bytes ( 0.266 GB )
+Simulated time                          : 259.654262s
+User time at initialisation             : 0.243683s
+User time                               : 94.984628s
+System time at initialisation           : 0.154433s
+System time                             : 0.055585s
+Wall time at initialisation             : 0.686272s
+Wall time                               : 95.094407s
+Performance index                       : 2.73
+cpu0                                    : 273.05 MIPS ( 25965345387 Inst)
+Memory highwater mark at initialisation : 0x10588000 bytes ( 0.255 GB )
+Memory highwater mark                   : 0x1100d000 bytes ( 0.266 GB )
 -------------------------------------------------------------------------------
