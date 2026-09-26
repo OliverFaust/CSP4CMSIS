@@ -15,6 +15,7 @@ is in `tests/fvp_sse300/`.
 | `select()` | used every set bit as the choice; disabled all guards | clears its bits per round; disables only the guards it enabled; re-verifies each wakeup (`Guard::confirm`); if `activate()` loses a race (only possible when another reader or writer took the token), starts a new round; a failed wait is fatal instead of being used as a bit mask |
 | RTOS calls inside CSP critical sections | `_notifyReader()`/`_notifyWriter()` called `osEventFlagsSet()` with BASEPRI raised; rendezvous `putFromISR()` too | never: state is snapshotted inside the section, and the RTOS is called after leaving it |
 | `RelTimeoutGuard` / `TimerGuard` | `osTimerNew()` from the RTOS heap on every construction | static control block under `CSP4CMSIS_STATIC_ALLOCATION`; creation checked |
+| CSP critical section entry | `MSR BASEPRI_MAX` only | `MSR BASEPRI_MAX; DSB; ISB` (as the FreeRTOS Cortex-M ports); Cortex-M7 r0p1 (erratum 837070) additionally needs `CPSID i`/`CPSIE i` around the MSR, which is not done (no known target uses that core) |
 | Failed RTOS object creation | silently ignored (e.g. a dead channel whose `input()` returned without data) | `csp4cmsis_fatal_error()` |
 | ALT guard state | one guard object per channel direction, shared by all processes | one guard per channel-end **handle** (`Chanin`/`Chanout`), for rendezvous and buffered channels |
 

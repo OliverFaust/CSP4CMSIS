@@ -45,9 +45,22 @@
 
 namespace csp::internal {
 
+    // DSB + ISB after raising BASEPRI: the section's first instruction then
+    // runs with the new priority in force, without relying on how soon an
+    // MSR that raises the execution priority takes effect. Same sequence as
+    // the FreeRTOS ARM_CM3/CM4F/CM33/CM55 ports (msr basepri; dsb; isb).
+    // Lowering BASEPRI on exit needs no barrier.
+    //
+    // NOT sufficient for Cortex-M7 r0p1 (erratum 837070: a BASEPRI write
+    // can be delayed so that an interrupt at the new masked level is still
+    // taken). FreeRTOS's ARM_CM7/r0p1 port brackets the MSR with
+    // CPSID i / CPSIE i; do the same here before using CSP4CMSIS on that core
+    // revision. No known CSP4CMSIS target uses a Cortex-M7.
     inline uint32_t csp_enter_critical() {
         uint32_t saved = __get_BASEPRI();
         __set_BASEPRI_MAX(CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - __NVIC_PRIO_BITS));
+        __DSB();
+        __ISB();
         return saved;
     }
 
