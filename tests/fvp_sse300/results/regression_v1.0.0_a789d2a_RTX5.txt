@@ -1,0 +1,68 @@
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5002
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5000
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5003
+
+Hello world
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: Keil RTX5 5.9.1; library: v1 API (osMessageQueue)
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 5 (last: osThreadFlagsSet); workload sum=6021
+RESULT T2: FAIL -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=0 (-); A done=0, B done=1
+RESULT T4a: FAIL -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: FAIL -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 20
+RESULT T4c: FAIL -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=0 fatal=0 heap delta=0
+RESULT T5: FAIL -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 40 B heap while alive; Alternative: 0 B; 200 loop constructions -> 200 allocations
+RESULT T6: FAIL -- RelTimeoutGuard and Alternative use no RTOS heap
+   [T7a] writer woken: reader uses input()=1, reader uses ALT=0
+RESULT T7a: FAIL -- a read via ALT wakes a writer blocked in ALT
+   [T8] 3 writers x 20 values: sum=60630 (expect 60630), writers done=3
+RESULT T8: PASS -- three blocking writers on one Block channel, no loss
+RESULT T9: SKIP -- stale ALT wakeup re-verification (needs v2 altFlag())
+   [T10] second ALT reader rejected=0 (-); reader1 done=0 reader2 done=1
+RESULT T10: FAIL -- a second ALTing reader is rejected by assert; the first is served
+   [T11] reader selected 0 (value 77); writer selected 0, done=1 (0 = channel, 1 = timeout)
+RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
+   [T12] received a=500 b=500, per-channel order ok=1
+RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
+   [T1a] kb=31873 k=30373..32873 EARLY=1491 LATE=1000 BUG=10 ANOMALY=0 (BUG k=31822..31838)
+   [T1a] kb=31873 k=30373..32873 EARLY=1490 LATE=1002 BUG=9 ANOMALY=0 (BUG k=31822..31831)
+RESULT T1a: FAIL -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
+   [T1b] kb=31873 k=30373..32873 EARLY=1492 LATE=998 BUG=11 ANOMALY=0 (BUG k=31412..31830)
+   [T1b] kb=32032 k=30532..33032 EARLY=1332 LATE=1159 BUG=10 ANOMALY=0 (BUG k=31821..31830)
+RESULT T1b: FAIL -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
+   [T3] kb=31880 k=30380..32880 EARLY=1465 LATE=1001 BUG=35 ANOMALY=0 (BUG k=31806..31843)
+   [T3] kb=31880 k=30380..32880 EARLY=1463 LATE=999 BUG=39 ANOMALY=0 (BUG k=31805..31843)
+RESULT T3: FAIL -- KeepNewest keeps the newest value of every writer (task vs task)
+   [T3i] kb=400000 k=398500..401000 EARLY=0 LATE=0 BUG=2501 ANOMALY=0 (BUG k=398500..401000)
+   [T3i] kb=400000 k=398500..401000 EARLY=0 LATE=0 BUG=2501 ANOMALY=0 (BUG k=398500..401000)
+RESULT T3i: FAIL -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
+SUMMARY: PASS=4 FAIL=12 SKIP=1; heap used=1856 B; runner stack min free=7504 B
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
+Simulated time                          : 310.926831s
+User time at initialisation             : 0.197798s
+User time                               : 68.428569s
+System time at initialisation           : 0.166829s
+System time                             : 0.034213s
+Wall time at initialisation             : 0.350685s
+Wall time                               : 68.434674s
+Performance index                       : 4.54
+cpu0                                    : 454.34 MIPS ( 31092582784 Inst)
+Memory highwater mark at initialisation : 0x10507000 bytes ( 0.255 GB )
+Memory highwater mark                   : 0x10e77000 bytes ( 0.264 GB )
+-------------------------------------------------------------------------------

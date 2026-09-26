@@ -1,91 +1,147 @@
-# BufferedChannel / ALT verification tests (Corstone-300 FVP)
+# BufferedChannel / ALT regression suite (Corstone-300 FVP)
 
-`bc_tests.cpp` holds the tests behind `BUFFERED_CHANNEL_ANALYSIS.md` (repository root). They are
-**test code**: they deliberately use `csp::internal` classes and FreeRTOS heap queries, and are not part
-of the pack.
+`bc_tests.cpp` is the regression suite behind `BUFFERED_CHANNEL_ANALYSIS.md` and the 2.0 BufferedChannel
+work (`docs/CHANGES_2.0.md`). It is **test code**: it deliberately uses `csp::internal` classes, backend
+heap queries and armlink symbol patching, and is not part of the pack.
 
-## Environment used
+The same source builds against:
+- **either library generation:** v1.0.0 (`BufferedChannel<T, P>(capacity)`) or v2
+  (`BufferedChannel<T, SIZE, P>`, detected via `CSP4CMSIS_BUFFERED_CHANNEL_API`);
+- **either CMSIS-RTOS2 backend:** FreeRTOS 11.3.0 through `ARM::CMSIS-FreeRTOS`, or Keil RTX5 5.9.1
+  through `ARM::CMSIS-RTX`.
 
-- Harness project: `helloworld_sse300` from the `arm_fvp_helloworld` repository, local branch
-  **`csp4cmsis-wt-tests`**. That repository's `origin` is not ours; never push it.
-- Target: Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
-- Stack: Arm Compiler 6.24, CMSIS-Toolbox 2.14.1, CMSIS-RTOS2 over FreeRTOS 11.3.0 (`ARM::CMSIS-FreeRTOS`),
-  heap_4 with 32 KB.
-- CSP4CMSIS defines: `CSP4CMSIS_RTOS2_BACKEND_FREERTOS`, `CSP4CMSIS_STATIC_ALLOCATION`,
-  `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` (BASEPRI 0xA0).
-- The FVP tick runs at about 312.5 Hz instead of the configured 100 Hz: `core_clk.mul` is 100 MHz while the
-  software assumes 32 MHz. The tests use tick counts only, and no verdict depends on absolute time.
+Each test prints `RESULT <id>: PASS | FAIL | SKIP -- <property>`, where FAIL means the defect is present.
+A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
-## How the harness builds against *this working tree*
+## Current results (`results/`)
 
-The test branch changes only `hello.cproject.yml`:
+| Library | FreeRTOS | RTX5 |
+|---|---|---|
+| v2, `buffered-channel-v2` @ `6920d1c` | PASS=17 FAIL=0 SKIP=0 | PASS=17 FAIL=0 SKIP=0 |
+| v1.0.0 @ `a789d2a` (regression baseline) | PASS=4 FAIL=12 SKIP=1 | PASS=4 FAIL=12 SKIP=1 |
+
+On v1.0.0, only T0, T8, T11 and T12 pass. T9 needs a v2-only hook.
+
+## Harness
+
+- **Project:** `helloworld_sse300` in the `arm_fvp_helloworld` repository, local branch
+  **`csp4cmsis-wt-tests`**. That repository's `origin` is not ours: never push it.
+- **Target:** Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
+  Arm Compiler 6.24 at `-O0`, CMSIS-Toolbox 2.14.1.
+- **Build types** (`hello.csolution.yml`):
+
+  | Build type | CSP4CMSIS backend define | RTOS components |
+  |---|---|---|
+  | `.FreeRTOS` | `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` | CMSIS-RTOS2 FreeRTOS adapter + FreeRTOS 11.3.0; config in `RTE/RTOS/FreeRTOSConfig.h` (32 KB heap_4) |
+  | `.RTX5` | `CSP4CMSIS_RTOS2_BACKEND_RTX5` | `ARM::CMSIS:RTOS2:Keil RTX5&Source` 5.9.1; `RTE/CMSIS/RTX_Config.h` |
+
+  `RTX_Config.h` is aligned with the FreeRTOS setup:
+  - `OS_TICK_FREQ 100`
+  - `OS_ROBIN_ENABLE 0`
+  - `OS_TIMER_THREAD_PRIO 55`
+  - `OS_THREAD_LIBSPACE_NUM 8`
+  - `OS_STACK_WATERMARK 1`
+- **Both builds:** `CSP4CMSIS_STATIC_ALLOCATION` and `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5`
+  (BASEPRI 0xA0).
+- **Timing:** the FVP tick runs at about 312.5 Hz on both backends. `core_clk.mul` is 100 MHz while the
+  software assumes 32 MHz. The tests use tick counts only.
+
+### Which library is under test
+
+`hello.cproject.yml` loads CSP4CMSIS as a **local pack** from the symlink `./csp4cmsis_under_test`:
 
 ```yaml
-  packs:
     - pack: OliverFaust::CSP4CMSIS
-      path: ../../../../../../home/of6/src/CSP4CMSIS   # = /home/of6/src/CSP4CMSIS
-  ...
-  groups:
-    - group: CSP4CMSIS tests
-      files:
-        - file: ../../../../../../home/of6/src/CSP4CMSIS/tests/fvp_sse300/bc_tests.cpp
+      path: ./csp4cmsis_under_test
 ```
 
-- `path:` makes csolution load `OliverFaust.CSP4CMSIS.pdsc` **directly from this clone**, so the component
-  `OliverFaust::CSP4CMSIS:Core` compiles `csp4cmsis/src/*.cpp` and `csp4cmsis/inc/` of the working tree. The
-  installed `OliverFaust::CSP4CMSIS@1.0.0` in `~/cmsis_packs` is not used.
-  - Nothing is registered with `cpackget`, so there is no clash with the installed 1.0.0 of the same version.
-  - csolution requires a relative path here (an absolute one only produces a portability warning).
-- Verify: `grep -o '/home/of6/src/CSP4CMSIS/csp4cmsis/src/[a-z_]*.cpp' out/MPS3-Corstone-300/compile_commands.json`
-  lists the working-tree sources. `hello.cbuild-pack.yml` does not list the pack, because local-path packs are
-  not locked.
-- `bc_tests.cpp` replaces the demo `application.cpp` and provides `csp_app_main_init()`.
-
-## Rerun
+csolution reads `OliverFaust.CSP4CMSIS.pdsc` directly from the linked tree, so
+`OliverFaust::CSP4CMSIS:Core` compiles that tree's sources. The installed `OliverFaust::CSP4CMSIS@1.0.0` in
+`~/cmsis_packs` is **not** used, and nothing is registered with `cpackget`. The test source itself always
+comes from this repository's working tree.
 
 ```sh
 cd <arm_fvp_helloworld>/helloworld_sse300
-git switch csp4cmsis-wt-tests
-source ../env.sh
-cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild
-$FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a out/MPS3-Corstone-300/hello.axf \
-    -C ethosu.num_macs=128 -f model_config_sse300.txt --simlimit 900 --stat
+ln -sfn ../../../../../../home/of6/src/CSP4CMSIS        csp4cmsis_under_test   # working tree (v2)
+ln -sfn ../../../../../../home/of6/src/CSP4CMSIS-v1.0.0 csp4cmsis_under_test   # v1.0.0 regression baseline
+#   (git -C ~/src/CSP4CMSIS worktree add --detach ~/src/CSP4CMSIS-v1.0.0 v1.0.0)
 ```
 
-- The runner prints one `RESULT <id>: CONFIRMED | NOT REPRODUCED | PASS | FAIL -- ...` line per test,
-  then sends EOT, which ends the FVP run after about 64 s of simulated time (about 5 minutes wall-clock).
-  Reference output: `results/2026-09-26_fvp_run.txt`.
-- Build with `-DTRACE_SWEEP=1` (add it to the cproject `define:`) to print every non-EARLY sweep trial.
-- The run is deterministic: two runs of the same image produce identical output, apart from the telnet
-  port numbers the FVP prints.
+To verify which library was used:
+`grep -o '/home/of6/src/CSP4CMSIS[^/]*/csp4cmsis/src/[a-z_]*.cpp' out/MPS3-Corstone-300/*/compile_commands.json`
+
+## Run
+
+```sh
+source ../env.sh
+cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild          # both build types
+for bt in FreeRTOS RTX5; do
+  $FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a out/MPS3-Corstone-300/$bt/hello.axf \
+      -C ethosu.num_macs=128 -f model_config_sse300.txt --simlimit 1200 --stat > run_$bt.txt &
+done; wait
+```
+
+- Each run takes about 130 s of simulated time. The v1.0.0 RTX5 run takes about 310 s, because T3i hangs
+  on every trial there. That is about 5–10 minutes of wall-clock time.
+- Two runs of the same image produce identical output (apart from telnet port numbers).
 
 ## Tests
 
-| Id | Analysis item | What it does |
-|---|---|---|
-| T0 | control | Plain Block `BufferedChannel` read through an ALT; 10 values arrive |
-| T1a | 1 | Phase sweep: a higher-priority writer's `output()` preempts an ALT reader at every instruction offset around `BufferedInputGuard::enable()` |
-| T1b | 1 | Same for an ALT writer and `BufferedOutputGuard::enable()`, with a reader freeing the slot |
-| T2 | 2 | `csp_enter_critical(); alt->wakeUp(bit); csp_exit_critical()`, exactly as in `_notifyReader()`; checks BASEPRI after `wakeUp()` and whether a higher-priority waiter ran inside the section |
-| T3 | 3 | Phase sweep: two `KeepNewest` writers on a full channel; checks that both newest values survive |
-| T4a | 4 | Two ALT writers on a full Block channel; the reader drains twice |
-| T4b | 4 / 7 | An unrelated ALT whose output guard is never enabled calls `disable()` on it |
-| T4c | 7 | A second `getOutputGuard()` call on a channel with a blocked ALT writer |
-| T5 | 5 | Channel whose queue cannot be allocated (80 KB > 32 KB heap) |
-| T6 | 6 | Heap use of `RelTimeoutGuard` and `Alternative`; 1000 constructions in a loop |
-| T7a | 7 | ALT reader vs plain reader against an ALT writer blocked on a full channel |
+| Id | Property checked (PASS = holds) |
+|---|---|
+| T0 | control: a Block BufferedChannel read through ALT delivers 10 values |
+| T1a | *sweep*: no lost wakeup when a writer preempts an ALT reader at any point in `select()` |
+| T1b | *sweep*: no lost wakeup when a reader preempts an ALT writer at any point in `select()` |
+| T2 | no CMSIS-RTOS2 call is made with BASEPRI raised (see "T2 method" below) |
+| T3 | *sweep*: KeepNewest keeps every writer's newest value, task vs task |
+| T3i | *sweep*: KeepNewest keeps every writer's newest value, task vs ISR `putFromISR()` (I2S_IRQn pended as a software interrupt, priority 6) |
+| T4a | two ALT writers: both served, or the second rejected by the assert; never a silent hang |
+| T4b | an ALT that never enabled a guard does not cancel another writer's registration |
+| T4c | guard state per writer: a second writer's `getGuard()` does not re-target a blocked writer |
+| T5 | a large channel (8200 × 4 B, more than the 32 KB heap) is valid after construction, or construction fails loudly |
+| T6 | `RelTimeoutGuard` and `Alternative` use no RTOS heap (200 constructions in a loop) |
+| T7a | a read via ALT wakes a writer blocked in ALT (control: plain `input()`) |
+| T8 | three blocking writers on one Block channel: no loss |
+| T9 | a stale ALT wakeup (flag without data) is re-verified, not selected (v2 only; SKIP on v1) |
+| T10 | a second ALTing reader is rejected by the assert; the first is served |
+| T11 | rendezvous ALT-vs-ALT completes on both ends with the value |
+| T12 | rendezvous `fairSelect` over two channels with blocking senders (pipe syntax): 1000 messages, per-channel order |
 
-### Phase-sweep method (T1a, T1b, T3)
+### T2 method
 
-1. The runner acts as the higher-priority aggressor. It aligns to a tick edge E0, releases the victim, and
+The test build interposes on the CMSIS-RTOS2 API with armlink's `$Sub$$`/`$Super$$` patching:
+`osThreadFlagsSet`, `osEventFlagsSet`, `osSemaphoreRelease/Acquire`, `osMessageQueuePut/Get/GetCount/GetSpace`
+and `osMutexAcquire/Release`. Every call from the library therefore passes a check that counts calls made
+with `BASEPRI != 0`. The map file lists the wrappers, and the disassembly shows the library's call sites
+resolved to them.
+
+The workload drives every notification path:
+- an ALT reader woken by `output()` and by `putFromISR()`;
+- an ALT writer woken by `input()`;
+- a KeepNewest overwrite plus an ISR write;
+- a rendezvous `putFromISR()`.
+
+### Phase-sweep method (T1a, T1b, T3, T3i)
+
+1. The runner is the higher-priority aggressor. It aligns to a tick edge E0, releases the victim, and
    sleeps until the next edge E1.
-2. The victim spins `k` iterations and then performs the operation under test.
-3. At E1 the runner preempts the victim wherever it is and performs the conflicting operation.
-4. A binary search finds the boundary `kb` where the aggressor starts acting before the victim's
-   operation. The sweep then covers `k = kb-1500 … kb+50` in steps of one spin iteration, so every
-   instruction offset of the victim's operation is hit. One tick is about 320,000 core cycles and
-   `kb` ≈ 31,800, so one iteration is about 10 cycles.
-5. The victim publishes a stage marker, so each hit also records where the victim was at E1.
-6. A hang is detected by an ACK timeout (30 ticks). It is classified as a lost wakeup only if the channel
-   really has data or space available. One successor operation then rescues the victim, so the sweep can
-   continue.
+2. The victim spins `k` iterations, then performs the operation under test.
+3. At E1 the runner preempts the victim wherever it is and performs the conflicting operation. In T3i it
+   pends the software interrupt, whose handler performs the conflicting operation.
+4. A binary search finds the boundary `kb` where the aggressor starts acting before the victim's operation.
+   Each of two sweeps then covers `k = kb−1500 … kb+1000` in steps of one iteration (about 10 cycles), so
+   every instruction offset of the victim's operation is hit. The boundary search can land about 600
+   iterations low, hence the wide upper range; in v1.0.0 the bug windows lay at `kb−60 … kb+190`.
+5. A hang counts as a lost wakeup only if data or space is really available when the ACK times out (30
+   ticks). One successor operation then rescues the victim, so the sweep continues.
+6. A sweep verdict needs both regimes (EARLY and LATE trials) to be present.
+
+## Test-harness notes
+
+- Worker threads have 1 KB static stacks and the runner has 8 KB. T5's 32 KB static channel must fit the
+  harness's 124.5 KB `RW_RAM0`.
+- Test threads are never deleted. Threads that are expected to hang (on v1.0.0) stay blocked forever.
+- `csp4cmsis_fatal_error()` is overridden: the test records the message and parks the calling thread.
+- RTX5: `osRtxErrorNotify()` is overridden to print the error code before halting.
+- `results/2026-09-26_fvp_run.txt` is the output of the earlier, v1.0.0-only analysis suite (commit
+  `21c0e09`), kept for reference.

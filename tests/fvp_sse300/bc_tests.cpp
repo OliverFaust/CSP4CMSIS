@@ -555,6 +555,58 @@ void test_T10() {
 }
 
 // ---------------------------------------------------------------------------
+// T11 -- rendezvous ALT-vs-ALT (both ends select, each with a timeout guard)
+// ---------------------------------------------------------------------------
+csp::Channel<uint32_t>* t11_ch; ThreadSlot t11_s; volatile int t11_wsel = -1, t11_wdone = 0;
+void t11_writer(void*) {
+    Out out = t11_ch->writer(); uint32_t w = 77;
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt({out.getGuard(w), to.internal_guard_ptr});
+    t11_wsel = alt.priSelect(); t11_wdone = 1; park();
+}
+void test_T11() {
+    static csp::Channel<uint32_t> ch; t11_ch = &ch;
+    spawn(t11_writer, nullptr, osPriorityNormal, t11_s, "T11w");
+    osDelay(3);                                          // writer is waiting in its ALT
+    In in = ch.reader(); uint32_t r = 0;
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt({in.getGuard(r), to.internal_guard_ptr});
+    int sel = alt.priSelect(); osDelay(3);
+    printf("   [T11] reader selected %d (value %lu); writer selected %d, done=%d (0 = channel, 1 = timeout)\r\n",
+           sel, (unsigned long)r, t11_wsel, t11_wdone);
+    result("T11", (sel == 0 && r == 77 && t11_wsel == 0 && t11_wdone == 1) ? 1 : 0,
+           "rendezvous ALT-vs-ALT completes on both ends with the value");
+}
+
+// ---------------------------------------------------------------------------
+// T12 -- rendezvous fairSelect over two channels, blocking senders (demo
+//        pattern), pipe syntax; per-channel order and count
+// ---------------------------------------------------------------------------
+ThreadSlot t12_s1, t12_s2;
+void t12_sender(void* arg) {
+    Out out = static_cast<csp::Channel<uint32_t>*>(arg)->writer();
+    for (uint32_t i = 1; i <= 500; ++i) out << i;
+    park();
+}
+void test_T12() {
+    static csp::Channel<uint32_t> a, b;
+    spawn(t12_sender, &a, osPriorityNormal, t12_s1, "T12a");
+    spawn(t12_sender, &b, osPriorityNormal, t12_s2, "T12b");
+    In ina = a.reader(), inb = b.reader(); uint32_t va = 0, vb = 0;
+    csp::Alternative alt(ina | va, inb | vb);
+    uint32_t na = 0, nb = 0; bool order_ok = true;
+    for (int i = 0; i < 1000; ++i) {
+        int sel = alt.fairSelect();
+        if (sel == 0) { order_ok &= (va == na + 1); na++; }
+        else if (sel == 1) { order_ok &= (vb == nb + 1); nb++; }
+        else order_ok = false;
+    }
+    printf("   [T12] received a=%lu b=%lu, per-channel order ok=%d\r\n", (unsigned long)na, (unsigned long)nb, (int)order_ok);
+    result("T12", (na == 500 && nb == 500 && order_ok) ? 1 : 0,
+           "rendezvous fairSelect over two channels: all messages, in order");
+}
+
+// ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
     printf("\r\n=== CSP4CMSIS BufferedChannel regression suite ===\r\n");
@@ -562,6 +614,7 @@ void runner(void*) {
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
+    test_T11(); test_T12();
     test_T1a(); test_T1b(); test_T3();  test_T3i();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
