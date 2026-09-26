@@ -669,6 +669,47 @@ void test_T12() {
 }
 
 // ---------------------------------------------------------------------------
+// T14 -- objects constructed at namespace scope, i.e. during C++ static
+// initialisation, BEFORE main() and osKernelInitialize(). The probe records
+// what the backend allows then (raw CMSIS-RTOS2 calls, no library code);
+// the global channel is then used after the kernel has started.
+// ---------------------------------------------------------------------------
+struct PreInitProbe {
+    osKernelState_t state = osKernelError;
+    bool static_sem_ok = false, dynamic_sem_ok = false;
+    osSemaphoreId_t static_sem = nullptr;
+    csp::internal::csp_static_semaphore_storage_t cb;
+    PreInitProbe() {
+        state = osKernelGetState();
+        osSemaphoreAttr_t a = {}; a.cb_mem = &cb; a.cb_size = sizeof(cb);
+        static_sem = osSemaphoreNew(1, 0, &a);
+        static_sem_ok = static_sem != nullptr;
+        osSemaphoreId_t d = osSemaphoreNew(1, 0, nullptr);
+        dynamic_sem_ok = d != nullptr;
+    }
+};
+PreInitProbe g_preinit;                           // runs before main()
+BlockChan<2> g_global_chan;                       // library channel constructed before main()
+ThreadSlot t14_s; volatile uint32_t t14_sum = 0;
+void t14_writer(void*) { Out out(&g_global_chan); for (uint32_t i = 1; i <= 3; ++i) out << i; park(); }
+void test_T14() {
+    const char* st = g_preinit.state == osKernelInactive ? "Inactive" : g_preinit.state == osKernelReady ? "Ready" :
+                     g_preinit.state == osKernelRunning ? "Running" : "other/error";
+    bool static_works_later = false;
+    if (g_preinit.static_sem_ok) {                // is the pre-init object usable after start?
+        static_works_later = osSemaphoreRelease(g_preinit.static_sem) == osOK &&
+                             osSemaphoreAcquire(g_preinit.static_sem, 0) == osOK;
+    }
+    printf("   [T14] before main(): kernel state=%s; static osSemaphoreNew=%s (usable after start=%s); dynamic osSemaphoreNew=%s\r\n",
+           st, g_preinit.static_sem_ok ? "ok" : "NULL", static_works_later ? "yes" : "no", g_preinit.dynamic_sem_ok ? "ok" : "NULL");
+    spawn(t14_writer, nullptr, osPriorityNormal, t14_s, "T14w");
+    uint32_t x;
+    for (int i = 0; i < 3; ++i) { g_global_chan.input(&x); t14_sum = t14_sum + x; }
+    printf("   [T14] namespace-scope BufferedChannel after start: received sum=%lu (expect 6)\r\n", (unsigned long)t14_sum);
+    result("T14", t14_sum == 6 ? 1 : 0, "a BufferedChannel constructed at namespace scope (before main) works");
+}
+
+// ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
     printf("\r\n=== CSP4CMSIS BufferedChannel regression suite ===\r\n");
@@ -676,7 +717,7 @@ void runner(void*) {
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
-    test_T11(); test_T12();
+    test_T11(); test_T12(); test_T14();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
