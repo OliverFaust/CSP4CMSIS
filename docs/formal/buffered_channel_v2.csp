@@ -452,6 +452,8 @@ assert RV_OK [FD= SYS_RV(true) \ diff(Events, {| rdone, idle |})
 assert SYS_RV(false) :[deadlock free [F]]
 -- expected: FAILS -- KNOWN LIMITATION of the trust path: a stale flag lets the
 --           reader's select() return without data (trace ... rdone.false)
+--           Reproduced on the FVP (T15, T15i); a checked fix model is in
+--           rendezvous_commit_record.csp.
 assert RV_OK [T= SYS_RV_STALE(true) \ diff(Events, {| rdone, idle |})
 
 -- 4b: SyncChannel (signal) ALT receiver vs blocking sender.

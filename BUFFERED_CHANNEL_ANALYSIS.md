@@ -935,3 +935,131 @@ cycle-accurate.
      ping-pong pair).
    - A future `getFromISR()` would be a small addition following the same pattern: acquire the token
      with timeout 0, pop, release, signal after the section.
+
+---
+
+# Review round 3: rendezvous/signal "trust the wakeup" (CSP-M assertion 23)
+
+Analysis only. The library is unchanged; the tests and the fix model are new.
+
+| Commit | Change |
+|---|---|
+| `cbb6ef8` | `.gitignore` for ProB caches; unused model channels removed; FDR section → ProB results |
+| `20862b4` | tests: T15i, T15s, T15 (FAIL expected); reference results for the 23-test suite |
+| *(this commit)* | `docs/formal/rendezvous_commit_record.csp` (fix model, checked); this section |
+
+## 1. What an application observes
+
+Rendezvous (`ChanInGuard`/`ChanOutGuard`) and signal (`SyncChannelInputGuard`) guards keep
+`Guard::confirm()`'s default, which trusts the wakeup. Their `activate()` also returns true when no
+partner is left (rendezvous "case 3"). So any flag for the guard's bit that does not come with a transfer
+**for the current round** completes the guard.
+
+| Observation | Mechanism | Test |
+|---|---|---|
+| **Rendezvous reported without data transfer (PHANTOM):** `select()` returns the channel's index; the destination still holds whatever was there before | a late wakeup from an earlier round, or a flag that carries no transfer | T15, T15i |
+| **Silent consumption (SILENT):** `select()` returns another guard, but the channel's data was written into the destination (and the writer's `select()` reports success) | the ALT partner copies under the mutex and wakes later; the ALT meanwhile takes another guard. `disable()` sees no writer and says "not ready", not "already done" | T15 |
+| **Wrong guard index:** the bit belongs to guard *i* of an earlier `select()`; if the thread now selects on a different `Alternative`, guard *i* of that one completes | thread flags carry only the index, not the `Alternative` or the round | not tested (follows from the mechanism) |
+| **Phantom output:** an ALT writer's `select()` returns the channel although no reader received the value | `ChanOutGuard::activate()` case 3 after the reader withdrew | model only (`w_sent.false`) |
+| **Lost signal, sender blocked for good** | `SyncChannel::unregisterAltIn()` resets the channel after a sender has already signalled; the sender waits on `sender_sem` forever | T15s |
+
+Sources of the stray flag in the current code:
+- the ALT-vs-ALT partner's `wakeUp()` after `osMutexRelease()` in `ChanInGuard/ChanOutGuard::activate()`;
+- `SyncChannel::output()`'s wakeup after releasing the mutex;
+- rendezvous `putFromISR()`, which wakes an ALT reader **without transferring anything** (deterministic);
+- a `KeepNewest`/`KeepOldest` rendezvous `output()`, which wakes the ALT reader and then drops the data
+  (read in the code, not tested);
+- application code setting bits 8–23 (documented as reserved).
+
+`select()` clears its bits at the start of every round. That only removes flags that arrive *before* the
+clear; T15's flag arrives after it.
+
+## 2. Reachability on the FVP
+
+| Test | 2.0, 12 configurations | v1.0.0 (AC6, FreeRTOS + RTX5) |
+|---|---|---|
+| T15i (rendezvous `putFromISR()` → ALT reader) | FAIL everywhere: `putFromISR()` returns 1; the reader selects the channel with its destination unchanged (`0xdeadbeef`) | FAIL, same |
+| T15s (signal lost while the receiver takes X) | FAIL everywhere: 2nd select times out; the sender never completes | FAIL, same |
+| T15 (sweep, ALT-vs-ALT late wakeup) | FAIL everywhere: **61–120 bad trials** per two sweeps; each is exactly one SILENT + one PHANTOM | FAIL: 106–121 SILENT+PHANTOM pairs |
+
+- The other 20 tests pass in all 12 configurations; T13/T13b show 0 spins.
+- These are **long-standing defects**, not 2.0 regressions.
+- The T15 bug window is k ≈ 30,800–31,700 (FreeRTOS AC6) and 31,600–31,730 (RTX5 AC6). It is wider on
+  FreeRTOS because the reader, waiting on the channel mutex, preempts the writer at `osMutexRelease()`.
+
+## 3. Fix model: per-round commit record (`docs/formal/rendezvous_commit_record.csp`)
+
+**System:**
+- ALT reader {C rendezvous, X buffered} doing two selects;
+- ALT writer {C};
+- a third-party X message;
+- one adversarial stale flag (for either side).
+
+That is T15 plus assertion 23's adversary. **Fix (FIX):**
+1. `AltScheduler` numbers its rounds.
+2. `enable()` registers `{alt, flag, round}`.
+3. A partner that transfers data into an ALT's registration does it under the channel mutex, **together
+   with a commit record `{round}`** and the removal of the registration. The wakeup follows after the
+   mutex, as today.
+4. `disable()` reports *committed in my round*; **a committed guard wins the selection**, with no
+   `activate()` because the transfer is already done.
+5. Any other wakeup is re-verified by readiness, and `activate()` without a partner returns false, which
+   starts a new round.
+
+**ProB 1.16.1 results** (all as expected):
+
+| Variant | Result |
+|---|---|
+| CUR (current code) | fails `[T=` / `[FD=`: `r_sel.gX.true` (SILENT); the trace `r_sel.gX.true, r_sel.gC.false` (= T15) and `w_sent.false` also exist |
+| **FIX**, with a stale flag | **passes `[T=`, `[FD=` (divergence-free, live), deadlock freedom, round bound** |
+| REVER: re-verify by readiness, no commit record (assertion 22's approach) | fails: deadlock (the reader sees "not ready" after the partner moved the data), and data loss |
+| NORC: no round check, record kept | fails: `r_sel.gC.true, w_sent.true, r_sel.gC.false` (the old record completes the next select) |
+| NORCCLR: no round check, record consumed when read | **passes** (see below) |
+| NOWIN: commit only counts for the chosen guard | fails: SILENT |
+| CASE3: `activate()` without a partner returns true | fails: `w_sent.false` |
+
+- **Assertion 23's scenario passes, and assertion 22's deadlock does not return.**
+- **On the round number:** in this task-only model a commit needs the live registration, and `disable()`
+  removes the registration under the same mutex. A commit therefore never outlives its round if the ALT
+  consumes it in `disable()`. The round check and consume-on-read are then interchangeable; dropping
+  *both* fails (NORC).
+- The round number becomes necessary where a commit is **not** serialised with `disable()` by the mutex:
+  - partners in ISRs (`putFromISR()` uses the CSP critical section, while task code uses the mutex, so
+    the two do not exclude each other);
+  - any design that keeps the record across rounds.
+
+  **Recommendation: keep both** (round-tagged and consumed); it costs one word per registration.
+
+**Not covered by the model:**
+- **Two partners committing into the same ALT round through different channels** (e.g. ALT reader on two
+  rendezvous channels, both with ALT writers). Each commit is under its own channel mutex, so both can
+  succeed and one transfer is lost, today and with a per-channel record alike.
+  - The fix needs a **per-ALT claim**: an atomic "round r: open → claimed", taken by the partner before it
+    copies, with CSP critical section or LDREX/STREX.
+  - The model should be extended to two committing partners before implementing.
+- ISR partners, plain (non-ALT) partners, `SyncChannel`.
+
+## 4. Implementation estimate (not implemented)
+
+| Area | Change | Size |
+|---|---|---|
+| `alt.h`, `alternative.cpp` | round counter; guards report *committed* (tri-state `disable()` or a new virtual); `select()` prefers a committed guard; per-ALT claim word | ~80–120 lines |
+| `alt_channel_sync.{h,cpp}` | `WaitingAlt.round`; commit record plus claim under the mutex in `activate()` case 2; case 3 → false; `disable()` reports the commit | ~80–120 lines |
+| `rendezvous_channel.h` | `putFromISR()` must transfer and commit, or return false, for ALT readers. The shared state is currently mutex-protected on the task side and BASEPRI-protected on the ISR side, which do not exclude each other: e.g. the ISR between the two stores of `registerWaitingTask()` would `memcpy()` to a null pointer. Either move `AltChanSyncBase` state under CSP critical sections (like the buffered channel) or stop supporting ISR writes to rendezvous channels. Non-`Block` `output()` must not wake an ALT whose data it then drops | ~40–80 lines |
+| `sync_channel.{h,cpp}` | commit record; `unregisterAltIn()` must not reset a signalled channel; `putFromISR()` currently returns true for a *blocking* receiver without releasing it (read, not tested), and reads `state` without any lock | ~60–100 lines (rework) |
+| buffered/timer/skip guards | adapt to the `Guard` API change (never "committed") | ~10–20 lines |
+| tests and model | T15 family turns green; new tests for two committing partners, SyncChannel ISR, phantom output; model extended with the per-ALT claim | ~200 lines |
+
+**Total:** about 300–450 library lines, plus tests and model.
+
+**Risk: medium–high.**
+- It changes the `select()` protocol that every channel type goes through.
+- ALT-vs-ALT with several partners needs a new cross-channel atomic step.
+- `SyncChannel` needs a rework rather than a patch.
+- The `Guard` interface changes (internal API).
+
+**Mitigation:**
+- model first, including the claim;
+- then implement against the T15 family, T11/T12 (ALT-vs-ALT, fair select) and the full 12-configuration
+  matrix;
+- keep the buffered-channel path (already re-verifying, not affected) untouched.

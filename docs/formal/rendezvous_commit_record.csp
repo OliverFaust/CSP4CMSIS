@@ -1,0 +1,242 @@
+-- =============================================================================
+-- CSP4CMSIS rendezvous ALT: "trust the wakeup" (current) vs. a per-round
+-- commit record (proposed fix). ANALYSIS MODEL -- the fix is not implemented.
+-- CSP-M (FDR4 dialect). Checked with ProB 1.16.1 (probcli 1.16.1-final,
+-- 716929f) on 2026-09-26; results at the end. Reproduce with
+--   probcli rendezvous_commit_record.csp -csp_assertion '<assertion>'
+-- (loop as in the header of buffered_channel_v2.csp; 3-25 s per assertion).
+--
+-- Scenario = FVP test T15 (tests/fvp_sse300/bc_tests.cpp), the concrete form
+-- of buffered_channel_v2.csp assertion 23:
+--   reader : ALT {C (rendezvous, index 0), X (buffered, index 1)}, two selects;
+--            the destination of C is reset before every select()
+--   writer : ALT {C}, one message (ChanOutGuard)
+--   X      : one message from a third party (buffered guard, re-verified)
+--   stale  : optionally ONE adversarial stale flag, for the reader or the writer
+--
+-- Abstraction (as in buffered_channel_v2.csp): each section under the channel
+-- mutex is one event; osThreadFlagsSet() after the mutex is released is a
+-- separate event (the late wakeup of T15); X is one atomic "ready + signal".
+--
+-- Variants (v):
+--   CUR     current 2.0 code: guards trust the wakeup (confirm() == true),
+--           activate() "case 3" (no partner left) returns true
+--   FIX     the partner records a commit for the ALT's round (per-ALT sequence
+--           number) in the channel state, under the mutex, together with the
+--           copy; disable() reports "committed in MY round"; a committed guard
+--           wins the selection; any other wakeup is re-verified by readiness,
+--           and activate() without a partner returns false (new round)
+--   NORC    mutation: FIX without the round check (any commit record counts;
+--           the record is never cleared)
+--   NORCCLR mutation: FIX without the round check, but the ALT clears the
+--           record when it consumes it
+--   REVER   mutation: re-verify by readiness only, no commit record at all
+--           (the approach of buffered_channel_v2.csp assertion 22)
+--   NOWIN   mutation: FIX, but a commit only counts for the guard whose flag
+--           was chosen (a committed guard does not win the selection)
+--   CASE3   mutation: FIX, but activate() without a partner still returns
+--           true (the current "case 3")
+-- =============================================================================
+
+CUR = 0
+FIX = 1
+NORC = 2
+NORCCLR = 3
+REVER = 4
+NOWIN = 5
+CASE3 = 6
+
+MAXR = 6                 -- round numbers 1..MAXR; exceeding it is reported
+Rnd = {0..MAXR}          -- 0 = none
+
+datatype GD = gC | gX
+
+channel r_start                       -- reader: new select(), destination reset
+channel r_clr                         -- reader: new round, osThreadFlagsClear()
+channel r_enC : Rnd.Bool              -- enable C in round r: writer registered? (else register)
+channel r_enX : Bool                  -- enable X: item present?
+channel r_wait : GD                   -- woken; lowest fired index
+channel r_disC : Rnd.Bool.Bool        -- disable C: round, ready (writer registered), committed
+channel r_disX : Bool
+channel r_actC : Bool                 -- activate C: partner (ALT writer) still registered?
+channel r_actX
+channel r_wakeW                       -- reader, as partner, wakes the writer (after the mutex)
+channel r_sel : GD.Bool               -- select() returned g; C's data written in this select?
+channel w_clr
+channel w_en : Rnd.Bool               -- enable in round w: reader registered? (else register)
+channel w_wait
+channel w_dis : Rnd.Bool.Bool         -- disable: round, ready (reader registered), committed
+channel w_act : Bool                  -- activate: reader still registered?
+channel w_wakeR                       -- writer, as partner, wakes the reader (after the mutex)
+channel w_sent : Bool                 -- writer's select() returned; was its value delivered?
+channel x_send
+channel stale_c, stale_w
+channel idle, bound_exceeded
+
+records(v) = v == FIX or v == NORC or v == NORCCLR or v == NOWIN or v == CASE3
+committed(v, com, r) = if v == FIX or v == NOWIN or v == CASE3 then com == r
+                       else if v == NORC or v == NORCCLR then com != 0
+                       else false
+consume(v, done, com) = if v == NORCCLR and done then 0 else com
+
+-- shared state: rreg/wreg = registered round (0 = none), rcom/wcom = commit
+-- records, cd = C's data written into the reader's destination in this select,
+-- dl = writer's value delivered, fC/fX/fW = thread flags, xr = X has an item
+ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr) =
+     r_start                -> ST(v, rreg, wreg, rcom, wcom, false, dl, fC, fX, fW, xr)
+  [] r_clr                  -> ST(v, rreg, wreg, rcom, wcom, cd, dl, false, false, fW, xr)
+  [] r_enC?r!(wreg != 0)    -> ST(v, if wreg != 0 then rreg else r, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] r_enX!xr               -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] fC & r_wait.gC         -> ST(v, rreg, wreg, rcom, wcom, cd, dl, false, false, fW, xr)
+  [] (not fC) and fX & r_wait.gX -> ST(v, rreg, wreg, rcom, wcom, cd, dl, false, false, fW, xr)
+  [] r_disC?r!(wreg != 0)!committed(v, rcom, r) ->
+       ST(v, 0, wreg, consume(v, committed(v, rcom, r), rcom), wcom, cd, dl, fC, fX, fW, xr)
+  [] r_disX!xr              -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] r_actC!(wreg != 0)     ->
+       (if wreg != 0
+        then ST(v, rreg, 0, rcom, if records(v) then wreg else wcom, true, true, fC, fX, fW, xr)
+        else ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr))
+  [] xr & r_actX            -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, false)
+  [] r_wakeW                -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, true, xr)
+  [] r_sel?_!cd             -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] w_clr                  -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, false, xr)
+  [] w_en?w!(rreg != 0)     -> ST(v, rreg, if rreg != 0 then wreg else w, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] fW & w_wait            -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, false, xr)
+  [] w_dis?w!(rreg != 0)!committed(v, wcom, w) ->
+       ST(v, rreg, 0, rcom, consume(v, committed(v, wcom, w), wcom), cd, dl, fC, fX, fW, xr)
+  [] w_act!(rreg != 0)      ->
+       (if rreg != 0
+        then ST(v, 0, wreg, if records(v) then rreg else rcom, wcom, true, true, fC, fX, fW, xr)
+        else ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr))
+  [] w_wakeR                -> ST(v, rreg, wreg, rcom, wcom, cd, dl, true, fX, fW, xr)
+  [] w_sent!dl              -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, fW, xr)
+  [] x_send                 -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, true, fW, true)
+  [] stale_c                -> ST(v, rreg, wreg, rcom, wcom, cd, dl, true, fX, fW, xr)
+  [] stale_w                -> ST(v, rreg, wreg, rcom, wcom, cd, dl, fC, fX, true, xr)
+
+FIN = idle -> FIN
+
+-- reader: n selects left, r = last round number used
+RD(v, n, r) = if n == 0 then FIN else r_start -> RROUND(v, n, r)
+RROUND(v, n, r) =
+  if r >= MAXR then bound_exceeded -> STOP else
+  r_clr -> r_enC.(r + 1)?rc ->
+    (if rc then RDIS(v, n, r + 1, gC, false)                  -- C ready at enable: X not enabled
+     else r_enX?rx ->
+       (if rx then RDIS(v, n, r + 1, gX, true)
+        else r_wait?g -> RDIS(v, n, r + 1, g, true)))
+RDIS(v, n, r, g, xen) =
+  r_disC.r?readyC?doneC ->
+    (if xen then r_disX?readyX -> RDEC(v, n, r, g, readyC, doneC, readyX)
+     else RDEC(v, n, r, g, readyC, doneC, false))
+RDEC(v, n, r, g, readyC, doneC, readyX) =
+  if v == CUR then
+    (if g == gC then r_actC?p -> (if p then r_wakeW -> RRET(v, n, r, gC) else RRET(v, n, r, gC))  -- trust; case 3 = true
+     else if readyX then r_actX -> RRET(v, n, r, gX) else RROUND(v, n, r))
+  else if doneC and (v != NOWIN or g == gC) then RRET(v, n, r, gC)                -- committed guard wins
+  else if g == gC then
+    (if readyC then r_actC?p -> (if p then r_wakeW -> RRET(v, n, r, gC)
+                                 else if v == CASE3 then RRET(v, n, r, gC) else RROUND(v, n, r))
+     else RROUND(v, n, r))                                                         -- stale: re-verify
+  else if readyX then r_actX -> RRET(v, n, r, gX) else RROUND(v, n, r)
+RRET(v, n, r, g) = r_sel.g?_ -> RD(v, n - 1, r)
+
+-- writer: w = last round number used
+WR(v, w) =
+  if w >= MAXR then bound_exceeded -> STOP else
+  w_clr -> w_en.(w + 1)?ready -> (if ready then WDIS(v, w + 1) else w_wait -> WDIS(v, w + 1))
+WDIS(v, w) =
+  w_dis.w?ready?done ->
+    (if v == CUR then w_act?p -> (if p then w_wakeR -> w_sent?_ -> SKIP else w_sent?_ -> SKIP)
+     else if done then w_sent?_ -> SKIP
+     else if ready then w_act?p -> (if p then w_wakeR -> w_sent?_ -> SKIP
+                                    else if v == CASE3 then w_sent?_ -> SKIP else WR(v, w))
+     else WR(v, w))
+
+XP = x_send -> SKIP
+STALE5(s) = if s then (stale_c -> SKIP) [] (stale_w -> SKIP) [] SKIP else SKIP
+
+S5 = {| r_start, r_clr, r_enC, r_enX, r_wait, r_disC, r_disX, r_actC, r_actX, r_wakeW, r_sel,
+        w_clr, w_en, w_wait, w_dis, w_act, w_wakeR, w_sent, x_send, stale_c, stale_w |}
+
+SYS5(v, s) = (RD(v, 2, 0) ||| WR(v, 0) ||| XP ||| STALE5(s)) [| S5 |]
+             ST(v, 0, 0, 0, 0, false, false, false, false, false, false)
+
+-- observable: what each select() returned (with "C's data written?") and the
+-- writer's result; the reader idles when done
+OBS5 = {| r_sel, w_sent, idle |}
+-- correct: the reader gets C WITH data and X WITHOUT C's data, in either
+-- order; the writer's value is delivered; nothing else. Liveness: the
+-- reader always makes progress; the writer's completion may be refused
+-- until the reader has taken C (a rendezvous writer cannot finish before its
+-- reader's round), and must be offered once the reader has taken C.
+ROPT(c, x) = union(if c then {} else {gC}, if x then {} else {gX})
+REV(g, c, x, w) = if g == gC then r_sel.gC.true -> SP(true, x, w) else r_sel.gX.false -> SP(c, true, w)
+SP(c, x, w) =
+  if c and x then (if w then FIN else ((w_sent.true -> FIN) [] (idle -> SP(c, x, w))))
+  else |~| g : ROPT(c, x) @
+         (if w then REV(g, c, x, w)
+          else if c then (REV(g, c, x, w) [] (w_sent.true -> SP(c, x, true)))
+          else ((REV(g, c, x, w) [] (w_sent.true -> SP(c, x, true))) |~| REV(g, c, x, w)))
+SPEC5 = SP(false, false, false)
+
+-- 1. current code, no adversary at all (the late wakeup is enough):
+-- expected: FAILS (T15: r_sel.gX.true = SILENT, then r_sel.gC.false = PHANTOM)
+assert SPEC5 [T= SYS5(CUR, false) \ diff(Events, OBS5)
+
+-- expected: FAILS (same trace; checks that SPEC5 is strict enough for [FD=)
+assert SPEC5 [FD= SYS5(CUR, false) \ diff(Events, OBS5)
+
+-- 2.-5. fix, with one adversarial stale flag
+-- expected: PASS (only correct selections, the writer's value delivered)
+assert SPEC5 [T= SYS5(FIX, true) \ diff(Events, OBS5)
+-- expected: PASS (in particular divergence-free and live: no livelock from re-verification)
+assert SPEC5 [FD= SYS5(FIX, true) \ diff(Events, OBS5)
+-- expected: PASS (the assertion-22 deadlock of re-verifying rendezvous guards does not return)
+assert SYS5(FIX, true) :[deadlock free [F]]
+-- expected: PASS (MAXR suffices; no round numbers are reused)
+assert STOP [T= SYS5(FIX, true) \ diff(Events, {bound_exceeded})
+
+-- 6. mutation: no round check, record kept   -- expected: FAILS
+assert SPEC5 [T= SYS5(NORC, true) \ diff(Events, OBS5)
+-- 7. mutation: no round check, record consumed -- see the results below
+assert SPEC5 [FD= SYS5(NORCCLR, true) \ diff(Events, OBS5)
+-- 8. mutation: re-verify by readiness only (no commit record) -- expected: FAILS
+assert SPEC5 [FD= SYS5(REVER, true) \ diff(Events, OBS5)
+-- 9. the same, deadlock -- expected: FAILS (the assertion-22 deadlock)
+assert SYS5(REVER, false) :[deadlock free [F]]
+-- 10. mutation: committed guard does not win -- expected: FAILS
+assert SPEC5 [FD= SYS5(NOWIN, true) \ diff(Events, OBS5)
+-- 11. mutation: activate() without a partner returns true -- expected: FAILS
+assert SPEC5 [FD= SYS5(CASE3, true) \ diff(Events, OBS5)
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1; all match the expectations above)
+--  #  assertion                                  expected  ProB  counterexample (visible events)
+--  1  SPEC5 [T=  SYS5(CUR, false)                FAIL      FAIL  r_sel.gX.true (SILENT); the current
+--                                                                code also has the trace
+--                                                                <r_sel.gX.true, r_sel.gC.false> (= T15)
+--                                                                and w_sent.false (writer reports a
+--                                                                send that nobody received, "case 3")
+--  2  SPEC5 [FD= SYS5(CUR, false)                FAIL      FAIL  r_sel.gX.true
+--  3  SPEC5 [T=  SYS5(FIX, true)                 PASS      PASS
+--  4  SPEC5 [FD= SYS5(FIX, true)                 PASS      PASS
+--  5  SYS5(FIX, true) deadlock free              PASS      PASS
+--  6  bound_exceeded never (FIX)                 PASS      PASS
+--  7  SPEC5 [T=  SYS5(NORC, true)                FAIL      FAIL  r_sel.gC.true, w_sent.true,
+--                                                                r_sel.gC.false (the old record counts)
+--  8  SPEC5 [FD= SYS5(NORCCLR, true)             --        PASS  consuming the record in its round is
+--                                                                equivalent here: a commit needs the live
+--                                                                registration, and disable() removes it
+--                                                                under the same mutex
+--  9  SPEC5 [FD= SYS5(REVER, true)               FAIL      FAIL  w_sent.true, then only r_sel.gX.true
+-- 10  SYS5(REVER, false) deadlock free           FAIL      FAIL  writer delivers in the reader's round 1;
+--                                                                the reader sees "not ready", takes X,
+--                                                                and waits forever in its 2nd select()
+-- 11  SPEC5 [FD= SYS5(NOWIN, true)               FAIL      FAIL  r_sel.gX.true
+-- 12  SPEC5 [FD= SYS5(CASE3, true)               FAIL      FAIL  w_sent.false
+--
+-- NOT covered: two partners committing into the same ALT round via two
+-- different channels (needs a per-ALT claim, see the analysis), ISR partners
+-- (putFromISR), SyncChannel, plain (non-ALT) partners.
+-- =============================================================================
