@@ -152,7 +152,7 @@ public:
         return &res_out_guard;
     }
 
-    void beginExtInput(T* const dest) override {}
+    void beginExtInput(T* const /*dest*/) override {}
     void endExtInput() override {}
 };
 
