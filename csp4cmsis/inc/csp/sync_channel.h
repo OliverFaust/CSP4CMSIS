@@ -25,7 +25,7 @@ namespace csp::internal {
 
         bool enable(AltScheduler* alt, uint32_t bit) override;
         bool disable() override;
-        void activate() override;
+        bool activate() override;   // always true (see Guard::confirm)
     };
 
     /**
@@ -43,7 +43,7 @@ namespace csp::internal {
 
         bool enable(AltScheduler* alt, uint32_t bit) override;
         bool disable() override;
-        void activate() override;
+        bool activate() override;   // always true (see Guard::confirm)
     };
 
     /**

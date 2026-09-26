@@ -125,7 +125,7 @@ namespace csp::internal {
 
         bool enable(AltScheduler* alt, uint32_t bit) override;
         bool disable() override;
-        void activate() override;
+        bool activate() override;   // always true (see Guard::confirm)
         void updateBuffer(void* new_dest) { user_data_dest = new_dest; }
     };
 
@@ -143,7 +143,7 @@ namespace csp::internal {
 
         bool enable(AltScheduler* alt, uint32_t bit) override;
         bool disable() override;
-        void activate() override;
+        bool activate() override;   // always true (see Guard::confirm)
         void updateBuffer(const void* new_src) { user_data_source = (void*)new_src; }
     };
 }

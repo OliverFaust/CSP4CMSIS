@@ -116,29 +116,35 @@ public:
     // --- ISR Output ---
     bool putFromISR(const T& data) override {
         bool success = false;
-        uint32_t saved = csp_enter_critical();
+        osThreadId_t  wake_task = nullptr;
+        AltScheduler* wake_alt  = nullptr;
+        uint32_t      wake_flag = 0;
 
+        // State is inspected and updated inside the CSP critical section;
+        // the RTOS is only called after leaving it (no RTOS call may run
+        // with BASEPRI raised -- see csp_critical.h).
+        uint32_t saved = csp_enter_critical();
         if (sync_base.getWaitingInTask() != nullptr) {
             std::memcpy(sync_base.getNonAltInDataPtr(), &data, sizeof(T));
-            osThreadId_t toWake = sync_base.getWaitingInTask();
+            wake_task = sync_base.getWaitingInTask();
             sync_base.clearWaitingIn();
-            // osThreadFlagsSet() detects IRQ context internally -- unlike
-            // FreeRTOS's vTaskNotifyGiveFromISR() + portYIELD_FROM_ISR(),
-            // no separate higher-priority-task-woken tracking/yield call
-            // is needed here.
-            osThreadFlagsSet(toWake, RENDEZVOUS_FLAG);
             success = true;
         }
         else if (sync_base.getAltInScheduler() != nullptr) {
-            sync_base.getAltInScheduler()->wakeUp(sync_base.getAltInBit());
+            wake_alt  = sync_base.getAltInScheduler();
+            wake_flag = sync_base.getAltInBit();
             success = true;
         }
         else if constexpr (P != csp::BufferPolicy::Block) {
             // Non-blocking ISR: Treat "dropped" as "handled successfully"
             success = true;
         }
-
         csp_exit_critical(saved);
+
+        // osThreadFlagsSet() detects IRQ context internally (no separate
+        // yield-from-ISR call needed).
+        if (wake_task != nullptr) osThreadFlagsSet(wake_task, RENDEZVOUS_FLAG);
+        if (wake_alt  != nullptr) wake_alt->wakeUp(wake_flag);
         return success;
     }
 

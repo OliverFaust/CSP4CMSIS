@@ -87,8 +87,8 @@ bool ChanInGuard::enable(AltScheduler* alt, uint32_t bit) {
     return false;
 }
 
-void ChanInGuard::activate() {
-    if (osMutexAcquire(parent_channel->getMutex(), osWaitForever) != osOK) return;
+bool ChanInGuard::activate() {
+    if (osMutexAcquire(parent_channel->getMutex(), osWaitForever) != osOK) return true;
 
     // Case 1: partner is a plain blocking task.
     osThreadId_t sender = parent_channel->getWaitingOutTask();
@@ -99,7 +99,7 @@ void ChanInGuard::activate() {
         parent_channel->clearWaitingOut();
         osMutexRelease(parent_channel->getMutex());
         osThreadFlagsSet(sender, RENDEZVOUS_FLAG);
-        return;
+        return true;
     }
 
     // Case 2: partner is another ALT (ALT-vs-ALT rendezvous). Without this
@@ -116,11 +116,12 @@ void ChanInGuard::activate() {
         out_alt.clear();
         osMutexRelease(parent_channel->getMutex());
         if (partner_alt) partner_alt->wakeUp(partner_bit);
-        return;
+        return true;
     }
 
     // Case 3: nothing to do (e.g. data was already moved by tryHandshake()).
     osMutexRelease(parent_channel->getMutex());
+    return true;
 }
 
 bool ChanInGuard::disable() {
@@ -146,8 +147,8 @@ bool ChanOutGuard::enable(AltScheduler* alt, uint32_t bit) {
     return false;
 }
 
-void ChanOutGuard::activate() {
-    if (osMutexAcquire(parent_channel->getMutex(), osWaitForever) != osOK) return;
+bool ChanOutGuard::activate() {
+    if (osMutexAcquire(parent_channel->getMutex(), osWaitForever) != osOK) return true;
 
     osThreadId_t receiver = parent_channel->getWaitingInTask();
     if (receiver != nullptr) {
@@ -157,7 +158,7 @@ void ChanOutGuard::activate() {
         parent_channel->clearWaitingIn();
         osMutexRelease(parent_channel->getMutex());
         osThreadFlagsSet(receiver, RENDEZVOUS_FLAG);
-        return;
+        return true;
     }
 
     WaitingAlt& in_alt = parent_channel->getWaitingInAlt();
@@ -171,10 +172,11 @@ void ChanOutGuard::activate() {
         in_alt.clear();
         osMutexRelease(parent_channel->getMutex());
         if (partner_alt) partner_alt->wakeUp(partner_bit);
-        return;
+        return true;
     }
 
     osMutexRelease(parent_channel->getMutex());
+    return true;
 }
 
 bool ChanOutGuard::disable() {

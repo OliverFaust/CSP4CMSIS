@@ -192,8 +192,9 @@ namespace csp::internal {
             channel->unregisterInputAlt();
             return channel->pending();
         }
-        void activate() override {
-            osMessageQueueGet(channel->getQueueHandle(), dest_ptr, NULL, 0);
+        bool confirm(bool ready) override { return ready; }
+        bool activate() override {
+            return osMessageQueueGet(channel->getQueueHandle(), dest_ptr, NULL, 0) == osOK;
         }
     };
 
@@ -218,8 +219,10 @@ namespace csp::internal {
             channel->unregisterOutputAlt();
             return channel->space_available();
         }
-        void activate() override {
+        bool confirm(bool ready) override { return ready; }
+        bool activate() override {
             channel->output(source_ptr);
+            return true;
         }
     };
 

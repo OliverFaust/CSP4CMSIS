@@ -162,10 +162,9 @@ bool SyncChannel<P>::putFromISR() {
         success = true;
     }
 
-    // No explicit yield-from-ISR call needed -- osEventFlagsSet()
+    // No explicit yield-from-ISR call needed -- osThreadFlagsSet()
     // (inside wakeUp(), called above when applicable) detects IRQ
-    // context internally, unlike FreeRTOS's xEventGroupSetBitsFromISR()
-    // + portYIELD_FROM_ISR() pair.
+    // context internally.
     return success;
 }
 
@@ -246,7 +245,7 @@ bool SyncChannelInputGuard<P>::disable() {
 }
 
 template <csp::BufferPolicy P>
-void SyncChannelInputGuard<P>::activate() {
+bool SyncChannelInputGuard<P>::activate() {
     osMutexAcquire(channel->getMutex(), osWaitForever);
     if (channel->getDataPtr() != nullptr && user_data_dest != nullptr) {
         // data_size should be set during bind()
@@ -255,6 +254,7 @@ void SyncChannelInputGuard<P>::activate() {
     osSemaphoreRelease(channel->getSenderSem());
     channel->reset();
     osMutexRelease(channel->getMutex());
+    return true;
 }
 
 template <csp::BufferPolicy P>
@@ -268,8 +268,9 @@ bool SyncChannelOutputGuard<P>::disable() {
 }
 
 template <csp::BufferPolicy P>
-void SyncChannelOutputGuard<P>::activate() {
+bool SyncChannelOutputGuard<P>::activate() {
     channel->output(user_data_source);
+    return true;
 }
 
 // =============================================================
