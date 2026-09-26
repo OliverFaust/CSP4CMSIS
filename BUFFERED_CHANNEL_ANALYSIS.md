@@ -1063,3 +1063,141 @@ That is T15 plus assertion 23's adversary. **Fix (FIX):**
 - then implement against the T15 family, T11/T12 (ALT-vs-ALT, fair select) and the full 12-configuration
   matrix;
 - keep the buffered-channel path (already re-verifying, not affected) untouched.
+
+---
+
+# Review round 4: cheap gates, ALT design comparison, API questions
+
+| Commit | Change |
+|---|---|
+| `cbdc9bc` | A1: `DSB; ISB` after raising BASEPRI |
+| `4ab6647` | A2: `putFromISR()` element-size limit (`CSP4CMSIS_ISR_MAX_ELEMENT_SIZE`, default 64) |
+| `57799f5` | A3: rule for where channels may be constructed (`Documentation/CSP4CMSIS_Configuration.md` §5) |
+| `6a6e439`, `73594b3` | B: `docs/formal/alt_one_winner.csp` (new), `rendezvous_commit_record.csp` generalised; checked |
+| `1ad3e11` | D: tests T16s, T16n, T16a; 26-test reference results |
+| *(this commit)* | this section |
+
+## A. Cheap gates (implemented)
+
+After each of A1–A3 the full suite ran on all 12 configurations: **PASS=20 FAIL=3** (the known T15 family)
+everywhere, and 0 T13/T13b spins. A3 is documentation only; its 12 images are byte-identical to A2's.
+
+- **A1 `DSB; ISB`:** `objdump` shows the barriers after every `MSR BASEPRI_MAX` (AC6 `-O2`: 77 of 77
+  inlined sites; GCC `-Os`: the one outlined copy).
+  - **Cortex-M7 r0p1 (erratum 837070):** `DSB/ISB` does *not* fix it. The FreeRTOS `ARM_CM7/r0p1` port
+    brackets the MSR with `CPSID i`/`CPSIE i`. This is documented in `csp_critical.h`, not implemented.
+  - **No sibling project uses a Cortex-M7.** Cores found: M55 (Alif DK-E8, Himax WE2, FVP); M4F (STM32L475
+    B-L475E-IOT01A, G474 NUCLEO, F401 Nucleo and its CubeIDE workspaces). Every M7 or "837070" hit is in
+    vendor boilerplate (FreeRTOS `port.c` comments, HAL legacy headers, CMSIS-NN comments).
+- **A2 size limit:** `static_assert` in the non-virtual `Chanout<T>::putFromISR()`.
+  - Compile checks: 20/20 with AC6 and GCC flags on both backends (new probes: 65 B fails; 64 B passes; a
+    1 KB task-only channel passes; `-D` 128 allows 100 B).
+  - Every `putFromISR()` element in the sibling projects is ≤ 12 bytes.
+- **A3:** namespace scope and function-local statics are allowed; never construct a channel in an ISR; the
+  RTX5 start-up-hook rule; enable an interrupt only after its channel exists.
+- **Noticed, not changed:** `CSP4CMSIS_Configuration.md` §3 still says the priority define is needed only
+  with `BufferedChannel`/`putFromISR()`. `rendezvous_channel.h` includes `csp_critical.h`, which `#error`s
+  without it, so every build needs it (FVP repo `UPSTREAM_ISSUES.md` #2).
+
+## B. ALT with rendezvous/signal channels: one-winner vs commit-record
+
+**Common model** (both files):
+- **System:** ALT reader A over two channels, two selects, destination reset per select. One partner per
+  channel (ALT writer, plain writer, or signal sender), plus an optional adversarial stale flag.
+- **Scenarios:**
+  - **SC1** = T15 (SILENT, PHANTOM);
+  - **SC2** = two ALT partners on *different* channels racing for the same ALT;
+  - **SC3** = T15s (lost signal).
+- **Specification:** each channel selected once, with its own data and without the other's; every
+  partner's message delivered; A always progresses.
+- **Positive controls:** the current code fails all three scenarios (SC1: SILENT; SC2: phantom output
+  `w_done.1.false`; SC3: phantom signal / deadlock).
+
+| | Commit-record + per-ALT claim (`CLAIM`) | One-winner (`OW`, `OWRV`) |
+|---|---|---|
+| Who performs the transfer | the partner, into the ALT's destination, under the channel mutex | the ALT process, in `activate()`; partners stay pending |
+| ProB, SC1–SC3 with stale flag | passes `[FD=`, deadlock freedom, round bound | passes `[FD=`, deadlock freedom, round bound (both variants) |
+| Mechanisms, each shown necessary by a failing mutation | round-tagged record or consume-on-read (NORC); committed guard wins (NOWIN); `activate()` without partner → new round (CASE3); **per-ALT claim** (round-3 FIX fails SC2: two commits into one round); **claim-aware partner readiness** (CLAIMNR: unbounded retries = livelock) | re-verification or state check after a wakeup (OWTRUST: PHANTOM); **atomic two-word claim** for ALT-vs-ALT (OWSPLIT: deadlock) |
+| Per-round sequence numbers | needed (or consume-on-read) | not needed |
+| Remaining assumptions | single core; each mutex/critical section atomic; ISR partners not modelled; ALT writers with one guard. With more guards the writer's own ALT must be claimed too, i.e. the design converges on the two-word claim | the same, except that the multi-guard case is covered by an argument, not a check: a claim needs both state words claimable in one critical section, so two ALTs cannot claim each other crosswise |
+| Interaction with buffered/timer guards (already verified) | none: records and claims only on rendezvous guards | **OWRV: none**: buffered and timer guards keep re-verifying and never claim. (OW with the WAITING check would require every partner, including the buffered S step and the timer callback, to set READY, which changes the verified buffered protocol. Avoid.) |
+| Signal channels | `SyncChannel` needs a commit record and a rework | a signal is a rendezvous without data: `SyncChannel` can be replaced |
+| Estimated library change | ~350–500 lines (records, rounds, claim word, `Guard` tri-state, `SyncChannel` rework) | ~250–350 lines (state word plus claim ~60; rendezvous guards ~150; partner paths ~60), with a **net reduction** if `SignalChannel` reuses the rendezvous code (`sync_channel.cpp`, 290 lines) |
+| Fit with the book (CSP ☐ over inputs) | observationally correct with the claim, but the partner decides and performs the event on the ALT's behalf | the occam/JCSP realisation of ☐: an offer stays until the choosing process takes it; the event happens when the ALT performs it |
+
+**Recommendation: one-winner with re-verification (`OWRV`)**, keeping ALT-vs-ALT (T11) through the atomic
+two-word claim in one CSP critical section.
+- It needs fewer mechanisms (two instead of five, each shown necessary).
+- It needs no round numbers.
+- It leaves the verified buffered-channel protocol untouched.
+- It lets the signal channel collapse into the rendezvous code, and it matches the book's semantics.
+
+**Before implementing:**
+- extend the model to ISR partners, if C1 keeps them;
+- extend it to ALT writers with two guards.
+
+## C. API questions (recommendations; nothing changed)
+
+### C1. `putFromISR()` on rendezvous and signal channels
+
+**Uses** (application code; test code in this repository omitted):
+
+| Project | File | Channel | Reader | Return value |
+|---|---|---|---|---|
+| HimaxWE2 `csp4cmsis_shake_detection` | `tests.cpp:28` | `Channel<bool>` (rendezvous) | plain `>>` | ignored |
+| HimaxWE2 `csp4cmsis_kws_iic` | `csp4cmsis_spn.cpp:83` | `Channel<bool>` | plain `>>` (I2C completion) | ignored |
+| HimaxWE2 `csp4cmsis_kws_PCA9685` | `csp4cmsis_spn.cpp:83` | `Channel<bool>` | plain `>>` (I2C completion) | ignored |
+| HimaxWE2 `csp4cmsis_kws_PCA9685_alt` | `csp4cmsis_spn.cpp:85` | `Channel<bool>` | plain `>>` (I2C completion) | ignored |
+| HimaxWE2 `csp4cmsis_irq` | `tests.cpp:25` | `Channel<uint32_t>` | plain `read()` | ignored |
+| HimaxWE2 `csp4cmsis_allon_sensor_tflm` (book ch. 8) | `camera_process.cpp:19` | `Channel<trigger_t>` | plain `>>` | checked (`sent`) |
+| Book ch. 5 `nucleo-g474re_Interrupts` | `application.cpp:28` | `Channel<ButtonEvent>` | plain `>>` | ignored |
+| Book ch. 6 `nucleo-g474re_Sensor_Data_Processing_Network` | `application.cpp:39` | `Channel<trigger_t>` | plain `>>` | ignored |
+| Alif `DK-E8/critsec_isr_test.cpp` | `:91` | `BufferedOne2OneChannel<…, 16, KeepNewest>` | — | checked |
+| Book site `CSP4CMSIS/api.md` | §3 example | "`my_chan`" (text describes buffer policies) | — | — |
+
+- The `The_Way_of_Static_Process_Networks/GithubCode/CSP4CMSIS` tree is a copy of the Himax apps.
+- **Signal-channel `putFromISR()`: no uses.**
+- **Every rendezvous use is ISR → a process blocked in plain input.** None uses ALT (so T15i's phantom does
+  not hit them).
+
+**Code-read issue in the I2C-completion pattern** (3 Himax apps): the process starts the transfer and then
+waits in `i2c_sync >> dummy`. If the ISR fires first, `putFromISR()` finds no reader and returns false
+(ignored), and the process blocks forever. A buffered channel of capacity 1 removes the race. Not tested.
+
+**Recommendation: remove `putFromISR()` from rendezvous and signal channels.**
+- ISR → process only via buffered channels (`BufferedChannel<T, 1>` for a completion,
+  `SamplingBufferedChannel<T, 1, KeepNewest>` for a latest value). The reader code is unchanged.
+- With this, the rendezvous state becomes task-only, so the mutex-vs-BASEPRI mismatch (T16a) disappears
+  entirely.
+- `Chanout<T>` cannot tell channel kinds apart at compile time. Options:
+  - (a) make it a fatal error at run time for rendezvous/signal in 2.0;
+  - (b) give buffered channels an `isrWriter()` that returns an ISR-only end with `putFromISR()`, and drop
+    `Chanout::putFromISR()` in the next major version.
+
+  (b) gives a compile-time guarantee.
+- **Migration:** 8 application sites plus the book text of chapters 5, 6 and 8 and the API page.
+
+### C2. KeepNewest/KeepOldest on rendezvous channels
+
+**Uses:** none in any code. The only occurrence is the declaration example in the book site's API page
+(`SamplingChannel<Message, BufferPolicy::KeepNewest/KeepOldest>`). The regex hits in Himax
+`csp4cmsis_lossy_policy_test` and Alif `critsec_isr_test` are `BufferedOne2OneChannel` (buffered).
+
+**Semantics problem:** a non-blocking rendezvous writer cannot wait for an ALT reader's `activate()`.
+- Under the current code it wakes the ALT and drops the value (T16n: PHANTOM).
+- Under the one-winner design it could only drop the value, or block, which contradicts its policy.
+
+**Recommendation: restrict sampling policies to buffered channels.** Add a `static_assert(P == Block)` in
+`SamplingChannel`, and document `SamplingBufferedChannel<T, 1, KeepNewest>` as the "latest value" channel.
+
+## D. Code-read defects as FVP tests (commit `1ad3e11`)
+
+| Test | Defect | 2.0 (12 configurations) | v1.0.0 | Disappears under |
+|---|---|---|---|---|
+| T16s | `SignalChannel::putFromISR()` returns true, blocked receiver never released | FAIL everywhere | FAIL | **C1** |
+| T16n | `KeepNewest` rendezvous `output()` wakes a waiting ALT reader and drops the value (PHANTOM) | FAIL everywhere | FAIL | **C2** |
+| T16a | rendezvous `putFromISR()` (BASEPRI) vs task path (mutex): copy through a null pointer between the two stores of `registerWaitingTask()` | PASS everywhere; **not conclusive** (window 1–2 instructions with AC6, absent with GCC `-O2` because the stores are reordered) | PASS | **C1** |
+| T15i (round 3) | rendezvous `putFromISR()` to an ALT reader: PHANTOM | FAIL | FAIL | **C1** |
+| T15, T15s (round 3) | late wakeup SILENT/PHANTOM; lost signal | FAIL | FAIL | only a protocol change (B) |
+
+**Suite now (26 tests):** 2.0 PASS=21 FAIL=5 in all 12 configurations; v1.0.0 PASS=8 FAIL=17 SKIP=1.
