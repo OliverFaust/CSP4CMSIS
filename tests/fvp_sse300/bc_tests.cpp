@@ -114,7 +114,7 @@ struct ThreadSlotN {
     alignas(8) uint32_t stack[WORDS];
     csp::internal::csp_static_thread_storage_t tcb;
 };
-using ThreadSlot = ThreadSlotN<512>;      // 2 KB workers
+using ThreadSlot = ThreadSlotN<256>;      // 1 KB workers (T5 needs a 32 KB static channel in RAM)
 using RunnerSlot = ThreadSlotN<2048>;     // 8 KB runner
 
 template <size_t WORDS>
