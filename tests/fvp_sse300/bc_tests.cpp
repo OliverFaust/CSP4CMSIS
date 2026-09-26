@@ -75,8 +75,9 @@ extern "C" void csp4cmsis_fatal_error(const char* msg) {
 
 // ---------------------------------------------------------------------------
 // RTOS calls made with BASEPRI raised (i.e. inside a CSP critical section).
-// armlink $Sub$$/$Super$$ patching intercepts every call from other objects
-// (the library) to these CMSIS-RTOS2 functions on both backends.
+// armlink $Sub$$/$Super$$ patching (Arm Compiler) or GNU ld --wrap (GCC)
+// intercepts every call from other objects (the library) to these
+// CMSIS-RTOS2 functions on both backends.
 // ---------------------------------------------------------------------------
 static volatile uint32_t g_rtos_in_crit = 0;
 static const char* volatile g_rtos_in_crit_fn = nullptr;
@@ -84,9 +85,15 @@ static inline void crit_check(const char* fn) {
     if (__get_BASEPRI() != 0U) { g_rtos_in_crit = g_rtos_in_crit + 1; g_rtos_in_crit_fn = fn; }
 }
 extern "C" {
+#if defined(__ARMCC_VERSION)          // armlink: $Sub$$name replaces name, $Super$$name is the original
 #define WRAP(ret, name, params, args)                                  \
     ret $Super$$##name params;                                         \
     ret $Sub$$##name params { crit_check(#name); return $Super$$##name args; }
+#else                                 // GNU ld: -Wl,--wrap=name (see the harness cproject)
+#define WRAP(ret, name, params, args)                                  \
+    ret __real_##name params;                                          \
+    ret __wrap_##name params { crit_check(#name); return __real_##name args; }
+#endif
 WRAP(uint32_t,   osEventFlagsSet,        (osEventFlagsId_t e, uint32_t f), (e, f))
 WRAP(uint32_t,   osThreadFlagsSet,       (osThreadId_t t, uint32_t f), (t, f))
 WRAP(osStatus_t, osSemaphoreRelease,     (osSemaphoreId_t s), (s))
