@@ -2,10 +2,18 @@
 -- CSP4CMSIS 2.0 BufferedChannel: ALT wakeup protocol and bounded buffer
 -- CSP-M model for FDR4.
 --
--- STATUS: written, NOT YET CHECKED. No CSP-M model checker was run for this
--- revision (FDR4's licence is academic-only; the maintainer runs it). The
--- "expected" result next to each assertion is the design intent, not a
+-- STATUS: written, NOT YET CHECKED. FDR4 is not installed on the machine
+-- where this model was written (see BUFFERED_CHANNEL_ANALYSIS.md, "FDR").
+-- The "expected" result next to each assertion is the design intent, not a
 -- recorded result. Run:   refines buffered_channel_v2.csp
+--
+-- Protocol versions modelled:
+--   (a) v1.0.0            : check-then-register (Part 1, SYS_OLD)
+--   (b) 2.0 draft/back-off: readiness from the ring count (Part 1,
+--                           SYS_DRAFT = 6920d1c, SYS_NEW = a34d608)
+--   (c) 2.0 final         : readiness from the semaphore count (Part 1c,
+--                           commit dd954a9)
+--   rendezvous / signal channels, "trust the wakeup" (Part 4)
 --
 -- Abstraction (see BUFFERED_CHANNEL_ANALYSIS.md and buffered_channel.h):
 --  * A CSP critical section (BASEPRI raised) is atomic w.r.t. every task and
@@ -128,6 +136,80 @@ assert DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})
 assert STOP [T= SYS_NEW \ diff(Events, {error})
 
 -- -----------------------------------------------------------------------------
+-- Part 1c -- (c) readiness from the SEMAPHORE count (final 2.0, dd954a9).
+--   ALT reader  : R register (critical section), then C = token count > 0
+--   writer      : P ring update (critical), T token release, S snapshot of
+--                 the registration (critical), G signal
+--   activate()  : acquire(items, 0); failure -> new round (no back-off)
+-- -----------------------------------------------------------------------------
+channel c_register, c_unregister      -- R / disable() (critical sections)
+channel c_tokens : Bool               -- C: osSemaphoreGetCount(items) > 0
+channel c_push                        -- P
+channel c_snap : Bool                 -- S (returns the registration)
+channel c_acq_alt : Bool              -- activate(): osSemaphoreAcquire(items, 0)
+channel c_acq_blk                     -- blocking reader: osSemaphoreAcquire(items, forever)
+channel c_pop_blk                     -- blocking reader: pop (critical)
+channel done_alt, done_blk
+
+NC1 = 2   -- capacity (two messages in the competitor system)
+
+STATE1C(count, tokens, reg, flag) =
+     c_register                         -> STATE1C(count, tokens, true, flag)
+  [] c_unregister                       -> STATE1C(count, tokens, false, flag)
+  [] c_tokens!(tokens > 0)              -> STATE1C(count, tokens, reg, flag)
+  [] count < NC1 & c_push               -> STATE1C(count + 1, tokens, reg, flag)
+  [] rel_items                          -> STATE1C(count, tokens + 1, reg, flag)
+  [] c_snap!reg                         -> STATE1C(count, tokens, reg, flag)
+  [] c_acq_alt!(tokens > 0) ->
+       (if tokens > 0 then
+          (if count > 0 then STATE1C(count - 1, tokens - 1, reg, flag) else error -> STOP)
+        else STATE1C(count, tokens, reg, flag))
+  [] tokens > 0 & c_acq_blk             -> STATE1C(count, tokens - 1, reg, flag)
+  [] c_pop_blk -> (if count > 0 then STATE1C(count - 1, tokens, reg, flag) else error -> STOP)
+  [] clear_flag                         -> STATE1C(count, tokens, reg, false)
+  [] flag & wait_flag                   -> STATE1C(count, tokens, reg, false)
+  [] set_flag                           -> STATE1C(count, tokens, reg, true)
+  [] stale_flag                         -> STATE1C(count, tokens, reg, true)
+
+W_C  = c_push -> rel_items -> c_snap?r -> (if r then set_flag -> SKIP else SKIP)
+W_C2 = W_C ; W_C                                   -- two messages
+
+R_C  = clear_flag -> c_register -> c_tokens?ready ->
+         (if ready then c_unregister -> c_tokens?r2 -> ROUND_C(r2)
+          else wait_flag -> c_unregister -> c_tokens?r2 -> ROUND_C(r2))
+ROUND_C(r2) = if r2 then c_acq_alt?ok -> (if ok then done_alt -> FIN else R_C)   -- lost race: new round
+              else R_C                                                            -- stale: new round
+
+RB_C = c_acq_blk -> c_pop_blk -> done_blk -> SKIP  -- competing blocking reader
+
+SC1 = {| c_register, c_unregister, c_tokens, c_push, rel_items, c_snap, c_acq_alt, c_acq_blk,
+         c_pop_blk, clear_flag, wait_flag, set_flag, stale_flag |}
+
+-- (c1) one message, ALT reader, adversarial stale signal
+SYS_C  = (R_C ||| W_C ||| STALE) [| SC1 |] STATE1C(0, 0, false, false)
+DELIVERED_C = done_alt -> FIN
+-- expected: PASSES
+assert SYS_C :[deadlock free [F]]
+-- expected: PASSES (no livelock without any back-off)
+assert DELIVERED_C [FD= SYS_C \ diff(Events, {done_alt, idle})
+-- expected: PASSES
+assert STOP [T= SYS_C \ diff(Events, {error})
+
+-- (c2) two messages, ALT reader AND a competing blocking reader, stale signal:
+--      activate() may fail (the competitor took the token) -- this must not
+--      diverge, and both readers get one message each
+SYS_C2 = (R_C ||| RB_C ||| W_C2 ||| STALE) [| SC1 |] STATE1C(0, 0, false, false)
+-- idle (the ALT reader's FIN loop) may interleave once done_alt happened
+BOTH    = (done_alt -> AFTER_A) [] (done_blk -> done_alt -> FIN)
+AFTER_A = (done_blk -> FIN) [] (idle -> AFTER_A)
+-- expected: PASSES
+assert SYS_C2 :[deadlock free [F]]
+-- expected: PASSES (in particular: divergence-free)
+assert BOTH [FD= SYS_C2 \ diff(Events, {done_alt, done_blk, idle})
+-- expected: PASSES
+assert STOP [T= SYS_C2 \ diff(Events, {error})
+
+-- -----------------------------------------------------------------------------
 -- Part 2 -- KeepNewest, capacity 2, initially full <1,2>.
 --           Task writer writes 3, ISR writer writes 4, then a reader drains.
 --           Every serial execution ends with {3,4}: <3,4> or <4,3>.
@@ -215,3 +297,97 @@ assert BUFF(<>) [T= SYS_BUF \ {| acq_space, rel_space, acq_item, rel_item |}
 W1 = {10, 11}
 FIFO1 = bin.10 -> bout.10 -> bin.11 -> bout.11 -> STOP
 assert FIFO1 [T= SYS_BUF \ diff(Events, {bin.v, bout.v | v <- W1})
+
+-- -----------------------------------------------------------------------------
+-- Part 4 -- rendezvous and signal channels: "trust the wakeup"
+--   Their guards keep Guard::confirm()'s default (true): after an ALT partner
+--   has transferred the data and cleared the registration, disable()
+--   reports "not ready" although the guard completed. Modelled after
+--   alt_channel_sync.cpp (ChanInGuard/ChanOutGuard, mutex-protected, so each
+--   mutex section is one event) and sync_channel.cpp (SyncChannel).
+-- -----------------------------------------------------------------------------
+
+-- 4a: rendezvous ALT reader vs rendezvous ALT writer (ALT-vs-ALT).
+channel rv_en_r, rv_en_w : Bool       -- enable(): ready? (else registered)
+channel rv_dis_r, rv_dis_w : Bool     -- disable(): hasWriterWaiting() / hasReaderWaiting()
+channel rv_act_r, rv_act_w : Bool     -- activate(): true = partner was an ALT, data moved now
+channel wflag_r, wflag_w              -- thread flag set (wake), per side
+channel wait_r, wait_w                -- osThreadFlagsWait, per side
+channel clr_r, clr_w
+channel stale_r
+channel rdone : Bool                  -- reader returns; payload: data really received?
+channel wdone2
+
+-- state: ir = reader registered, iw = writer registered, got = data at reader,
+--        fr/fw = thread flags
+RV(ir, iw, got, fr, fw) =
+     rv_en_r!iw        -> RV(if iw then ir else true, iw, got, fr, fw)
+  [] rv_en_w!ir        -> RV(ir, if ir then iw else true, got, fr, fw)
+  [] rv_dis_r!iw       -> RV(false, iw, got, fr, fw)
+  [] rv_dis_w!ir       -> RV(ir, false, got, fr, fw)
+  [] rv_act_r!iw       -> RV(ir, false, if iw then true else got, fr, fw or iw)     -- case 2: copy, clear, wake writer
+  [] rv_act_w!ir       -> RV(false, iw, if ir then true else got, fr or ir, fw)    -- case 2: copy, clear, wake reader
+  [] clr_r -> RV(ir, iw, got, false, fw)   [] clr_w -> RV(ir, iw, got, fr, false)
+  [] fr & wait_r -> RV(ir, iw, got, false, fw)
+  [] fw & wait_w -> RV(ir, iw, got, fr, false)
+  [] stale_r -> RV(ir, iw, got, true, fw)
+  [] rdone!got -> RV(ir, iw, got, fr, fw)
+
+-- trust = true: confirm() default (current code); false: re-verify with disable()
+RV_R(trust) = clr_r -> rv_en_r?ready ->
+                (if ready then rv_dis_r?_ -> rv_act_r?_ -> rdone?_ -> FIN
+                 else wait_r -> rv_dis_r?d -> (if trust or d then rv_act_r?_ -> rdone?_ -> FIN else RV_R(trust)))
+RV_W(trust) = clr_w -> rv_en_w?ready ->
+                (if ready then rv_dis_w?_ -> rv_act_w?_ -> wdone2 -> SKIP
+                 else wait_w -> rv_dis_w?d -> (if trust or d then rv_act_w?_ -> wdone2 -> SKIP else RV_W(trust)))
+
+SRV = {| rv_en_r, rv_en_w, rv_dis_r, rv_dis_w, rv_act_r, rv_act_w, clr_r, clr_w, wait_r, wait_w,
+         stale_r, rdone |}
+SYS_RV(trust)       = (RV_R(trust) ||| RV_W(trust)) [| SRV |] RV(false, false, false, false, false)
+SYS_RV_STALE(trust) = (RV_R(trust) ||| RV_W(trust) ||| (stale_r -> SKIP [] SKIP)) [| SRV |]
+                      RV(false, false, false, false, false)
+RV_OK = rdone.true -> FIN
+
+-- expected: PASSES -- trust path: ALT-vs-ALT completes, reader gets the data
+assert SYS_RV(true) :[deadlock free [F]]
+assert RV_OK [FD= SYS_RV(true) \ diff(Events, {| rdone, idle |})
+-- expected: FAILS (deadlock) -- re-verifying rendezvous guards would hang:
+--           the woken side sees "not ready" after the partner already moved
+--           the data, re-registers and waits forever (why trust is required)
+assert SYS_RV(false) :[deadlock free [F]]
+-- expected: FAILS -- KNOWN LIMITATION of the trust path: a stale flag lets the
+--           reader's select() return without data (trace ... rdone.false)
+assert RV_OK [T= SYS_RV_STALE(true) \ diff(Events, {| rdone, idle |})
+
+-- 4b: SyncChannel (signal) ALT receiver vs blocking sender.
+--     Simplification: only the interleaving in which the receiver registers
+--     first is modelled (the sender's SENDER_WAITING path is not).
+channel sg_reg : Bool                 -- registerAltIn(): true = sender already waiting
+channel sg_unreg : Bool               -- unregisterAltIn(nullptr): completed? (resets if not)
+channel sg_send                       -- sender output(): sees RECEIVER_WAITING, wakes ALT
+channel sg_sender_wait                -- sender: acquire(sender_sem)
+channel sg_act                        -- receiver activate(): release(sender_sem), reset
+channel sg_rdone, sg_sdone
+
+-- state: st = 0 IDLE, 1 RECEIVER_WAITING (SENDER_WAITING not reached here);
+--        alt = ALT registered; sem = sender_sem; fr = receiver flag
+SG(st, alt, sem, fr) =
+     sg_reg!false                 -> SG(1, true, sem, fr)
+  [] st == 1 & alt & sg_send      -> SG(st, false, sem, true)
+  [] sg_unreg!(st != 1)           -> SG(if st != 1 then st else 0, false, sem, fr)
+  [] sg_act                       -> SG(0, alt, sem + 1, fr)
+  [] sem > 0 & sg_sender_wait     -> SG(st, alt, sem - 1, fr)
+  [] clr_r -> SG(st, alt, sem, false)
+  [] fr & wait_r -> SG(st, alt, sem, false)
+
+SG_R(trust) = clr_r -> sg_reg?_ -> wait_r -> sg_unreg?d ->
+                (if trust or d then sg_act -> sg_rdone -> FIN else SG_R(trust))
+SG_S        = sg_send -> sg_sender_wait -> sg_sdone -> SKIP
+SSG = {| sg_reg, sg_unreg, sg_send, sg_sender_wait, sg_act, clr_r, wait_r |}
+SYS_SG(trust) = (SG_R(trust) ||| SG_S) [| SSG |] SG(0, false, 0, false)
+
+-- expected: PASSES -- trust path completes both sides
+assert SYS_SG(true) :[deadlock free [F]]
+-- expected: FAILS (deadlock) -- a re-verifying signal guard hangs the sender
+assert SYS_SG(false) :[deadlock free [F]]
+

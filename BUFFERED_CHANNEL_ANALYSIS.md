@@ -372,7 +372,7 @@ storage type.
 | 7i | `BufferedChannel` / `SamplingBufferedChannel` are **copyable** | Code: implicit copy constructor | A copy double-deletes the queue handle, and the copy's guards point to the original (`res_in_guard(this)`). |
 | 7j | `T` requirements are not enforced (see item 3): trivially copyable, and default-constructible for KeepNewest | Code | Undefined behaviour for non-trivial `T`. |
 | 7k | `KeepOldest` `output()` calls `_notifyReader()` even when the message was dropped | Code l.136 | Harmless: the queue is full, so the reader has data anyway. It is still an RTOS call inside the critical section (item 2). |
-| 7l | Channels as namespace-scope statics call `osMessageQueueNew()` during C++ static initialisation, before `osKernelInitialize()` (Himax KWS apps) | Usage | Works on the FreeRTOS adapter. On RTX, dynamic creation before kernel initialisation is expected to return NULL, which is then silent (item 5). Not verified here. |
+| 7l | Channels as namespace-scope statics call `osMessageQueueNew()` during C++ static initialisation, before `osKernelInitialize()` (Himax KWS apps) | Usage | Works on the FreeRTOS adapter. **Correction (review round 2, T14):** also works on RTX5, where CMSIS-RTX calls `osKernelInitialize()` before C++ static constructors. My original expectation of a NULL return was wrong. |
 
 ---
 
@@ -648,9 +648,258 @@ Assumptions:
 - **Interrupt latency:** `putFromISR()` and every buffered operation copy `sizeof(T)` bytes with BASEPRI
   raised.
 - **Thread-flag collision** with native FreeRTOS index-0 task notifications on CSP threads (documented).
-- **RTX5, channels constructed before `osKernelInitialize()`** (namespace-scope statics): object creation
-  may fail there. If it does, 2.0 now stops in `csp4cmsis_fatal_error()` instead of running with a dead
-  channel. Not tested.
-- **The back-off** adds up to one tick of latency in the race of finding 1.
+- ~~**RTX5, channels constructed before `osKernelInitialize()`** may fail~~. Superseded (review round 2,
+  T14): namespace-scope construction works on both backends.
+- ~~**The back-off** adds up to one tick of latency~~. Superseded: the back-off was removed in `dd954a9`
+  (review round 2).
 - **Test coverage:** Arm Compiler 6 at `-O0` only; FVP only, no hardware; the Cortex-M55 core only.
   The FreeRTOS ISR-path variant of item 2 (Armv7-M / Armv8-M Mainline) was not built.
+
+---
+
+# Review round 2 (branch `buffered-channel-v2`, not merged, version not bumped)
+
+| Commit | Change |
+|---|---|
+| `dd954a9` | BufferedChannel: ALT readiness from the semaphore count; **back-off removed** |
+| `8ba4bdb` | tests: T2 interposition for GCC (`--wrap`) |
+| `b5856a3` | tests: T14 (namespace-scope channels / pre-`main()` creation) |
+| `17cead1` | `buffered_channel.h`: masked element copy documented (comment only) |
+| *(this commit)* | results, README, CSP-M model extensions, this section |
+
+## 1. Livelock: structural fix instead of the back-off (implemented in `dd954a9`)
+
+### Mechanism of the `6920d1c` livelock
+
+- Readiness came from the ring state (`count_ > 0`), but `activate()` needs the semaphore token.
+- A partner preempted between its ring update and `osSemaphoreRelease()` created a state where
+  "ready" was true while no token existed.
+- A higher-priority ALT then retried forever. `a34d608` hid this behind a one-tick sleep, which made
+  progress depend on the tick and on the preempted partner getting CPU time.
+
+### Fix
+
+Readiness is the token count, `osSemaphoreGetCount(items | spaces) > 0`. The protocol, with R, C, P, T,
+S, G as in the header of `buffered_channel.h`:
+
+| Side | Step | What it does |
+|---|---|---|
+| ALT `enable()` | R | register `{thread, flag}` (critical section) |
+| ALT `enable()` | C | readiness = token count > 0 (an RTOS call, therefore after R and outside the section) |
+| Partner | P | ring update (critical section) |
+| Partner | T | `osSemaphoreRelease()` |
+| Partner | S | snapshot the registration (critical section; moved **after** T) |
+| Partner | G | `osThreadFlagsSet()` |
+
+### Proof sketch, input side (one ALT reader, any number of writers)
+
+- **No lost wakeup.** The ALT blocks only if C saw 0 tokens, i.e. C happened before the relevant T. It is
+  then not woken only if S missed the registration, i.e. S happened before R. With R before C (program
+  order) and T before S (program order), that requires R < C < T < S < R, a cycle. So a token released
+  after C is always followed by a signal to the registered thread.
+- **No false readiness.** "Ready" means a token exists at C. With one ALT reader, no other thread
+  consumes `items` tokens, so `activate()`'s `osSemaphoreAcquire(items, 0)` cannot fail. If extra
+  blocking readers exist anyway, a failure means one of them took the token; the next round then reads
+  the reduced count.
+- **A writer preempted between P and T** leaves the count at 0, so the ALT registers and blocks. The
+  writer's later T, S, G wake it.
+
+### Output side (one ALT writer, any number of blocking writers, one reader)
+
+- `spaces` tokens are taken by blocking writers **before** their ring update. A blocking writer that
+  holds a token but is preempted before its push has therefore already removed that token from the
+  count, and the ALT writer sees the correct, lower value.
+- The reader releases `spaces` after its pop (T), then snapshots the writer registration (S) and signals
+  (G), so the same cycle argument applies.
+- `activate()` can fail only if a blocking writer acquired the token between the ALT's C/confirm and its
+  acquire, i.e. another writer made progress. The retry reads the new count and blocks if it is 0.
+  **Each failed round implies another thread's progress, so there is no livelock** without any sleep.
+
+### Other changes in `dd954a9`
+
+- **Cost:** one extra, short critical section per operation (S). The readiness check is an RTOS call
+  (`osSemaphoreGetCount()`), made outside critical sections.
+- **`pending()` / `space_available()`** remain informational (ring state).
+- **`select()`:** the back-off is removed; a failed `activate()` starts a new round. The `Guard`
+  contract in `alt.h` now states that readiness must not become true before the partner's operation is
+  complete.
+
+### Results
+
+- T13/T13b show **0 spins in all 48 sweeps**: 12 configurations × 2 tests × 2 sweeps.
+- The full suite passes in every configuration (see 3).
+
+## 2. FDR: model extended, **not run: FDR is not installed**
+
+**Status.** FDR4 is not installed on this machine: there is no `refines` or `fdr4` binary. No Haskell
+toolchain is installed either, so the open-source libcspm `cspmchecker` type checker cannot be used.
+FDR4's licence is limited to academic teaching and research, and the free academic licence is obtained
+by registering from inside FDR. I therefore did not install it for you. In the previous round, the
+option chosen was "write the model only". **There are no FDR results, so nothing can be reported
+verbatim.**
+
+**To install and run:**
+1. Download FDR 4.2.7 for Linux x86-64 from <https://cocotec.io/fdr/>, following the page's installation
+   instructions (packages or a tarball).
+2. Start `fdr4` once and complete the academic licence registration when prompted.
+3. Check all assertions:
+   `refines ~/src/CSP4CMSIS/docs/formal/buffered_channel_v2.csp`
+   (or load the file in the `fdr4` GUI).
+
+**What the model now covers** (`docs/formal/buffered_channel_v2.csp`, 23 assertions, each annotated with
+its expected result):
+
+| Protocol | Systems | Expected |
+|---|---|---|
+| (a) v1.0.0 check-then-register | `SYS_OLD` | deadlock (lost wakeup); fails `[FD=` delivery |
+| (b) ring-count readiness | `SYS_DRAFT` (`6920d1c`) | divergence (livelock) |
+| (b) ring-count readiness + back-off | `SYS_NEW` (`a34d608`) | passes, under the stated fairness assumption |
+| **(c) semaphore-count readiness (`dd954a9`)** | `SYS_C` (stale-signal adversary); `SYS_C2` (competing blocking reader, two messages) | deadlock-free, divergence-free, never takes from an empty buffer, both readers served. No fairness assumption is needed. |
+| KeepNewest, task writer + ISR writer | two-step (v1.0.0) vs. one atomic update (2.0) | v1.0.0 fails the serial specification; 2.0 passes |
+| Block buffer, items/spaces tokens | — | refines `BUFF` and keeps per-writer FIFO order |
+| **Rendezvous ALT-vs-ALT (trust path)** | `SYS_RV(true)` | completes |
+| Rendezvous, re-verifying variant | `SYS_RV(false)` | deadlocks, which shows why these guards must trust the wakeup |
+| Rendezvous trust path + stale flag | `SYS_RV_STALE` | a stale flag lets `select()` return without data (the documented limitation) |
+| **SyncChannel ALT receiver (trust path)** | `SYS_SG(true)` | completes |
+| SyncChannel, re-verifying variant | `SYS_SG(false)` | deadlocks |
+
+Modelling assumptions are stated in the file: each critical section and each mutex section is one event;
+an ISR's operation is atomic relative to tasks; for 4b, only the interleaving in which the receiver
+registers first is modelled.
+
+## 3. Optimisation levels and toolchains
+
+**Build matrix.**
+- Arm Compiler 6.24 and GCC 14.2.1 (Arm GNU 14.2.Rel1, Armv8.1-M MVE hard-float multilib);
+- `-O0`, `-O2`, `-Os`;
+- FreeRTOS and RTX5.
+
+That is 12 images. Each was built with the exact harness flags plus `-Wall -Wextra`: **0 warnings in 60
+translation units per toolchain.**
+
+| Toolchain | Backend | `-O0` | `-O2` | `-Os` |
+|---|---|---|---|---|
+| AC6 | FreeRTOS | 20/0/0 | 20/0/0 | 20/0/0 |
+| AC6 | RTX5 | 20/0/0 | 20/0/0 | 20/0/0 |
+| GCC | FreeRTOS | 20/0/0 | 20/0/0 | 20/0/0 |
+| GCC | RTX5 | 20/0/0 | 20/0/0 | 20/0/0 |
+
+Entries are PASS/FAIL/SKIP. Every race sweep covered both regimes: at least 42 EARLY and 674 LATE trials
+per sweep, with 0 BUG and 0 ANOMALY. The boundary `kb` moves with the code speed, from about 26,500 (GCC
+`-O0`) to about 54,000 (GCC `-O2`), and the sweep follows it.
+
+**Positive control.** v1.0.0 built with GCC `-O2` and with AC6 `-O2` (FreeRTOS) gives PASS=6 FAIL=12
+SKIP=1, the same as at `-O0`. T2's `--wrap` detector counts 5 RTOS calls with BASEPRI raised under GCC,
+and the race sweeps still find the v1.0.0 bugs. The harness is therefore sensitive at those settings.
+
+### Ring-index access review (task/ISR, compiler barriers)
+
+- `head_`, `storage_` and the `AltWake` registrations are only accessed between `csp_enter_critical()` and
+  `csp_exit_critical()`.
+- In CMSIS 6.0.0, both `__set_BASEPRI_MAX()` and `__set_BASEPRI()` are `asm volatile` with a
+  **`"memory"` clobber**, in `cmsis_armclang_m.h` and `cmsis_gcc_m.h` alike. They are therefore full
+  compiler barriers, and no ring access can be moved out of the section at any optimisation level.
+  `volatile` is not needed on those fields.
+- `count_` is `volatile` because `pending()`/`space_available()` read it outside the section. Those are
+  informational only; ALT readiness now comes from the RTOS semaphore count.
+- Single core: tasks and ISRs share one view of memory in program order, so no `DMB` is needed between
+  a critical section and an ISR. The M55 data cache is coherent for the core's own accesses.
+- `TimerGuard::fired` / `wake_thread` / `wake_flag` are `volatile` single words written in one thread and
+  read in the timer thread, so their accesses are atomic on Cortex-M. A torn `{thread, flag}` pair is
+  harmless: at worst a stale flag, which is re-verified.
+- **Open point (hardening proposal, not implemented):** `csp_enter_critical()` issues `MSR BASEPRI_MAX`
+  without a following `DSB`/`ISB`, whereas the FreeRTOS ARM_CM55 port's `ulSetInterruptMask()` uses
+  `msr basepri; dsb; isb`.
+  - My understanding is that an MSR that *raises* execution priority takes effect for subsequent
+    instructions without a context-synchronisation event; I could not confirm this against the Arm ARM
+    here.
+  - Adding `__DSB(); __ISB();` after the MSR costs a few cycles and removes the question.
+  - I recommend adding it; not done in this task.
+
+## 4. Global channels on RTX5
+
+**Survey.** I classified channel declarations by scope, resolving type aliases (e.g. `using AltChannel =
+Channel<Message>`) and ignoring vendored library copies:
+
+| Repository | Backend(s) | Namespace scope | Function-local `static` |
+|---|---|---|---|
+| This repo (CSP4CMSIS) | — | 0 (no examples) | 0 |
+| FVP `helloworld_sse300` demo | FreeRTOS / RTX5 harness | 0 | 2 |
+| Alif-DK-E8-CSP4CMSIS (`neuropathway`, `pack_test`) | FreeRTOS adapter | 0 | 4 |
+| Alif `csp4cmsis_alt_test` (uses `Alif/DK-E8/application.cpp`) | **RTX5** | 0 | 2 (`chan_A`/`chan_B` in `MainApp_Task`) |
+| HimaxWE2-CSP4CMSIS | FreeRTOS | 32 | 22 |
+| The_Way_of_Static_Process_Networks/GithubCode (copies of Himax and Nucleo) | FreeRTOS | 37 | 26 |
+| CSP4CMSIS-B-L475E-IOT01A | FreeRTOS | 1 | 1 |
+| CSP4CMSIS-Nucleo, CSP4CMSIS_for_NUCLEO-G474RE | FreeRTOS | 0 | 2 each |
+
+- The only RTX5 project constructs its channels as function-local statics *after* the kernel has
+  started.
+- That same project creates `MainApp_Task` (static control block) with `osThreadNew()` **before** its
+  explicit `osKernelInitialize()`.
+- All 70 namespace-scope channels are in FreeRTOS projects.
+
+**Measured behaviour (T14, AC6 and GCC, both backends).** During C++ static initialisation:
+
+| Backend | Kernel state | Static `osSemaphoreNew()` | Dynamic `osSemaphoreNew()` | Namespace-scope 2.0 `BufferedChannel` used after start |
+|---|---|---|---|---|
+| FreeRTOS | `Inactive` | succeeds | succeeds | works |
+| RTX5 | **`Ready`** | succeeds | succeeds | works |
+
+- **The reason on RTX5:** CMSIS-RTX 5.9.1 initialises the kernel before C++ constructors, through weak
+  hooks in `rtx_lib.c`:
+  - `_platform_post_stackheap_init()` (Arm Compiler);
+  - `software_init_hook()` (GCC/newlib; verified linked in the GCC image);
+  - `$Sub$$__iar_data_init3` (IAR).
+- A later explicit `osKernelInitialize()` in `main()` is harmless. This is also why DK-E8's pre-init
+  `osThreadNew()` works.
+- **My earlier concern (analysis item 7l, CHANGES) was wrong** and has been corrected.
+
+**Options:**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Eager construction (current), documented rule** | Works today on both backends; no hot-path cost; creation failure is already fatal (loud) | Depends on the RTX pre-init hook (standard CMSIS startup plus C library init); an application that overrides the hook or bypasses C library init gets a fatal error at boot |
+| B. Deferred creation on first use | Independent of init order | Needs a one-time-init protocol on every operation. RTOS creation cannot run inside a critical section, so it needs a lock or a CAS state machine. A first use from an ISR (`putFromISR()`) could not create objects at all. Adds a branch to every operation |
+| C. Creation in `Run()` | Deterministic point | Channels are not known to `Run()` (processes hold handles), so a registry is needed; channels used outside `Run()` would break |
+
+**Recommendation: A.** Keep eager construction and add a documented rule to
+`CSP4CMSIS_Configuration.md`: *channels may be constructed at namespace scope or as function-local
+statics. On RTX5 this relies on CMSIS-RTX's pre-`main()` `osKernelInitialize()` hook, so do not override
+`_platform_post_stackheap_init` / `software_init_hook` / `__iar_data_init3` without calling
+`osKernelInitialize()`. Never construct channels in an ISR.* T14 guards the rule in the regression suite.
+Not implemented yet, as instructed.
+
+## 5. `putFromISR()`: masked copy
+
+**Documented** in `buffered_channel.h` (`17cead1`):
+- every element copy (`output()`, `input()`, `putFromISR()`, ALT `activate()`) runs with BASEPRI raised;
+- interrupts above `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` are unaffected;
+- the documentation includes the index/pointer pattern for large payloads.
+
+**Measured** (AC6 `-O2`, instructions between `MSR BASEPRI_MAX` and `MSR BASEPRI` in the
+KeepNewest/`putFromISR()` path):
+
+| Element | Masked section |
+|---|---|
+| `uint32_t` | 12 instructions, no calls (plus 1 instruction in the snapshot section) |
+| 1 KB struct | 16 instructions plus `__aeabi_memcpy4` of 1,024 bytes |
+
+For the 1 KB case I *estimate* about 0.5–0.7 k cycles of LDM/STM traffic, i.e. roughly 15–20 µs at the
+AN552's 32 MHz, or about 2–3 µs at 250 MHz. That is an estimate, not a measurement: the FVP is not
+cycle-accurate.
+
+**Proposal (not implemented):**
+1. **Compile-time limit for ISR use:** `static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_BYTES)`,
+   default 64 bytes, overridable with `-D`.
+   - It belongs in the **non-virtual** `Chanout<T>::putFromISR()`, not in the virtual
+     `BufferedChannel::putFromISR()`. A virtual member of a class template is instantiated with every
+     channel type, so the assert would fire for large-`T` channels that never use an ISR. The non-virtual
+     wrapper is only instantiated when an ISR path actually calls it.
+   - 64 bytes is a 16-word copy, about the cost of an RTOS queue operation.
+2. **Index/pointer pattern for large payloads:** a static pool plus a channel of indices (`uint8_t`).
+   This is documented in the header.
+   - A complete ISR-side free list would need a non-blocking ISR read (e.g.
+     `bool getFromISR(T&)`); until then, an ISR must use indices it already owns (e.g. a pre-assigned
+     ping-pong pair).
+   - A future `getFromISR()` would be a small addition following the same pattern: acquire the token
+     with timeout 0, pop, release, signal after the section.
