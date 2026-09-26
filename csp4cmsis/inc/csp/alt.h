@@ -5,7 +5,9 @@
 #include "csp_rtos_static.h"
 #include <stddef.h>
 #include <initializer_list>
+#include <type_traits>
 #include "time.h"
+#include "csp_fatal.h"
 
 namespace csp {
     // Forward declarations
@@ -68,6 +70,11 @@ namespace csp {
             uint32_t delay_ticks;
             osTimerId_t timer_handle;
             uint32_t assigned_bit;
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+            // Static osTimer control block (no RTOS heap); see csp_rtos_static.h
+            // for the backend-specific size rules.
+            csp_static_timer_storage_t timer_storage;
+#endif
             // CMSIS-RTOS2 passes the argument given to osTimerNew() straight
             // to the callback -- no TimerHandle_t-to-owner lookup needed,
             // unlike FreeRTOS's pvTimerGetTimerID(). Genuine simplification,
@@ -76,6 +83,10 @@ namespace csp {
         public:
             TimerGuard(csp::Time delay);
             ~TimerGuard() override;
+            // The osTimer is bound to `this` (callback argument, static
+            // control block): copies would share or dangle.
+            TimerGuard(const TimerGuard&) = delete;
+            TimerGuard& operator=(const TimerGuard&) = delete;
             bool enable(AltScheduler* alt, uint32_t bit) override;
             bool disable() override;
             void activate() override;
@@ -127,6 +138,9 @@ namespace csp {
         RelTimeoutGuard(csp::Time delay)
             : Guard(&timer_storage), timer_storage(delay) {}
         ~RelTimeoutGuard() override = default;
+        // internal_guard_ptr points into this object: not copyable/movable.
+        RelTimeoutGuard(const RelTimeoutGuard&) = delete;
+        RelTimeoutGuard& operator=(const RelTimeoutGuard&) = delete;
     };
 
     /**
@@ -144,8 +158,13 @@ namespace csp {
     public:
         Alternative() : num_guards(0) {}
 
-        template <typename... Bindings>
-        Alternative(Bindings... bindings) : num_guards(0) {
+        // Bindings are taken by reference (never copied): copying a
+        // RelTimeoutGuard would duplicate its osTimer. The constraint keeps
+        // this template from hijacking copy construction.
+        template <typename... Bindings,
+                  typename = std::enable_if_t<(sizeof...(Bindings) > 0) &&
+                      !(std::is_same_v<std::decay_t<Bindings>, Alternative> || ...)>>
+        Alternative(Bindings&&... bindings) : num_guards(0) {
             (addBinding(bindings), ...);
         }
 

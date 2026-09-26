@@ -41,10 +41,21 @@
     #include "task.h"
     #include "event_groups.h"
     #include "semphr.h"
+    #include "timers.h"
     namespace csp::internal {
         using csp_static_thread_storage_t     = StaticTask_t;
         using csp_static_eventflags_storage_t = StaticEventGroup_t;
         using csp_static_semaphore_storage_t  = StaticSemaphore_t;
+        // Timers: the adapter's osTimerNew() stores its callback wrapper
+        // (TimerCallback_t {osTimerFunc_t func; void* arg;}) directly after
+        // the StaticTimer_t, and only if cb_size >= sizeof(StaticTimer_t) +
+        // sizeof(TimerCallback_t). With a bare StaticTimer_t it silently
+        // pvPortMalloc()s the wrapper instead (cmsis_os2.c, osTimerNew()).
+        struct csp_static_timer_storage_t {
+            StaticTimer_t timer;
+            void*         callback_func;
+            void*         callback_arg;
+        };
     }
 
   #elif defined(CSP4CMSIS_RTOS2_BACKEND_RTX5)
@@ -61,6 +72,8 @@
         using csp_static_thread_storage_t     = osRtxThread_t;
         using csp_static_eventflags_storage_t = osRtxEventFlags_t;
         using csp_static_semaphore_storage_t  = osRtxSemaphore_t;
+        // RTX5 requires cb_size == sizeof(osRtxTimer_t) exactly (rtx_timer.c).
+        using csp_static_timer_storage_t      = osRtxTimer_t;
     }
 
   #else

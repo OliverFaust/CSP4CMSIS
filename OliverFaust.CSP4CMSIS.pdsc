@@ -99,6 +99,7 @@
         <file category="header" name="csp4cmsis/inc/csp/buffered_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
         <file category="header" name="csp4cmsis/inc/csp/csp_critical.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/csp_fatal.h"/>
         <file category="header" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
         <file category="header" name="csp4cmsis/inc/csp/process.h"/>
         <file category="header" name="csp4cmsis/inc/csp/public_channel.h"/>

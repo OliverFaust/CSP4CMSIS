@@ -132,7 +132,14 @@ void AltScheduler::wakeUp(uint32_t bit) {
 TimerGuard::TimerGuard(csp::Time delay)
     : parent_alt(nullptr), delay_ticks(delay.to_ticks()), assigned_bit(0)
 {
-    timer_handle = osTimerNew(TimerCallback, osTimerOnce, this, NULL);
+    osTimerAttr_t attr = {};
+    attr.name = "CspTimeout";
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+    attr.cb_mem  = &timer_storage;
+    attr.cb_size = sizeof(timer_storage);
+#endif
+    timer_handle = osTimerNew(TimerCallback, osTimerOnce, this, &attr);
+    if (timer_handle == nullptr) fatal("CSP4CMSIS: TimerGuard: osTimerNew() failed");
 }
 
 TimerGuard::~TimerGuard() {
