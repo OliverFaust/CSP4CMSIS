@@ -47,6 +47,8 @@ is in `tests/fvp_sse300/`.
   (default 64 bytes; override with `-D`). Only code that calls `putFromISR()` is affected. For larger
   payloads, send an index into a static pool (pattern in `buffered_channel.h`).
 - Override `csp4cmsis_fatal_error(const char*)` (weak) to log or reset. It must not return.
+- **Where channels may be constructed** (namespace scope, function-local static; never in an ISR) and
+  the RTX5 start-up-hook rule: `Documentation/CSP4CMSIS_Configuration.md`, section 5.
 
 ## Source/API changes (internal API: only code using `csp::internal` is affected)
 

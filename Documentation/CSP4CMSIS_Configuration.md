@@ -101,6 +101,44 @@ queue operation.
   send the index (`uint8_t`) through the channel; see the "Masked copy"
   comment in `buffered_channel.h`.
 
+## 5. Where channels may be constructed
+
+Every channel creates its RTOS objects (semaphores, mutexes) **in its
+constructor**, and a failed creation is fatal (`csp4cmsis_fatal_error()`).
+So the kernel must accept object creation when the constructor runs.
+
+**Allowed:**
+- **Namespace scope** (global or `static` at file scope), i.e. during C++
+  static initialisation before `main()`;
+- **function-local `static`**, constructed on first use;
+- automatic (stack) objects in a process, provided they outlive every use by
+  other processes.
+
+**Why namespace scope works on both backends** (measured by test T14 on the
+Corstone-300 FVP, Arm Compiler 6 and GCC):
+- **FreeRTOS** (CMSIS-FreeRTOS adapter): before `main()` the kernel is
+  `osKernelInactive`, and static and dynamic `osSemaphoreNew()` both succeed.
+- **Keil RTX5** (CMSIS-RTX 5.9.1): the kernel is already `osKernelReady`
+  before C++ constructors run, because CMSIS-RTX calls
+  `osKernelInitialize()` from a C-library start-up hook:
+  `_platform_post_stackheap_init()` (Arm Compiler), `software_init_hook()`
+  (GCC/newlib) or `$Sub$$__iar_data_init3` (IAR). A later explicit
+  `osKernelInitialize()` in `main()` is harmless.
+
+**Rules:**
+- On RTX5, do not override `_platform_post_stackheap_init()`,
+  `software_init_hook()` or `__iar_data_init3` unless your version also
+  calls `osKernelInitialize()` first; and do not bypass the C library's
+  start-up. Otherwise namespace-scope channels fail at boot (loudly, via
+  `csp4cmsis_fatal_error()`).
+- Other CMSIS-RTOS2 backends: namespace-scope construction needs object
+  creation to work before `main()`. If your backend cannot do that, use
+  function-local statics constructed after `osKernelInitialize()`.
+- **Never construct a channel in an ISR**, and never let a channel be
+  destroyed while any process or ISR may still use it.
+- A channel must be constructed before any `putFromISR()` to it can run:
+  enable the interrupt only after the channel exists.
+
 ## Application-level dynamic allocation (not CSP4CMSIS's concern)
 
 CSP4CMSIS itself never calls `operator new`/`operator delete` and performs
