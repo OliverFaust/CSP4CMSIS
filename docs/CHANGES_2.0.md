@@ -89,11 +89,16 @@ is in `tests/fvp_sse300/`.
 - New header `csp_fatal.h` (in the pdsc). `csp_rtos_static.h` adds `csp_static_timer_storage_t`.
 - `OverwritingChannel` was removed: use `SamplingBufferedChannel<T, SIZE, BufferPolicy::KeepNewest>`.
 
-## Not changed / still using the RTOS heap
+## RTOS heap
 
-These remain even with `CSP4CMSIS_STATIC_ALLOCATION`:
-- `Barrier`;
 - `run.h`'s thread control blocks are static only when `CSP4CMSIS_STATIC_ALLOCATION` is set (unchanged).
+- `Barrier` (2.0): count and phase under a CSP critical section, two semaphores alternating by phase,
+  static control blocks, so no RTOS heap. This also fixes two 1.x bugs: the last arrival released N
+  tokens for N - 1 waiters (the next phase's first arrival passed straight through), and it reset the
+  count outside the lock. FVP test T18 fails on 1.0.0 and passes on 2.0.
+- **Under `CSP4CMSIS_STATIC_ALLOCATION` CSP4CMSIS makes no dynamic RTOS allocation at all.** The harness
+  proves it with builds that have RTOS dynamic allocation disabled (`tests/fvp_sse300/README.md`,
+  "Heap-free proof").
 
 Rendezvous and signal channels use no RTOS heap under `CSP4CMSIS_STATIC_ALLOCATION`: their only RTOS
 objects are two counting semaphores per channel (one per end, serialising plain operations), with

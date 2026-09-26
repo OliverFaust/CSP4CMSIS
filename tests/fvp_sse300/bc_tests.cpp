@@ -570,14 +570,44 @@ void test_T17() {
     uint32_t allocs = 0, fatal0 = g_fatal_count, u0 = heap_used();
     for (int i = 0; i < 50; ++i) {
         uint32_t b = heap_used();
-        { csp::Channel<uint32_t> c; csp::SignalChannel<> s; if (heap_used() > b) allocs++; }
+        { csp::Channel<uint32_t> c; csp::SignalChannel<> s; csp::Barrier bar(3); if (heap_used() > b) allocs++; }
     }
-    printf("   [T17] 50 x (Channel + SignalChannel): %lu allocations, heap delta %ld B, fatal=%lu\r\n",
+    printf("   [T17] 50 x (Channel + SignalChannel + Barrier): %lu allocations, heap delta %ld B, fatal=%lu\r\n",
            (unsigned long)allocs, (long)heap_used() - (long)u0, (unsigned long)(g_fatal_count - fatal0));
-    result("T17", (allocs == 0 && g_fatal_count == fatal0) ? 1 : 0, "rendezvous and signal channels use no RTOS heap");
+    result("T17", (allocs == 0 && g_fatal_count == fatal0) ? 1 : 0, "rendezvous and signal channels and Barrier use no RTOS heap");
 #else
     result("T17", -1, "rendezvous and signal channels use no RTOS heap (2.0 only)");
 #endif
+}
+
+// ---------------------------------------------------------------------------
+// T18 -- Barrier(3), reused for 20 phases by threads of different priority:
+//        nobody leaves phase p before all three arrived in phase p
+// ---------------------------------------------------------------------------
+constexpr uint32_t T18_N = 3, T18_PHASES = 20;
+csp::Barrier* t18_bar; ThreadSlot t18_s[T18_N];
+volatile uint8_t t18_arrived[T18_N][T18_PHASES]; volatile uint32_t t18_early[T18_N], t18_done[T18_N];
+void t18_worker(void* arg) {
+    uint32_t id = (uint32_t)(uintptr_t)arg;
+    for (uint32_t ph = 0; ph < T18_PHASES; ++ph) {
+        t18_arrived[id][ph] = 1;
+        if (id == 0 && (ph % 3) == 0) osDelay(1);            // a slow process now and then
+        t18_bar->sync();
+        for (uint32_t j = 0; j < T18_N; ++j)
+            if (!t18_arrived[j][ph]) t18_early[id] = t18_early[id] + 1;   // left phase ph too early
+    }
+    t18_done[id] = 1; park();
+}
+void test_T18() {
+    static csp::Barrier bar(T18_N); t18_bar = &bar;
+    const osPriority_t prio[T18_N] = { osPriorityLow, osPriorityNormal, osPriorityAboveNormal };
+    for (uint32_t i = 0; i < T18_N; ++i) spawn(t18_worker, (void*)(uintptr_t)i, prio[i], t18_s[i], "T18");
+    osDelay(150);
+    uint32_t early = 0, done = 0;
+    for (uint32_t i = 0; i < T18_N; ++i) { early += t18_early[i]; done += t18_done[i]; }
+    printf("   [T18] %lu threads x %lu phases: finished=%lu, early departures=%lu\r\n",
+           (unsigned long)T18_N, (unsigned long)T18_PHASES, (unsigned long)done, (unsigned long)early);
+    result("T18", (done == T18_N && early == 0) ? 1 : 0, "reusable Barrier: nobody leaves a phase before all arrived");
 }
 
 // ---------------------------------------------------------------------------
@@ -1039,7 +1069,7 @@ void runner(void*) {
     printf("backend: %s; library: %s\r\n", BACKEND_NAME, LIB_NAME);
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
-    test_T5();  test_T6();  test_T17(); test_T7a(); test_T8();  test_T9();  test_T10();
+    test_T5();  test_T6();  test_T17(); test_T18(); test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
