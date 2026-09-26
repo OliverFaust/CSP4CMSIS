@@ -15,26 +15,40 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 ## Current results (`results/`)
 
-| Library | FreeRTOS | RTX5 |
-|---|---|---|
-| v2, `buffered-channel-v2` @ `a34d608` | PASS=19 FAIL=0 SKIP=0 | PASS=19 FAIL=0 SKIP=0 |
-| v1.0.0 @ `a789d2a` (regression baseline) | PASS=6 FAIL=12 SKIP=1 | PASS=6 FAIL=12 SKIP=1 |
+The same 20-test suite was run everywhere:
 
-On v1.0.0, only T0, T8, T11, T12, T13 and T13b pass. T9 needs a v2-only hook. The intermediate commit
-`6920d1c` failed T13/T13b (a livelock fixed in `a34d608`).
+| Library | Configurations | Result |
+|---|---|---|
+| 2.0, `buffered-channel-v2` @ `17cead1` (library code of `dd954a9`) | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=20 FAIL=0 SKIP=0 in all 12**; T13/T13b 0 spins in every sweep |
+| v1.0.0 @ `a789d2a` (regression baseline) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=7 FAIL=12 SKIP=1 on both |
+
+On v1.0.0, only T0, T8, T11, T12, T13, T13b and T14 pass. T9 needs a v2-only hook.
+
+Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
+AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's
+`--wrap` detector and the race sweeps stay sensitive there.
+
+History: `6920d1c` failed T13/T13b (livelock); `a34d608` fixed it with a one-tick back-off; `dd954a9`
+replaced the back-off with semaphore-count readiness.
 
 ## Harness
 
 - **Project:** `helloworld_sse300` in the `arm_fvp_helloworld` repository, local branch
   **`csp4cmsis-wt-tests`**. That repository's `origin` is not ours: never push it.
 - **Target:** Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
-  Arm Compiler 6.24 at `-O0`, CMSIS-Toolbox 2.14.1.
-- **Build types** (`hello.csolution.yml`):
+  CMSIS-Toolbox 2.14.1.
+- **Build types** (`hello.csolution.yml`): each backend at three optimisation levels.
 
-  | Build type | CSP4CMSIS backend define | RTOS components |
+  | Build types | CSP4CMSIS backend define | RTOS components |
   |---|---|---|
-  | `.FreeRTOS` | `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` | CMSIS-RTOS2 FreeRTOS adapter + FreeRTOS 11.3.0; config in `RTE/RTOS/FreeRTOSConfig.h` (32 KB heap_4) |
-  | `.RTX5` | `CSP4CMSIS_RTOS2_BACKEND_RTX5` | `ARM::CMSIS:RTOS2:Keil RTX5&Source` 5.9.1; `RTE/CMSIS/RTX_Config.h` |
+  | `.FreeRTOS`, `.FreeRTOS-O2`, `.FreeRTOS-Os` | `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` | CMSIS-RTOS2 FreeRTOS adapter + FreeRTOS 11.3.0; config in `RTE/RTOS/FreeRTOSConfig.h` (32 KB heap_4) |
+  | `.RTX5`, `.RTX5-O2`, `.RTX5-Os` | `CSP4CMSIS_RTOS2_BACKEND_RTX5` | `ARM::CMSIS:RTOS2:Keil RTX5&Source` 5.9.1; `RTE/CMSIS/RTX_Config.h` |
+
+  - The plain types use the compiler default (`-O0`); the `-O2`/`-Os` types pass that flag verbatim
+    (`misc`).
+  - Toolchains: `--toolchain AC6` (Arm Compiler 6.24) or `--toolchain GCC` (GCC 14.2.1; set
+    `GCC_TOOLCHAIN_14_2_1=/usr/bin`).
+  - Output goes to `out/<target>/<build type>/<compiler>/`.
 
   `RTX_Config.h` is aligned with the FreeRTOS setup:
   - `OS_TICK_FREQ 100`
@@ -75,10 +89,13 @@ To verify which library was used:
 
 ```sh
 source ../env.sh
-cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild          # both build types
-for bt in FreeRTOS RTX5; do
-  $FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a out/MPS3-Corstone-300/$bt/hello.axf \
-      -C ethosu.num_macs=128 -f model_config_sse300.txt --simlimit 1200 --stat > run_$bt.txt &
+export GCC_TOOLCHAIN_14_2_1=/usr/bin                                    # for GCC builds
+cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild           # all 6 build types
+cbuild hello.csolution.yml --packs --toolchain GCC                     # all 6 build types
+for d in out/MPS3-Corstone-300/*/*/; do
+  img=$(ls $d/hello.axf $d/hello.elf 2>/dev/null | head -1)
+  $FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a $img -C ethosu.num_macs=128 \
+      -f model_config_sse300.txt --simlimit 1500 --stat > run_$(basename $(dirname $d))_$(basename $d).txt &
 done; wait
 ```
 
@@ -109,10 +126,12 @@ done; wait
 | T12 | rendezvous `fairSelect` over two channels with blocking senders (pipe syntax): 1000 messages, per-channel order |
 | T13 | *sweep*: no livelock when a high-priority ALT reader meets a preempted low-priority blocking writer (separate aggressor thread; the runner detects spinning and rescues by lowering the aggressor's priority) |
 | T13b | *sweep*: the same for a high-priority ALT writer vs a preempted low-priority blocking reader |
+| T14 | a BufferedChannel constructed at namespace scope (before `main()`) works. It also reports the kernel state and static/dynamic `osSemaphoreNew()` results during C++ static initialisation |
 
 ### T2 method
 
-The test build interposes on the CMSIS-RTOS2 API with armlink's `$Sub$$`/`$Super$$` patching:
+The test build interposes on the CMSIS-RTOS2 API: with armlink's `$Sub$$`/`$Super$$` patching (Arm
+Compiler), or with GNU ld's `-Wl,--wrap=` (GCC; the flags are in the harness cproject). It covers:
 `osThreadFlagsSet`, `osEventFlagsSet`, `osSemaphoreRelease/Acquire`, `osMessageQueuePut/Get/GetCount/GetSpace`
 and `osMutexAcquire/Release`. Every call from the library therefore passes a check that counts calls made
 with `BASEPRI != 0`. The map file lists the wrappers, and the disassembly shows the library's call sites

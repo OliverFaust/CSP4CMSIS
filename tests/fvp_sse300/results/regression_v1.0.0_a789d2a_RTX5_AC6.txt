@@ -1,14 +1,14 @@
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5000
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5048
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5001
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5049
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5002
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5050
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5003
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5051
 
 Hello world
 
@@ -37,40 +37,43 @@ RESULT T10: FAIL -- a second ALTing reader is rejected by assert; the first is s
 RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
    [T12] received a=500 b=500, per-channel order ok=1
 RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
-   [T1a] kb=31873 k=30373..32873 EARLY=1492 LATE=999 BUG=10 ANOMALY=0 (BUG k=31822..31831)
-   [T1a] kb=31873 k=30373..32873 EARLY=1492 LATE=1000 BUG=9 ANOMALY=0 (BUG k=31822..31831)
+   [T14] before main(): kernel state=Ready; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
+   [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
+RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
+   [T1a] kb=31873 k=30373..32873 EARLY=1488 LATE=1002 BUG=11 ANOMALY=0 (BUG k=31797..31831)
+   [T1a] kb=31874 k=30374..32874 EARLY=1488 LATE=1002 BUG=11 ANOMALY=0 (BUG k=31822..31843)
 RESULT T1a: FAIL -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=31873 k=30373..32873 EARLY=1493 LATE=999 BUG=9 ANOMALY=0 (BUG k=31528..31830)
-   [T1b] kb=31873 k=30373..32873 EARLY=1492 LATE=1000 BUG=9 ANOMALY=0 (BUG k=31822..31830)
+   [T1b] kb=31873 k=30373..32873 EARLY=1488 LATE=1002 BUG=11 ANOMALY=0 (BUG k=31797..31830)
+   [T1b] kb=31873 k=30373..32873 EARLY=1491 LATE=1000 BUG=10 ANOMALY=0 (BUG k=31821..31830)
 RESULT T1b: FAIL -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=31880 k=30380..32880 EARLY=1455 LATE=1004 BUG=42 ANOMALY=0 (BUG k=31528..31856)
-   [T3] kb=31880 k=30380..32880 EARLY=1465 LATE=1001 BUG=35 ANOMALY=0 (BUG k=31805..31843)
+   [T3] kb=31880 k=30380..32880 EARLY=1460 LATE=1001 BUG=40 ANOMALY=0 (BUG k=31792..31843)
+   [T3] kb=31880 k=30380..32880 EARLY=1461 LATE=1002 BUG=38 ANOMALY=0 (BUG k=31805..31843)
 RESULT T3: FAIL -- KeepNewest keeps the newest value of every writer (task vs task)
    [T3i] kb=400000 k=398500..401000 EARLY=0 LATE=0 BUG=2501 ANOMALY=0 (BUG k=398500..401000)
    [T3i] kb=400000 k=398500..401000 EARLY=0 LATE=0 BUG=2501 ANOMALY=0 (BUG k=398500..401000)
 RESULT T3i: FAIL -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
-   [T13] kb=31880 k=30380..32880 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T13] kb=31885 k=30385..32885 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T13] kb=31880 k=30380..32880 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T13] kb=31880 k=30380..32880 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
 RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
    [T13] spins detected: 0
-   [T13b] kb=31880 k=30380..32880 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T13b] kb=31880 k=30380..32880 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13b] kb=31880 k=30380..32880 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T13b] kb=31880 k=30380..32880 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
 RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
    [T13b] spins detected: 0
-SUMMARY: PASS=6 FAIL=12 SKIP=1; heap used=2032 B; runner stack min free=7504 B
+SUMMARY: PASS=7 FAIL=12 SKIP=1; heap used=2160 B; runner stack min free=7504 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 375.281664s
-User time at initialisation             : 0.194866s
-User time                               : 101.205174s
-System time at initialisation           : 0.189844s
-System time                             : 0.043197s
-Wall time at initialisation             : 0.676605s
-Wall time                               : 101.194214s
-Performance index                       : 3.71
-cpu0                                    : 370.85 MIPS ( 37528038758 Inst)
-Memory highwater mark at initialisation : 0x1056e000 bytes ( 0.255 GB )
-Memory highwater mark                   : 0x10f5b000 bytes ( 0.265 GB )
+Simulated time                          : 375.889638s
+User time at initialisation             : 0.431221s
+User time                               : 90.854345s
+System time at initialisation           : 0.265290s
+System time                             : 0.057796s
+Wall time at initialisation             : 0.685729s
+Wall time                               : 91.174950s
+Performance index                       : 4.12
+cpu0                                    : 412.27 MIPS ( 37588838528 Inst)
+Memory highwater mark at initialisation : 0x1058b000 bytes ( 0.255 GB )
+Memory highwater mark                   : 0x10fe5000 bytes ( 0.266 GB )
 -------------------------------------------------------------------------------
