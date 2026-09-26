@@ -1,19 +1,19 @@
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5056
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5024
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5057
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5025
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5058
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5026
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5060
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5027
 
 Hello world
 
 === CSP4CMSIS BufferedChannel regression suite ===
-backend: Keil RTX5 5.9.1; library: v2 API (ring buffer); RTOS heap enabled
+backend: Keil RTX5 5.9.1; library: v2 API (ring buffer); RTOS dynamic allocation DISABLED (RTX5: no dynamic memory pool)
 RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
    [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
 RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
@@ -42,7 +42,7 @@ RESULT T10: PASS -- a second ALTing reader is rejected by assert; the first is s
 RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
    [T12] received a=500 b=500, per-channel order ok=1
 RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
-   [T14] before main(): kernel state=Ready; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
+   [T14] before main(): kernel state=Ready; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=NULL
    [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
 RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
 RESULT T15i: REPLACED -- rendezvous putFromISR() no longer exists (ISR writes go to buffered channels via isrWriter()) (compile check neg_rendezvous_isr.cpp)
@@ -50,45 +50,47 @@ RESULT T15i: REPLACED -- rendezvous putFromISR() no longer exists (ISR writes go
 RESULT T15s: PASS -- a signal that arrives while the ALT receiver takes another guard is not lost
 RESULT T16s: REPLACED -- signal channels have no ISR writer (data-less rendezvous, task-only) (compile check neg_signal_isr.cpp)
 RESULT T16n: REPLACED -- KeepNewest/KeepOldest rendezvous channels are rejected at compile time (use SamplingBufferedChannel<T, 1, P>) (compile check neg_rendezvous_policy.cpp)
-   [T1a] kb=45628 k=44128..46628 EARLY=1507 LATE=994 BUG=0 ANOMALY=0
-   [T1a] kb=45639 k=44139..46639 EARLY=1496 LATE=1005 BUG=0 ANOMALY=0
+   [T1a] kb=26562 k=25062..27562 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T1a] kb=26562 k=25062..27562 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
 RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T1b] kb=45639 k=44139..46639 EARLY=1496 LATE=1005 BUG=0 ANOMALY=0
+   [T1b] kb=26562 k=25062..27562 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1b] kb=26562 k=25062..27562 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
 RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T3] kb=45639 k=44139..46639 EARLY=1496 LATE=1005 BUG=0 ANOMALY=0
+   [T3] kb=26563 k=25063..27563 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T3] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
 RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
-   [T3i] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T3i] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T3i] kb=26758 k=25258..27758 EARLY=1305 LATE=1196 BUG=0 ANOMALY=0
+   [T3i] kb=26660 k=25160..27660 EARLY=1403 LATE=1098 BUG=0 ANOMALY=0
 RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
-   [T13] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T13] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T13] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
 RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
    [T13] spins detected: 0
-   [T13b] kb=45639 k=44139..46639 EARLY=1498 LATE=1003 BUG=0 ANOMALY=0
-   [T13b] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T13b] kb=26758 k=25258..27758 EARLY=1304 LATE=1197 BUG=0 ANOMALY=0
+   [T13b] kb=26563 k=25063..27563 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
 RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
    [T13b] spins detected: 0
-   [T15] kb=45639 k=44139..46639 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
-   [T15] kb=45639 k=44139..46639 EARLY=1498 LATE=1003 BUG=0 ANOMALY=0
+   [T15] kb=26563 k=25063..27563 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T15] kb=26563 k=25063..27563 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
 RESULT T15: PASS -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
    [T15] bad trials=0: PHANTOM (C selected, no data)=0, SILENT (X selected, C data written)=0
 RESULT T16a: REPLACED -- no ISR path into rendezvous channels, so no mutex/BASEPRI race (their state is task-only) (compile check neg_rendezvous_isr.cpp)
-SUMMARY: PASS=24 FAIL=0 SKIP=0 REPLACED=4; heap used=40 B; runner stack min free=7240 B
+   [T19] RTX5 heap-free build: no dynamic memory pool (osRtxInfo.mem.common == NULL); fatal errors=2
+RESULT T19: PASS -- heap-free build: no dynamic RTOS memory exists; every object was created statically
+SUMMARY: PASS=25 FAIL=0 SKIP=0 REPLACED=4; heap used=0 B; runner stack min free=7432 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 259.774754s
-User time at initialisation             : 0.388681s
-User time                               : 110.717266s
-System time at initialisation           : 0.252144s
-System time                             : 0.041784s
-Wall time at initialisation             : 0.827572s
-Wall time                               : 110.803177s
-Performance index                       : 2.34
-cpu0                                    : 234.45 MIPS ( 25977394856 Inst)
-Memory highwater mark at initialisation : 0x104e5000 bytes ( 0.255 GB )
-Memory highwater mark                   : 0x10e38000 bytes ( 0.264 GB )
+Simulated time                          : 259.930812s
+User time at initialisation             : 0.302469s
+User time                               : 106.721354s
+System time at initialisation           : 0.193660s
+System time                             : 0.054230s
+Wall time at initialisation             : 0.681486s
+Wall time                               : 107.083394s
+Performance index                       : 2.43
+cpu0                                    : 242.74 MIPS ( 25993005080 Inst)
+Memory highwater mark at initialisation : 0x105b3000 bytes ( 0.256 GB )
+Memory highwater mark                   : 0x1102a000 bytes ( 0.266 GB )
 -------------------------------------------------------------------------------

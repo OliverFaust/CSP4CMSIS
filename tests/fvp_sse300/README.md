@@ -17,7 +17,8 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
-| 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`fcc29c5`), C1/C2 API (`bd3965f`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=23 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
+| 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`fcc29c5`), C1/C2 API (`bd3965f`), static Barrier (`c109660`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
+| 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
 | v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `1ad3e11`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 
 - **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
@@ -43,6 +44,34 @@ History:
 - `6920d1c` failed T13/T13b (livelock);
 - `a34d608` fixed it with a one-tick back-off;
 - `dd954a9` replaced the back-off with semaphore-count readiness.
+
+## Heap-free proof (`FreeRTOS-NoHeap`, `RTX5-NoHeap` build types)
+
+Two extra build types of the harness (FVP test branch) disable RTOS dynamic allocation completely. The
+whole suite runs on them with Arm Compiler 6 and GCC.
+
+| Build type | RTOS configuration | What proves "no dynamic RTOS allocation" |
+|---|---|---|
+| `FreeRTOS-NoHeap` | `configSUPPORT_DYNAMIC_ALLOCATION=0`: FreeRTOS's dynamic-allocation API is not compiled; **no heap implementation is linked** (the Heap component is left out) | `pvPortMalloc`/`vPortFree` are defined only as counting traps (`noheap_stubs.c`), because the CMSIS-FreeRTOS adapter references them without checking the setting. **AC6:** the linker removes the traps, so nothing in the image references an allocator at all. **GCC:** the traps are linked and T19 reports 0 calls |
+| `RTX5-NoHeap` | `OS_DYNAMIC_MEM_SIZE=0`: **no dynamic memory pool** (`osRtxInfo.mem.common == NULL`, `os_mem` absent from the image). Any object created without static memory would get NULL, which CSP4CMSIS treats as fatal | T19 checks that the pool is absent; the suite passing shows every object was created statically |
+
+- **Common evidence:** T17 (50 constructions of `Channel` + `SignalChannel` + `Barrier`, no allocation);
+  "heap used = 0 B" in the SUMMARY line; the CSP4CMSIS object files reference no `malloc`, `operator new`,
+  `pvPortMalloc` or `osRtxMemoryAlloc`. (Sized `operator delete` is referenced by the deleting
+  destructors of classes with virtual destructors, and is never called.)
+- **Workarounds needed only because of the RTOS packages** (test branch; upstream issue draft:
+  `docs/upstream/CMSIS-FreeRTOS_no_dynamic_allocation.md`, not filed):
+  - CMSIS-FreeRTOS 11.3.0 `clib_os.c` (Arm C library locks, AC6) falls back to the dynamic
+    `xSemaphoreCreateMutex()` without checking `configSUPPORT_DYNAMIC_ALLOCATION`. A forced include
+    (`noheap_shim.h`) makes that fallback yield NULL, so the adapter's static pool of 5 mutexes is used.
+  - CMSIS-FreeRTOS 11.3.0 `cmsis_os2.c` references `pvPortMalloc()`/`vPortFree()` unconditionally
+    (`osThreadEnumerate()`, `osMemoryPool*()`), hence the traps.
+  - RTX5 with Arm Compiler: the C library's stream mutexes (`rtx_lib.c` `_mutex_initialize()`) are
+    created with `osMutexNew(NULL)`. Without dynamic memory they come from RTX5's fixed, statically
+    allocated mutex pool (`OS_MUTEX_OBJ_MEM=1`, `OS_MUTEX_NUM=8`). Without that pool the image hangs
+    before `main()`. CSP4CMSIS itself creates no mutex.
+- **The C library's own heap** (`malloc`, used by stdio) is outside the RTOS and still linked. CSP4CMSIS
+  never calls it.
 
 ## Harness
 
@@ -142,7 +171,9 @@ done; wait
 | T14 | a BufferedChannel constructed at namespace scope (before `main()`) works. It also reports the kernel state and static/dynamic `osSemaphoreNew()` results during C++ static initialisation |
 | T15i | a rendezvous `putFromISR()` to a waiting ALT reader either delivers the value or returns false. (Today it returns true, and the reader's `select()` returns the channel guard with its destination unchanged.) |
 | T15s | `SignalChannel` ALT receiver {X, signal}: a signal that arrives while the receiver takes X (the lower index) is received by the next `select()`, and the sender completes. (Today `unregisterAltIn()` resets the channel, so the signal is lost and the sender blocks for good.) |
-| T17 | rendezvous and signal channels use no RTOS heap: 50 constructions and destructions of `Channel<uint32_t>` + `SignalChannel<>` allocate nothing (2.0; SKIP on 1.x) |
+| T17 | rendezvous and signal channels and `Barrier` use no RTOS heap: 50 constructions and destructions of `Channel<uint32_t>` + `SignalChannel<>` + `Barrier(3)` allocate nothing (2.0; SKIP on 1.x) |
+| T18 | `Barrier(3)` reused for 20 phases by threads of three priorities: nobody leaves a phase before all three arrived (FAIL on 1.0.0: 4 early departures) |
+| T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
 | T16a | *sweep*, rendezvous `putFromISR()` against a plain reader entering `input()`. The task path locks with the mutex, the ISR path with BASEPRI; an ISR between the two stores of `registerWaitingTask()` copies through a null pointer. Correct: `putFromISR()` true → the reader has the value; false → the runner's kick value. (Passes on the FVP; see "Current results".) A `HardFault_Handler` in the test file reports CFSR/HFSR/BFAR and ends the run if a fault happens |

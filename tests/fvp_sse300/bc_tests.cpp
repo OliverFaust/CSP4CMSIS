@@ -27,12 +27,25 @@
 #if defined(RTE_CMSIS_RTOS2_FreeRTOS)
   #include "FreeRTOS.h"
   #define BACKEND_NAME "FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter)"
-  static uint32_t heap_used() { return (uint32_t)(configTOTAL_HEAP_SIZE - xPortGetFreeHeapSize()); }
+  #if (configSUPPORT_DYNAMIC_ALLOCATION == 0)
+    // Heap-free build: no dynamic-allocation API exists; not touching the
+    // heap keeps heap_4 (pvPortMalloc) out of the linked image.
+    #define HEAP_MODE "RTOS dynamic allocation DISABLED (configSUPPORT_DYNAMIC_ALLOCATION=0)"
+    static uint32_t heap_used() { return 0; }
+  #else
+    #define HEAP_MODE "RTOS heap enabled"
+    static uint32_t heap_used() { return (uint32_t)(configTOTAL_HEAP_SIZE - xPortGetFreeHeapSize()); }
+  #endif
 #elif defined(RTE_CMSIS_RTOS2_RTX5)
   #include "rtx_os.h"
   #define BACKEND_NAME "Keil RTX5 5.9.1"
-  // RTX5 dynamic memory pool: mem_head_t { uint32_t size; uint32_t used; } (rtx_memory.c)
-  static uint32_t heap_used() { return static_cast<const uint32_t*>(osRtxInfo.mem.common)[1]; }
+  // RTX5 dynamic memory pool: mem_head_t { uint32_t size; uint32_t used; } (rtx_memory.c).
+  // Heap-free build (OS_DYNAMIC_MEM_SIZE=0): no pool at all (mem.common == NULL),
+  // so every dynamic creation would return NULL.
+  #define HEAP_MODE (osRtxInfo.mem.common == nullptr ? "RTOS dynamic allocation DISABLED (RTX5: no dynamic memory pool)" : "RTOS heap enabled")
+  static uint32_t heap_used() {
+      return osRtxInfo.mem.common == nullptr ? 0U : static_cast<const uint32_t*>(osRtxInfo.mem.common)[1];
+  }
   extern "C" uint32_t osRtxErrorNotify(uint32_t code, void* object_id) {
       printf("!! RTX5 osRtxErrorNotify(code=%lu, object=%p) -- halting\r\n", (unsigned long)code, object_id);
       for (;;) { }
@@ -611,6 +624,36 @@ void test_T18() {
 }
 
 // ---------------------------------------------------------------------------
+// T19 -- heap-free build types only (RTOS dynamic allocation disabled): no
+//        dynamic RTOS allocation was even attempted during the whole suite.
+//        FreeRTOS-NoHeap: the harness's pvPortMalloc()/vPortFree() traps
+//        were never called. RTX5-NoHeap: there is no dynamic memory pool
+//        (any dynamic creation would have returned NULL -> fatal).
+//        Run last. Not run (no RESULT line) in builds with a heap.
+// ---------------------------------------------------------------------------
+extern "C" __attribute__((weak)) volatile unsigned int noheap_alloc_calls;
+void test_T19() {
+#if defined(RTE_CMSIS_RTOS2_FreeRTOS) && (configSUPPORT_DYNAMIC_ALLOCATION == 0)
+    if (&noheap_alloc_calls == nullptr) {
+        // The linker removed the traps: nothing in the image references
+        // pvPortMalloc()/vPortFree() at all (strongest outcome).
+        printf("   [T19] FreeRTOS heap-free build: pvPortMalloc()/vPortFree() traps not linked (no reference in the image)\r\n");
+        result("T19", 1, "heap-free build: no dynamic RTOS allocation possible (allocator not referenced)");
+    } else {
+        unsigned int calls = noheap_alloc_calls;
+        printf("   [T19] FreeRTOS heap-free build: pvPortMalloc()/vPortFree() trap calls during the suite: %u\r\n", calls);
+        result("T19", calls == 0 ? 1 : 0, "heap-free build: no dynamic RTOS allocation attempted");
+    }
+#elif defined(RTE_CMSIS_RTOS2_RTX5)
+    if (osRtxInfo.mem.common == nullptr) {
+        printf("   [T19] RTX5 heap-free build: no dynamic memory pool (osRtxInfo.mem.common == NULL); fatal errors=%lu\r\n",
+               (unsigned long)g_fatal_count);
+        result("T19", 1, "heap-free build: no dynamic RTOS memory exists; every object was created statically");
+    }
+#endif
+}
+
+// ---------------------------------------------------------------------------
 // T7a -- a read via ALT wakes a writer blocked in ALT (control: plain input)
 // ---------------------------------------------------------------------------
 BlockChan<1>* t7_ch; ThreadSlot t7_s1, t7_s2; volatile int t7_done = 0;
@@ -1066,12 +1109,12 @@ void test_T14() {
 RunnerSlot runner_slot;
 void runner(void*) {
     printf("\r\n=== CSP4CMSIS BufferedChannel regression suite ===\r\n");
-    printf("backend: %s; library: %s\r\n", BACKEND_NAME, LIB_NAME);
+    printf("backend: %s; library: %s; %s\r\n", BACKEND_NAME, LIB_NAME, HEAP_MODE);
     isr_init();
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T17(); test_T18(); test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
-    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
+    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a(); test_T19();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)g_replaced, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));

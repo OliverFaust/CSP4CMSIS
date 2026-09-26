@@ -1,19 +1,19 @@
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5012
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5044
 
 
-
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5014
-
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5013
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5045
 
 
-Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5015
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5046
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5047
 
 Hello world
 
 === CSP4CMSIS BufferedChannel regression suite ===
-backend: Keil RTX5 5.9.1; library: v2 API (ring buffer)
+backend: Keil RTX5 5.9.1; library: v2 API (ring buffer); RTOS heap enabled
 RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
    [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
 RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
@@ -26,8 +26,10 @@ RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
 RESULT T5: PASS -- large channel is valid (or construction fails loudly)
    [T6] RelTimeoutGuard: 0 B heap while alive; Alternative: 0 B; 200 loop constructions -> 0 allocations
 RESULT T6: PASS -- RelTimeoutGuard and Alternative use no RTOS heap
-   [T17] 50 x (Channel + SignalChannel): 0 allocations, heap delta 0 B, fatal=0
-RESULT T17: PASS -- rendezvous and signal channels use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 0 allocations, heap delta 0 B, fatal=0
+RESULT T17: PASS -- rendezvous and signal channels and Barrier use no RTOS heap
+   [T18] 3 threads x 20 phases: finished=3, early departures=0
+RESULT T18: PASS -- reusable Barrier: nobody leaves a phase before all arrived
    [T7a] writer woken: reader uses input()=1, reader uses ALT=1
 RESULT T7a: PASS -- a read via ALT wakes a writer blocked in ALT
    [T8] 3 writers x 20 values: sum=lu (expect lu), writers done=0
@@ -48,45 +50,45 @@ RESULT T15i: REPLACED -- rendezvous putFromISR() no longer exists (ISR writes go
 RESULT T15s: PASS -- a signal that arrives while the ALT receiver takes another guard is not lost
 RESULT T16s: REPLACED -- signal channels have no ISR writer (data-less rendezvous, task-only) (compile check neg_signal_isr.cpp)
 RESULT T16n: REPLACED -- KeepNewest/KeepOldest rendezvous channels are rejected at compile time (use SamplingBufferedChannel<T, 1, P>) (compile check neg_rendezvous_policy.cpp)
+   [T1a] kb=53255 k=51755..54255 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
    [T1a] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T1a] kb=53321 k=51821..54321 EARLY=1434 LATE=1067 BUG=0 ANOMALY=0
 RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
-   [T1b] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T1b] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1b] kb=53259 k=51759..54259 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T1b] kb=53255 k=51755..54255 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
 RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
-   [T3] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T3] kb=53246 k=51746..54246 EARLY=1509 LATE=992 BUG=0 ANOMALY=0
+   [T3] kb=53259 k=51759..54259 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T3] kb=53255 k=51755..54255 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
 RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
-   [T3i] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T3i] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T3i] kb=53321 k=51821..54321 EARLY=1434 LATE=1067 BUG=0 ANOMALY=0
+   [T3i] kb=53255 k=51755..54255 EARLY=1498 LATE=1003 BUG=0 ANOMALY=0
 RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
+   [T13] kb=53254 k=51754..54254 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
    [T13] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T13] kb=53259 k=51759..54259 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
 RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
    [T13] spins detected: 0
-   [T13b] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
-   [T13b] kb=53255 k=51755..54255 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13b] kb=53272 k=51772..54272 EARLY=1482 LATE=1019 BUG=0 ANOMALY=0
+   [T13b] kb=53255 k=51755..54255 EARLY=1498 LATE=1003 BUG=0 ANOMALY=0
 RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
    [T13b] spins detected: 0
-   [T15] kb=53246 k=51746..54246 EARLY=1509 LATE=992 BUG=0 ANOMALY=0
-   [T15] kb=53259 k=51759..54259 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+   [T15] kb=53516 k=52016..54516 EARLY=1239 LATE=1262 BUG=0 ANOMALY=0
+   [T15] kb=53516 k=52016..54516 EARLY=1239 LATE=1262 BUG=0 ANOMALY=0
 RESULT T15: PASS -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
    [T15] bad trials=0: PHANTOM (C selected, no data)=0, SILENT (X selected, C data written)=0
 RESULT T16a: REPLACED -- no ISR path into rendezvous channels, so no mutex/BASEPRI race (their state is task-only) (compile check neg_rendezvous_isr.cpp)
-SUMMARY: PASS=23 FAIL=0 SKIP=0 REPLACED=4; heap used=40 B; runner stack min free=7176 B
+SUMMARY: PASS=24 FAIL=0 SKIP=0 REPLACED=4; heap used=40 B; runner stack min free=6944 B
 
 Info: /OSCI/SystemC: Simulation stopped by user.
 
 --- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
-Simulated time                          : 259.163407s
-User time at initialisation             : 0.242968s
-User time                               : 85.766208s
-System time at initialisation           : 0.146981s
-System time                             : 0.049083s
-Wall time at initialisation             : 0.375649s
-Wall time                               : 85.840538s
-Performance index                       : 3.02
-cpu0                                    : 301.91 MIPS ( 25916265164 Inst)
-Memory highwater mark at initialisation : 0x10628000 bytes ( 0.256 GB )
-Memory highwater mark                   : 0x1111d000 bytes ( 0.267 GB )
+Simulated time                          : 259.630662s
+User time at initialisation             : 0.299297s
+User time                               : 99.759040s
+System time at initialisation           : 0.202554s
+System time                             : 0.080308s
+Wall time at initialisation             : 0.684037s
+Wall time                               : 100.502124s
+Performance index                       : 2.58
+cpu0                                    : 258.33 MIPS ( 25962984998 Inst)
+Memory highwater mark at initialisation : 0x105e0000 bytes ( 0.256 GB )
+Memory highwater mark                   : 0x110b7000 bytes ( 0.266 GB )
 -------------------------------------------------------------------------------
