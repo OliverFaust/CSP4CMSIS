@@ -518,3 +518,139 @@ Compare the output with `tests/fvp_sse300/results/2026-09-26_fvp_run.txt`.
    FreeRTOS's own queue copy), or should B use reserve/copy/commit from the start?
 7. **Upstream report:** the adapter's missing `__ARM_ARCH_8_1M_MAIN__` in `IS_IRQ_MASKED()` (item 2) is
    an ARM::CMSIS-FreeRTOS issue on Armv8.1-M. Should it be reported to ARM-software/CMSIS-FreeRTOS?
+
+---
+
+# Implementation (2.0, branch `buffered-channel-v2`): decisions, commits, results
+
+**Decisions (maintainer):**
+- **BufferedChannel: design B.** Static ring buffer, two counting semaphores (items/spaces) with static
+  control blocks. ALT `activate()` takes the token with timeout 0. No RTOS call inside a CSP critical
+  section, including semaphore releases and `putFromISR()`.
+- **ALT wakeups: thread flags** in a documented, reserved bit range. `select()` re-verifies wakeups and
+  checks the wait result.
+- **Any number of blocking writers**, but at most one ALTing reader and one ALTing writer per channel
+  (assert). Guard state per ALT, not per channel.
+- Also in scope: static `TimerGuard`, handle checks at construction, deleted copy/move, `static_assert`s.
+- **RTX5 harness first**, with the v1.0.0 regression baseline on both backends.
+- **CSP-M model:** write only; the maintainer runs FDR.
+- The pdsc version is **not** bumped and the pack is **not** rebuilt yet.
+
+## Commits (on top of `21c0e09`)
+
+| Commit | Change |
+|---|---|
+| `a7ee998` | tests: version- and backend-agnostic regression suite (PASS/FAIL), T2 via armlink `$Sub$$` interposition, T3i (real ISR), T8–T10 |
+| `5c827a4` | fatal-error hook (`csp_fatal.h`); static `TimerGuard` control block (FreeRTOS: `StaticTimer_t` + adapter callback wrapper); non-copyable timeout guards; `Alternative` binds by reference |
+| `7b293e1` | ALT via thread flags (bits 8–23; bit 0 = `RENDEZVOUS_FLAG`); `select()`: error check, disable only enabled guards, `confirm()`, `activate()` → bool; rendezvous `putFromISR()` snapshots then acts |
+| `203bffd` | guard state per channel-end handle (`GuardSlot` in `Chanin`/`Chanout`), rendezvous and buffered |
+| `302cc67` | tests: 1 KB worker stacks (RAM budget for the static T5 channel) |
+| `6920d1c` | `BufferedChannel<T, SIZE, P>`: design B |
+| `3709984` | tests: T11/T12 (rendezvous ALT regression), README, results |
+| `f1711cf` | tests: compile-time checks (`static_assert`s, deleted copy/move, by-reference bindings) |
+| `0af7731` | tests: T13/T13b (livelock of a high-priority ALT vs a preempted partner); **FAIL** on `6920d1c` |
+| `a34d608` | `select()` backs off (one tick) after a lost `activate()` race: fixes the livelock |
+| *(this commit)* | CSP-M model, CMSIS-FreeRTOS issue draft, `CHANGES_2.0.md`, this section |
+
+Each library commit was built with 0 warnings under `-Wall -Wextra` on both backends and run through the
+regression suite on both backends:
+
+| After commit | FreeRTOS | RTX5 | Newly passing |
+|---|---|---|---|
+| v1.0.0 (baseline, 15-test suite) | 2 / 12 / 1 | 2 / 12 / 1 | — |
+| `5c827a4` | 3 / 11 / 1 | 3 / 11 / 1 | T6 |
+| `7b293e1` | 4 / 10 / 1 | 4 / 10 / 1 | T4b |
+| `203bffd` | 5 / 9 / 1 | 5 / 9 / 1 | T4c |
+| `6920d1c` | 15 / 0 / 0 (17 / 0 / 0 with T11–T12) | same | T1a T1b T2 T3 T3i T4a T5 T7a T9 T10 |
+| `6920d1c` + T13/T13b | 17 / **2** / 0 | 17 / **2** / 0 | — (livelock found) |
+| **`a34d608` (HEAD)** | **19 / 0 / 0** | **19 / 0 / 0** | T13 T13b |
+
+Entries are PASS / FAIL / SKIP. Rows before T11–T13 existed used the smaller suite of that time.
+
+## Final regression (identical 19-test suite; outputs in `tests/fvp_sse300/results/`)
+
+| Library | FreeRTOS 11.3.0 | Keil RTX5 5.9.1 |
+|---|---|---|
+| **2.0 @ `a34d608`** | **PASS 19, FAIL 0, SKIP 0** | **PASS 19, FAIL 0, SKIP 0** |
+| v1.0.0 @ `a789d2a` | PASS 6, FAIL 12, SKIP 1 | PASS 6, FAIL 12, SKIP 1 |
+
+On v1.0.0, only T0, T8, T11, T12, T13 and T13b pass. T13/T13b pass there because v1.0.0 never retries
+`activate()`: the livelock was introduced by, and fixed within, the 2.0 work.
+
+On 2.0, every phase sweep (T1a, T1b, T3, T3i, T13, T13b; two sweeps each, about 2,500 trials per sweep,
+covering the full v1.0.0 bug windows) recorded **0** bug trials. Compile checks: 14/14 on both backends
+(`tests/compile_checks/`).
+
+**End-to-end:** the FVP demo application (`helloworld_sse300` `application.cpp`) built against 2.0 and ran
+for 24 s of simulated time. It uses rendezvous channels, pipe-syntax ALT, `fairSelect` and
+`Run(InParallel)`.
+- 0 data errors on both backends.
+- Functional output identical to the migration reference (v1.0.0 pack).
+- Messages verified in 24 s: FreeRTOS 470,000 (v1.0.0: 460,000), RTX5 520,000.
+
+**Heap at the end of the suite** (2.0): FreeRTOS 360 B, RTX5 416 B. This comes from the rendezvous
+channels' mutexes, which are outside this work (see `docs/CHANGES_2.0.md`). BufferedChannel, `Alternative`
+and `RelTimeoutGuard` use 0 B (T5, T6).
+
+## Findings made during the implementation
+
+1. **Livelock in the first design-B commit (`6920d1c`), found by reviewing the CSP-M model.**
+   - What happens: a high-priority ALT whose `enable()` reports ready (`count_ > 0`) while the
+     semaphore token is not yet released, because a lower-priority writer was preempted between its
+     critical section and `osSemaphoreRelease()`, retried `select()` immediately and spun forever.
+   - The same applies to the output side, and to a blocking competitor holding the token.
+   - Reproduced by T13/T13b on both backends (21–23 spins per sweep on FreeRTOS, 12–15 on RTX5).
+   - Fixed in `a34d608` with a one-tick back-off. The model file keeps the draft variant, whose assertion
+     is expected to fail with divergence.
+   - **Residual cost:** in this rare race the ALT sees up to one tick of extra latency. It never
+     busy-waits.
+2. **v1.0.0 on RTX5: KeepNewest `putFromISR()` always loses the newest value.** `isrRtxMessageQueueGet()`
+   defers freeing the message block to post-processing (PendSV). The immediate re-`put` in the same ISR
+   therefore finds no free block, and the drop has already happened. That is why T3i on v1.0.0/RTX5 fails
+   on every trial, not only inside a race window.
+3. **Rendezvous and signal-channel guards cannot be re-verified generically.** In an ALT-to-ALT rendezvous
+   the partner copies the data during *its* `activate()` and clears the registration. The receiving
+   guard's `disable()` then reports "not ready" although it has completed, and `SyncChannel`'s `disable()`
+   behaves similarly. These guards keep "trust the wakeup" (the default `confirm()`), as in 1.0.0. Only
+   buffered and timer guards re-verify.
+4. **FreeRTOS adapter static timers** need `cb_size >= sizeof(StaticTimer_t) + sizeof(TimerCallback_t)`;
+   otherwise the callback wrapper is `pvPortMalloc`ed silently. RTX5 needs `cb_size == sizeof(osRtxTimer_t)`
+   exactly. `csp_static_timer_storage_t` covers both.
+5. **Upstream (ARM-software/CMSIS-FreeRTOS):** the `IS_IRQ_MASKED()` Armv8.1-M gap (item 2 of this
+   analysis) still exists on `main` @ `c3e5dc3` (2026-09-01, `11.3.1-dev`). An issue is drafted, **not
+   filed**: `docs/upstream/CMSIS-FreeRTOS_IS_IRQ_MASKED_Armv8.1-M.md`.
+
+## Formal model (`docs/formal/buffered_channel_v2.csp`, not checked)
+
+The model is written for FDR4 and **has not been run**; the "expected" annotations are design intent.
+1. **ALT reader vs. one final message, no successor.**
+   - v1.0.0 protocol: expected to deadlock (the lost wakeup) and to fail `[FD=`.
+   - The `6920d1c` draft: expected to fail `[FD=` with **divergence** (the livelock).
+   - 2.0 with back-off: expected deadlock-free, no take-from-empty, and eventual delivery, even with an
+     adversarial stale signal.
+2. **KeepNewest, capacity 2, task writer and ISR writer.** The v1.0.0 two-step write should fail
+   refinement of the serial specification (counterexample ending `rd.2, rd.4`). The 2.0 single atomic
+   update should pass `[T=` and `[FD=`.
+3. **Block bounded buffer, capacity 1, two blocking writers, items/spaces tokens.** It should refine
+   `BUFF` and keep per-writer FIFO order.
+
+Assumptions:
+- Each CSP critical section is one atomic event.
+- An ISR's operation is atomic relative to tasks.
+- The one-tick back-off ends only after the preempted partner has finished its in-flight step. This is a
+  scheduling (fairness) assumption, stated in the file.
+
+## Remaining limitations and risks
+
+- **Rendezvous and signal channels still have one ALT registration slot per direction**, and are not
+  covered by the one-ALTing-process assert or by re-verification.
+- **Remaining RTOS heap use:** rendezvous and `SyncChannel` mutexes and semaphores, and `Barrier`.
+- **Interrupt latency:** `putFromISR()` and every buffered operation copy `sizeof(T)` bytes with BASEPRI
+  raised.
+- **Thread-flag collision** with native FreeRTOS index-0 task notifications on CSP threads (documented).
+- **RTX5, channels constructed before `osKernelInitialize()`** (namespace-scope statics): object creation
+  may fail there. If it does, 2.0 now stops in `csp4cmsis_fatal_error()` instead of running with a dead
+  channel. Not tested.
+- **The back-off** adds up to one tick of latency in the race of finding 1.
+- **Test coverage:** Arm Compiler 6 at `-O0` only; FVP only, no hardware; the Cortex-M55 core only.
+  The FreeRTOS ISR-path variant of item 2 (Armv7-M / Armv8-M Mainline) was not built.

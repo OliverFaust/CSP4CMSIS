@@ -1,0 +1,217 @@
+-- =============================================================================
+-- CSP4CMSIS 2.0 BufferedChannel: ALT wakeup protocol and bounded buffer
+-- CSP-M model for FDR4.
+--
+-- STATUS: written, NOT YET CHECKED. No CSP-M model checker was run for this
+-- revision (FDR4's licence is academic-only; the maintainer runs it). The
+-- "expected" result next to each assertion is the design intent, not a
+-- recorded result. Run:   refines buffered_channel_v2.csp
+--
+-- Abstraction (see BUFFERED_CHANNEL_ANALYSIS.md and buffered_channel.h):
+--  * A CSP critical section (BASEPRI raised) is atomic w.r.t. every task and
+--    every ISR at or below CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY, so each
+--    critical section is ONE event on the shared-state process.
+--  * RTOS calls (thread-flag set/wait, semaphore release/acquire) are
+--    separate events, i.e. other processes may interleave around them.
+--  * An ISR is not preempted by tasks, so an ISR's whole operation is one
+--    atomic step relative to a task; tasks may be preempted between any two
+--    of their events.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Part 1 -- ALT reader vs. one writer that sends ONE final message (no
+--           successor). Capacity 1 suffices: the question is only whether the
+--           reader is woken.
+-- -----------------------------------------------------------------------------
+N1 = 1
+
+-- shared state: count (elements), tokens (items semaphore count),
+--               reg (reader registered), flag (reader's ALT thread flag)
+channel pending_chk : Bool      -- v1.0.0: pending() in enable(), unlocked
+channel register_old            -- v1.0.0: registerInputAlt() (separate step)
+channel notify_old : Bool       -- v1.0.0: _notifyReader(): reads reg and signals, atomically
+channel put_old                 -- v1.0.0: osMessageQueuePut() succeeded
+channel act_old                 -- v1.0.0: activate(): osMessageQueueGet(..., 0), result ignored
+channel enable_new : Bool       -- 2.0: check-and-register in ONE critical section
+channel unregister : Bool       -- disable(): unregister own registration, report readiness
+channel push_snap : Bool        -- 2.0: push + snapshot of the registration (critical section)
+channel rel_items               -- 2.0: osSemaphoreRelease(items) after the critical section
+channel act_new : Bool          -- 2.0: activate(): osSemaphoreAcquire(items, 0) + pop
+channel clear_flag, wait_flag, set_flag, stale_flag
+channel backoff_tick            -- 2.0: select()'s 1-tick back-off after a failed activate()
+channel done, idle, error
+
+STATE1(count, tokens, reg, flag) =
+     pending_chk!(count > 0)          -> STATE1(count, tokens, reg, flag)
+  [] register_old                     -> STATE1(count, tokens, true, flag)
+  [] count < N1 & put_old             -> STATE1(count + 1, tokens + 1, reg, flag)
+  [] notify_old!reg                   -> STATE1(count, tokens, reg, flag or reg)
+  [] act_old -> (if count > 0 then STATE1(count - 1, tokens - 1, reg, flag)
+                 else error -> STOP)                      -- select() returned without data
+  [] enable_new!(count > 0)           -> STATE1(count, tokens, true, flag)
+  [] unregister!(count > 0)           -> STATE1(count, tokens, false, flag)
+  [] count < N1 & push_snap!reg       -> STATE1(count + 1, tokens, reg, flag)
+  [] rel_items                        -> STATE1(count, tokens + 1, reg, flag)
+  [] act_new!(tokens > 0) ->
+       (if tokens > 0 then
+          (if count > 0 then STATE1(count - 1, tokens - 1, reg, flag) else error -> STOP)
+        else STATE1(count, tokens, reg, flag))
+  [] clear_flag                       -> STATE1(count, tokens, reg, false)
+  [] flag & wait_flag                 -> STATE1(count, tokens, reg, false)  -- osThreadFlagsWait clears
+  [] set_flag                         -> STATE1(count, tokens, reg, true)
+  [] stale_flag                       -> STATE1(count, tokens, reg, true)
+  -- Back-off wait (osThreadFlagsWait(mask, any, 1 tick)) ends by timeout.
+  -- FAIRNESS ASSUMPTION: the ALT thread sleeps for a tick, so the preempted
+  -- lower-priority partner runs and finishes its short in-flight step; the
+  -- timeout is therefore only offered once no push is in flight
+  -- (tokens == count). Without this assumption no fix based on waiting can
+  -- be shown live in an untimed model.
+  [] tokens == count & backoff_tick   -> STATE1(count, tokens, reg, flag)
+
+FIN = idle -> FIN
+
+-- v1.0.0 writer: put, then notify (reads the registration, signals if set)
+W_OLD = put_old -> notify_old?_ -> SKIP
+
+-- v1.0.0 ALT reader, one buffered input guard (select() of 1.0.0)
+R_OLD = clear_flag -> pending_chk?ready ->
+          (if ready then unregister?_ -> act_old -> done -> FIN
+           else register_old -> wait_flag -> unregister?_ -> act_old -> done -> FIN)
+
+-- 2.0 writer: push + snapshot (critical section), then token, then signal
+W_NEW = push_snap?r -> rel_items -> (if r then set_flag -> SKIP else SKIP)
+
+-- 2.0 ALT reader: rounds of enable / wait / disable / confirm / activate.
+-- bo = back-off after a failed activate() (the final design); without it
+-- (first 2.0 draft, commit 6920d1c) a failed activate() retried at once.
+R_NEW(bo) = clear_flag -> enable_new?ready ->
+          (if ready then unregister?r2 -> ROUND(bo, r2)
+           else wait_flag -> unregister?r2 -> ROUND(bo, r2))
+ROUND(bo, r2) =
+     if r2 then act_new?ok ->
+          (if ok then done -> FIN
+           else if bo then ((wait_flag -> R_NEW(bo)) [] (backoff_tick -> R_NEW(bo)))   -- back off
+           else R_NEW(bo))                                                           -- retry at once
+     else R_NEW(bo)                                                                  -- stale wakeup
+
+-- An adversary that may deliver ONE late signal from an earlier select()
+STALE = (stale_flag -> SKIP) [] SKIP
+
+S1 = {| pending_chk, register_old, notify_old, put_old, act_old, enable_new, unregister,
+        push_snap, rel_items, act_new, clear_flag, wait_flag, set_flag, stale_flag |}
+
+SYS_OLD = (R_OLD ||| W_OLD) [| S1 |] STATE1(0, 0, false, false)
+S1B = union(S1, {backoff_tick})
+SYS_NEW   = (R_NEW(true)  ||| W_NEW ||| STALE) [| S1B |] STATE1(0, 0, false, false)
+SYS_DRAFT = (R_NEW(false) ||| W_NEW ||| STALE) [| S1B |] STATE1(0, 0, false, false)
+
+-- Liveness spec: the single message is eventually received, then idle forever.
+DELIVERED = done -> FIN
+
+-- expected: FAILS -- counterexample: pending_chk.false, put_old, notify_old.false,
+--           register_old, (reader blocked in wait_flag with count = 1)  = lost wakeup
+assert SYS_OLD :[deadlock free [F]]
+-- expected: FAILS (same trace; done never happens)
+assert DELIVERED [FD= SYS_OLD \ diff(Events, {done, idle})
+
+-- expected: FAILS with DIVERGENCE -- the first 2.0 draft (6920d1c) livelocks:
+--           push_snap.false (writer preempted before rel_items), then the reader
+--           repeats clear_flag, enable_new.true, unregister.true, act_new.false
+--           forever (found by this model review; reproduced on the FVP by T13)
+assert DELIVERED [FD= SYS_DRAFT \ diff(Events, {done, idle})
+
+-- expected: PASSES
+assert SYS_NEW :[deadlock free [F]]
+-- expected: PASSES -- delivered despite a possible stale signal; no livelock
+assert DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})
+-- expected: PASSES -- never takes from an empty buffer
+assert STOP [T= SYS_NEW \ diff(Events, {error})
+
+-- -----------------------------------------------------------------------------
+-- Part 2 -- KeepNewest, capacity 2, initially full <1,2>.
+--           Task writer writes 3, ISR writer writes 4, then a reader drains.
+--           Every serial execution ends with {3,4}: <3,4> or <4,3>.
+-- -----------------------------------------------------------------------------
+NB = 2
+Vals = {1..4}
+
+knwrite(s, v) = if #s < NB then s ^ <v> else tail(s) ^ <v>
+
+channel t_try : Bool            -- v1.0.0 task: osMessageQueuePut(.., 0) (fails if full)
+channel t_drop                  -- v1.0.0 task: osMessageQueueGet(.., 0) = drop oldest
+channel t_put2 : Bool           -- v1.0.0 task: second osMessageQueuePut(.., 0), result ignored
+channel isr_old                 -- v1.0.0 ISR putFromISR (its 2 steps are atomic vs. the task)
+channel t_new, isr_new          -- 2.0: one critical section each (overwrite in place)
+channel wdone
+channel rd : Vals
+channel drained
+
+KNSTATE(s) =
+     t_try!(#s < NB)             -> KNSTATE(if #s < NB then s ^ <3> else s)
+  [] t_drop                      -> KNSTATE(if null(s) then s else tail(s))
+  [] t_put2!(#s < NB)            -> KNSTATE(if #s < NB then s ^ <3> else s)
+  [] isr_old                     -> KNSTATE(knwrite(s, 4))
+  [] t_new                       -> KNSTATE(knwrite(s, 3))
+  [] isr_new                     -> KNSTATE(knwrite(s, 4))
+  [] not null(s) & rd!head(s)    -> KNSTATE(tail(s))
+  [] null(s) & drained           -> KNSTATE(s)
+
+T_OLD = t_try?ok -> (if ok then wdone -> SKIP else t_drop -> t_put2?_ -> wdone -> SKIP)
+I_OLD = isr_old -> wdone -> SKIP
+T_NEW = t_new   -> wdone -> SKIP
+I_NEW = isr_new -> wdone -> SKIP
+
+DRAIN   = rd?_ -> DRAIN [] drained -> FIN
+READER2 = wdone -> wdone -> DRAIN
+
+SK = {| t_try, t_drop, t_put2, isr_old, t_new, isr_new, rd, drained |}
+
+SYS_KN_OLD = ((T_OLD ||| I_OLD) [| {wdone} |] READER2) [| SK |] KNSTATE(<1,2>)
+SYS_KN_NEW = ((T_NEW ||| I_NEW) [| {wdone} |] READER2) [| SK |] KNSTATE(<1,2>)
+
+KN_SPEC = (rd.3 -> rd.4 -> drained -> FIN) |~| (rd.4 -> rd.3 -> drained -> FIN)
+KN_OBS  = {| rd, drained, idle |}
+
+-- expected: FAILS -- counterexample trace <rd.2, rd.4, drained>: the task drops 1,
+--           the ISR fills the freed slot, the task's second put fails; 3 lost, 2 kept
+assert KN_SPEC [T= SYS_KN_OLD \ diff(Events, KN_OBS)
+-- expected: PASSES (both serial orders, nothing else)
+assert KN_SPEC [T= SYS_KN_NEW \ diff(Events, KN_OBS)
+assert KN_SPEC [FD= SYS_KN_NEW \ diff(Events, KN_OBS)
+
+-- -----------------------------------------------------------------------------
+-- Part 3 -- Block bounded buffer, capacity 1, two blocking writers (2 values
+--           each) and one blocking reader, with the 2.0 items/spaces tokens.
+--           Linearisation points: push (bin.v) and pop (bout.v) critical sections.
+-- -----------------------------------------------------------------------------
+NC = 1
+Data = {10, 11, 20, 21}
+
+channel bin, bout : Data
+channel acq_space, rel_space, acq_item, rel_item
+
+-- state: buffer contents s, items tokens it, spaces tokens sp
+BSTATE(s, it, sp) =
+     sp > 0 & acq_space            -> BSTATE(s, it, sp - 1)
+  [] rel_space                     -> BSTATE(s, it, sp + 1)
+  [] it > 0 & acq_item             -> BSTATE(s, it - 1, sp)
+  [] rel_item                      -> BSTATE(s, it + 1, sp)
+  [] #s < NC & bin?v                -> BSTATE(s ^ <v>, it, sp)
+  [] not null(s) & bout!head(s)     -> BSTATE(tail(s), it, sp)
+
+WRITER(<>)     = SKIP
+WRITER(<v>^vs) = acq_space -> bin!v -> rel_item -> WRITER(vs)
+READER3        = acq_item -> bout?_ -> rel_space -> READER3
+
+SB = {| acq_space, rel_space, acq_item, rel_item, bin, bout |}
+SYS_BUF = ((WRITER(<10,11>) ||| WRITER(<20,21>)) ||| READER3) [| SB |] BSTATE(<>, 0, NC)
+
+-- classic bounded buffer of capacity NC
+BUFF(s) = (#s < NC & bin?v -> BUFF(s ^ <v>)) [] (not null(s) & bout!head(s) -> BUFF(tail(s)))
+
+-- expected: PASSES -- the token implementation is a bounded buffer
+assert BUFF(<>) [T= SYS_BUF \ {| acq_space, rel_space, acq_item, rel_item |}
+-- expected: PASSES -- per-writer FIFO order is kept (bin/bout restricted to writer 1)
+W1 = {10, 11}
+FIFO1 = bin.10 -> bout.10 -> bin.11 -> bout.11 -> STOP
+assert FIFO1 [T= SYS_BUF \ diff(Events, {bin.v, bout.v | v <- W1})
