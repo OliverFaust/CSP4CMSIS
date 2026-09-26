@@ -1,11 +1,76 @@
 -- =============================================================================
 -- CSP4CMSIS 2.0 BufferedChannel: ALT wakeup protocol and bounded buffer
--- CSP-M model for FDR4.
+-- CSP-M model (FDR4 dialect; also accepted by ProB).
 --
--- STATUS: written, NOT YET CHECKED. FDR4 is not installed on the machine
--- where this model was written (see BUFFERED_CHANNEL_ANALYSIS.md, "FDR").
--- The "expected" result next to each assertion is the design intent, not a
--- recorded result. Run:   refines buffered_channel_v2.csp
+-- STATUS: CHECKED with ProB 1.16.1 (probcli 1.16.1-final, 716929f; SICStus
+-- 4.9.0) on 2026-09-26. Not checked with FDR4 (not installed). All 25 results
+-- match the "expected" annotations; the ones marked FAILS are intended.
+--
+-- Reproduce (ProB: https://prob.hhu.de, Linux tarball ProB.linux64 1.16.1):
+--   probcli buffered_channel_v2.csp -init                  # parse/type-check
+--   probcli buffered_channel_v2.csp -csp_assertion 'SYS_OLD :[deadlock free [F]]'
+--   grep '^assert ' buffered_channel_v2.csp | sed 's/^assert //' |
+--     while IFS= read -r a; do echo "== $a"
+--       probcli buffered_channel_v2.csp -csp_assertion "$a" 2>&1 |
+--         grep -E '^OK$|FALSE|Counter-?[Ee]xample' -A1; done
+-- probcli prints OK when an assertion holds and FALSE plus a counterexample
+-- when it does not. Each run takes about 3 s (mostly ProB start-up).
+--
+-- Order of checking: positive controls (#1, #3) and mutation controls (#13,
+-- #14) first; the other results are only meaningful if these fail.
+--
+--  #  assertion                                   expected  ProB  counterexample
+--  1  SYS_OLD deadlock free                       FAIL      FAIL  clear_flag, pending_chk.false, put_old,
+--                                                                 notify_old.false, register_old, DEADLOCK
+--  2  DELIVERED [FD= SYS_OLD                      FAIL      FAIL  <> then refuses done (lost wakeup)
+--  3  DELIVERED [FD= SYS_DRAFT                    FAIL      FAIL  <> DIVERGES (loop clear_flag,
+--                                                                 enable_new.true, unregister.true,
+--                                                                 act_new.false after push_snap.false)
+--  4  SYS_NEW deadlock free                       PASS      PASS
+--  5  DELIVERED [FD= SYS_NEW                      PASS      PASS
+--  6  STOP [T= SYS_NEW (error)                    PASS      PASS
+--  7  SYS_C deadlock free                         PASS      PASS
+--  8  DELIVERED_C [FD= SYS_C                      PASS      PASS
+--  9  STOP [T= SYS_C (error)                      PASS      PASS
+-- 10  SYS_C2 deadlock free                        PASS      PASS
+-- 11  BOTH [FD= SYS_C2                            PASS      PASS
+-- 12  STOP [T= SYS_C2 (error)                     PASS      PASS
+-- 13  SYS_M1 deadlock free (mutation m1)          FAIL      FAIL  clear_flag, stale_flag, c_tokens.false,
+--                                                                 c_push, c_register, wait_flag,
+--                                                                 c_unregister, c_tokens.false, clear_flag,
+--                                                                 c_tokens.false, rel_items, c_snap.false,
+--                                                                 c_register, DEADLOCK
+-- 14  SYS_M2 deadlock free (mutation m2)          FAIL      FAIL  clear_flag, stale_flag, c_register,
+--                                                                 c_tokens.false, wait_flag, c_unregister,
+--                                                                 c_tokens.false, clear_flag, c_push,
+--                                                                 c_snap.false, c_register, c_tokens.false,
+--                                                                 rel_items, DEADLOCK
+-- 15  KN_SPEC [T= SYS_KN_OLD                      FAIL      FAIL  rd.2 (spec allows only rd.3, rd.4)
+-- 16  KN_SPEC [T= SYS_KN_NEW                      PASS      PASS
+-- 17  KN_SPEC [FD= SYS_KN_NEW                     PASS      PASS
+-- 18  BUFF(<>) [T= SYS_BUF                        PASS      PASS
+-- 19  FIFO1 [T= SYS_BUF                           PASS      PASS
+-- 20  SYS_RV(true) deadlock free                  PASS      PASS
+-- 21  RV_OK [FD= SYS_RV(true)                     PASS      PASS
+-- 22  SYS_RV(false) deadlock free                 FAIL      FAIL  clr_r, rv_en_r.false, clr_w, rv_en_w.true,
+--                                                                 rv_dis_w.true, rv_act_w.true, wait_r,
+--                                                                 rv_dis_r.false, clr_r, rv_en_r.false,
+--                                                                 wdone2, DEADLOCK
+-- 23  RV_OK [T= SYS_RV_STALE(true)                FAIL      FAIL  rdone.false (after a stale signal)
+-- 24  SYS_SG(true) deadlock free                  PASS      PASS
+-- 25  SYS_SG(false) deadlock free                 FAIL      FAIL  clr_r, sg_reg.false, sg_send, wait_r,
+--                                                                 sg_unreg.false, clr_r, sg_reg.false, DEADLOCK
+--
+-- Changes made while checking (2026-09-26):
+--  * SYS_OLD synchronised on S1, which lacks backoff_tick; STATE1 could then do
+--    backoff_tick forever and SYS_OLD was wrongly deadlock free (positive
+--    control #1 failed). It now uses S1B, like the other Part 1 systems.
+--  * `st == 1 & alt & sg_send` -> `st == 1 and alt & sg_send` (ProB groups
+--    the first form as (st == 1 & alt) & sg_send and rejects it).
+--  * Part 1d (mutation controls m1, m2) added.
+--  * Alphabet audit: for every SYS_* system, no event outside its
+--    synchronisation set occurs other than the intended observables (done,
+--    done_alt, done_blk, idle, error, wdone2, sg_rdone, sg_sdone).
 --
 -- Protocol versions modelled:
 --   (a) v1.0.0            : check-then-register (Part 1, SYS_OLD)
@@ -13,6 +78,7 @@
 --                           SYS_DRAFT = 6920d1c, SYS_NEW = a34d608)
 --   (c) 2.0 final         : readiness from the semaphore count (Part 1c,
 --                           commit dd954a9)
+--   (d) mutations of (c)  : C before R (m1), S before T (m2) (Part 1d)
 --   rendezvous / signal channels, "trust the wakeup" (Part 4)
 --
 -- Abstraction (see BUFFERED_CHANNEL_ANALYSIS.md and buffered_channel.h):
@@ -108,8 +174,11 @@ STALE = (stale_flag -> SKIP) [] SKIP
 S1 = {| pending_chk, register_old, notify_old, put_old, act_old, enable_new, unregister,
         push_snap, rel_items, act_new, clear_flag, wait_flag, set_flag, stale_flag |}
 
-SYS_OLD = (R_OLD ||| W_OLD) [| S1 |] STATE1(0, 0, false, false)
-S1B = union(S1, {backoff_tick})
+S1B = union(S1, {backoff_tick})   -- every STATE1 event except error
+-- All systems synchronise on S1B: STATE1 offers backoff_tick by itself, so a
+-- system that did not synchronise on it could always do it (the first version
+-- of SYS_OLD used S1 and was wrongly deadlock free).
+SYS_OLD = (R_OLD ||| W_OLD) [| S1B |] STATE1(0, 0, false, false)
 SYS_NEW   = (R_NEW(true)  ||| W_NEW ||| STALE) [| S1B |] STATE1(0, 0, false, false)
 SYS_DRAFT = (R_NEW(false) ||| W_NEW ||| STALE) [| S1B |] STATE1(0, 0, false, false)
 
@@ -208,6 +277,32 @@ assert SYS_C2 :[deadlock free [F]]
 assert BOTH [FD= SYS_C2 \ diff(Events, {done_alt, done_blk, idle})
 -- expected: PASSES
 assert STOP [T= SYS_C2 \ diff(Events, {error})
+
+-- -----------------------------------------------------------------------------
+-- Part 1d -- mutation controls for (c). Each swaps ONE ordering of the final
+--            protocol; each must deadlock (lost wakeup), otherwise the model
+--            cannot tell the orderings apart and the Part 1c passes mean nothing.
+-- -----------------------------------------------------------------------------
+-- (m1) ALT side reads the token count BEFORE registering (C before R)
+R_M1 = clear_flag -> c_tokens?ready -> c_register ->
+         (if ready then c_unregister -> c_tokens?r2 -> ROUND_M1(r2)
+          else wait_flag -> c_unregister -> c_tokens?r2 -> ROUND_M1(r2))
+ROUND_M1(r2) = if r2 then c_acq_alt?ok -> (if ok then done_alt -> FIN else R_M1)
+               else R_M1
+SYS_M1 = (R_M1 ||| W_C ||| STALE) [| SC1 |] STATE1C(0, 0, false, false)
+
+-- (m2) partner snapshots the registration BEFORE releasing the token (S before T)
+W_M2 = c_push -> c_snap?r -> rel_items -> (if r then set_flag -> SKIP else SKIP)
+SYS_M2 = (R_C ||| W_M2 ||| STALE) [| SC1 |] STATE1C(0, 0, false, false)
+
+-- expected: FAILS (deadlock) -- clear_flag, c_tokens.false, c_push, rel_items,
+--           c_snap.false, c_register, then the reader waits for a signal that
+--           never comes (ProB reports a longer trace with a stale round first)
+assert SYS_M1 :[deadlock free [F]]
+-- expected: FAILS (deadlock) -- clear_flag, c_push, c_snap.false, c_register,
+--           c_tokens.false, rel_items, then the reader waits for a signal that
+--           never comes (ProB reports a longer trace with a stale round first)
+assert SYS_M2 :[deadlock free [F]]
 
 -- -----------------------------------------------------------------------------
 -- Part 2 -- KeepNewest, capacity 2, initially full <1,2>.
@@ -373,7 +468,7 @@ channel sg_rdone, sg_sdone
 --        alt = ALT registered; sem = sender_sem; fr = receiver flag
 SG(st, alt, sem, fr) =
      sg_reg!false                 -> SG(1, true, sem, fr)
-  [] st == 1 & alt & sg_send      -> SG(st, false, sem, true)
+  [] st == 1 and alt & sg_send    -> SG(st, false, sem, true)
   [] sg_unreg!(st != 1)           -> SG(if st != 1 then st else 0, false, sem, fr)
   [] sg_act                       -> SG(0, alt, sem + 1, fr)
   [] sem > 0 & sg_sender_wait     -> SG(st, alt, sem - 1, fr)
