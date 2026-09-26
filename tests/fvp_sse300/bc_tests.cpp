@@ -378,6 +378,61 @@ void test_T3i() {
 }
 
 // ---------------------------------------------------------------------------
+// T13 / T13b -- no livelock: a HIGH-priority ALT process meets a LOW-priority
+// blocking partner that was preempted in the middle of its operation (e.g.
+// between the push and the semaphore release). The ALT must block, not spin.
+// Aggressor = separate thread (above the victim, below the runner) woken at
+// E1; the runner detects a spin (no progress within T_ACK while the victim
+// is stuck) and rescues by temporarily dropping the aggressor's priority.
+// ---------------------------------------------------------------------------
+constexpr uint32_t F_GO   = 0x2u;     // runner -> aggressor thread (application bit)
+constexpr uint32_t F_ACK2 = 0x4u;     // aggressor thread -> runner
+BlockChan<1>* t13_ch; ThreadSlot t13_vs, t13_as, t13b_vs, t13b_as; Case t13, t13b;
+osThreadId_t t13_aggr_tid; volatile bool t13_go = false, t13_livelock = false;
+uint32_t t13_livelocks = 0;
+void t13_reader_aggr(void*) {                     // high-priority ALT reader
+    In in(t13_ch); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)});
+    for (;;) { osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever); alt.priSelect(); osThreadFlagsSet(t13.runner, F_ACK2); }
+}
+void t13_writer_aggr(void*) {                     // high-priority ALT writer
+    Out out(t13_ch); uint32_t w = 9; csp::Alternative alt({out.getGuard(w)});
+    for (;;) { osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever); alt.priSelect(); osThreadFlagsSet(t13b.runner, F_ACK2); }
+}
+void t13_kick() {
+    t13_go = true;
+    osThreadFlagsClear(F_ACK2);
+    osThreadFlagsSet(t13_aggr_tid, F_GO);
+    if (osThreadFlagsWait(F_ACK2, osFlagsWaitAny, T_ACK) & osFlagsError) {   // no progress: spinning?
+        t13_livelock = true; t13_livelocks++;
+        osThreadSetPriority(t13_aggr_tid, (osPriority_t)(osPriorityLow - 1));  // let the victim finish
+        (void)osThreadFlagsWait(F_ACK2, osFlagsWaitAny, T_ACK);
+        osThreadSetPriority(t13_aggr_tid, osPriorityAboveNormal);
+    }
+}
+bool t13_probe() { return t13_go; }
+bool t13_check() { return !t13_livelock; }
+void t13_reset()  { drain(*t13_ch); t13_go = false; t13_livelock = false; }
+void t13b_reset() { drain(*t13_ch); uint32_t one = 1; t13_ch->output(&one); t13_go = false; t13_livelock = false; }
+void t13_victim()  { static Out out(t13_ch); out << 5u; }             // blocking writer
+void t13b_victim() { uint32_t x; t13_ch->input(&x); }                 // blocking reader
+void test_T13() {
+    static BlockChan<1> ch; t13_ch = &ch; t13_livelocks = 0;
+    t13 = {"T13", t13_reset, t13_probe, t13_victim, t13_kick, nullptr, nullptr, t13_check, nullptr, osThreadGetId()};
+    t13_aggr_tid = spawn(t13_reader_aggr, nullptr, osPriorityAboveNormal, t13_as, "T13A");
+    t13.victim   = spawn(victim_main, &t13, osPriorityLow, t13_vs, "T13V");
+    sweep_verdict(t13, "no livelock: high-priority ALT reader vs preempted low-priority blocking writer");
+    printf("   [T13] spins detected: %lu\r\n", (unsigned long)t13_livelocks);
+}
+void test_T13b() {
+    static BlockChan<1> ch; t13_ch = &ch; t13_livelocks = 0;
+    t13b = {"T13b", t13b_reset, t13_probe, t13b_victim, t13_kick, nullptr, nullptr, t13_check, nullptr, osThreadGetId()};
+    t13_aggr_tid = spawn(t13_writer_aggr, nullptr, osPriorityAboveNormal, t13b_as, "T13bA");
+    t13b.victim  = spawn(victim_main, &t13b, osPriorityLow, t13b_vs, "T13bV");
+    sweep_verdict(t13b, "no livelock: high-priority ALT writer vs preempted low-priority blocking reader");
+    printf("   [T13b] spins detected: %lu\r\n", (unsigned long)t13_livelocks);
+}
+
+// ---------------------------------------------------------------------------
 // T4a -- two ALT writers on one channel: either both are served, or the
 //        second is rejected by the v2 assert; never a silent hang
 // T4b -- an unrelated ALT must not cancel another writer's registration
@@ -615,7 +670,7 @@ void runner(void*) {
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12();
-    test_T1a(); test_T1b(); test_T3();  test_T3i();
+    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));
