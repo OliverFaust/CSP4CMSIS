@@ -71,6 +71,7 @@
 #include "csp_critical.h"
 #include "csp_fatal.h"
 #include "csp_rtos_static.h"
+#include "csp_semaphore.h"
 #include "channel_base.h"
 #include "alt.h"
 #include <cstring>
@@ -90,33 +91,7 @@ namespace csp::internal {
         void signal() const { if (thread != nullptr) (void)osThreadFlagsSet(thread, flag); }
     };
 
-    /// Counting semaphore, static control block under CSP4CMSIS_STATIC_ALLOCATION.
-    class CspSemaphore {
-    private:
-        osSemaphoreId_t id_ = nullptr;
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-        csp_static_semaphore_storage_t cb_;
-#endif
-    public:
-        CspSemaphore() = default;
-        CspSemaphore(const CspSemaphore&) = delete;
-        CspSemaphore& operator=(const CspSemaphore&) = delete;
-        ~CspSemaphore() { if (id_ != nullptr) (void)osSemaphoreDelete(id_); }
-
-        void create(uint32_t max_count, uint32_t initial, const char* name) {
-            osSemaphoreAttr_t attr = {};
-            attr.name = name;
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-            attr.cb_mem  = &cb_;
-            attr.cb_size = sizeof(cb_);
-#endif
-            id_ = osSemaphoreNew(max_count, initial, &attr);
-            if (id_ == nullptr) fatal("CSP4CMSIS: BufferedChannel: osSemaphoreNew() failed");
-        }
-        bool acquire(uint32_t timeout) { return osSemaphoreAcquire(id_, timeout) == osOK; }
-        void release() { (void)osSemaphoreRelease(id_); }
-        bool available() const { return osSemaphoreGetCount(id_) > 0U; }   // not in a critical section
-    };
+    // CspSemaphore: csp_semaphore.h (static control block under CSP4CMSIS_STATIC_ALLOCATION).
 
     struct NoSemaphore {
         void create(uint32_t, uint32_t, const char*) {}
@@ -315,7 +290,6 @@ namespace csp::internal {
             return channel->altRegister(channel->alt_reader_, owner, flag, channel->items_, true);
         }
         bool disable() override { return channel->altUnregister(channel->alt_reader_, owner, channel->items_); }
-        bool confirm(bool ready) override { return ready; }
         bool activate() override {
             if (!channel->items_.acquire(0)) return false;   // another reader took the token
             channel->popWithToken(dest);
@@ -344,7 +318,6 @@ namespace csp::internal {
             if constexpr (!kBlock) return true;
             else return channel->altUnregister(channel->alt_writer_, owner, channel->spaces_);
         }
-        bool confirm(bool ready) override { return ready; }
         bool activate() override {
             if constexpr (!kBlock) { channel->offer(source); return true; }
             else {

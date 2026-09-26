@@ -19,8 +19,9 @@
 //   bits 24..30  free for the application
 //   bit  31      invalid in CMSIS-RTOS2 (error-code range)
 //
-// select() clears its bits on entry and re-verifies every wakeup with the
-// guard (confirm()), so a late signal from an earlier select() is harmless.
+// select() clears its bits at the start of every round and re-verifies
+// every wakeup (disable() reports readiness again), so a late or stale
+// signal is harmless: it only starts a new round.
 //
 // FreeRTOS backend: the CMSIS-RTOS2 adapter implements thread flags with the
 // task notification at index 0 (xTaskNotify/xTaskNotifyWait). Native FreeRTOS
@@ -49,40 +50,55 @@ namespace csp {
         /**
          * @brief Base Guard Interface.
          *
-         * select() protocol, per round:
-         *   1. enable(alt, flag) in fairness order until one returns true
-         *      (ready now). A guard that returns false registers so that its
-         *      partner signals `flag` to alt->ownerThread() when it may be
-         *      ready. enable() must check and register atomically.
-         *   2. If none was ready: wait for any enabled guard's flag.
+         * select() protocol (one-winner with re-verification, "OWRV"; see
+         * docs/formal/alt_owrv_extended.csp), per round:
+         *   1. The ALT's state word becomes ENABLING. enable(alt, flag) in
+         *      fairness order until one returns true (ready now). A guard
+         *      that returns false registers, so that its partner signals
+         *      `flag` to alt->ownerThread() when it may be ready. enable()
+         *      must check and register atomically.
+         *   2. If none was ready and the ALT was not claimed meanwhile:
+         *      state WAITING, wait for any enabled guard's flag.
          *   3. disable() every guard that was enabled this round (and only
-         *      those); it returns whether the guard can complete now.
-         *   4. confirm(disable_result) on the chosen guard: false = stale
-         *      wakeup, start a new round.
-         *   5. activate(): commit. false = a competitor took the item/space
-         *      between confirm() and activate(); start a new round.
-         *   Readiness reported by enable()/disable() must only become true
-         *   once the partner's operation is complete (otherwise select()
-         *   could retry without anybody making progress).
+         *      those); it returns whether the guard can complete NOW
+         *      (re-verification: a stale flag just starts a new round).
+         *   4. If a rendezvous partner CLAIMED this ALT for one of its
+         *      guards (state word), that guard wins; otherwise the first
+         *      ready guard in fairness order; none -> new round.
+         *   5. activate(): commit. false = the partner went away or a
+         *      competitor took the item/space; start a new round.
+         *   Readiness must only be reported while the partner's offer stands
+         *   and cannot be withdrawn except by the partner making progress
+         *   (otherwise select() could retry without anybody making progress).
          */
         class Guard {
         public:
             virtual bool enable(AltScheduler* alt, uint32_t flag) = 0;
             virtual bool disable() = 0;
-            /// Default: trust the wakeup (guards whose completion cannot be
-            /// re-checked after the partner has already transferred data,
-            /// e.g. ALT-vs-ALT rendezvous).
-            virtual bool confirm(bool disable_result) { (void)disable_result; return true; }
             virtual bool activate() = 0;
             virtual ~Guard() = default;
         };
 
         class AltScheduler {
+        public:
+            /// One-winner state word. Read and written ONLY inside CSP
+            /// critical sections (csp_critical.h), by this ALT and by
+            /// rendezvous partners that claim it.
+            enum State : uint8_t { IDLE, ENABLING, WAITING, CLAIMED };
         private:
             // Thread currently running select() on this ALT; wakeups are
             // thread flags sent to it (no RTOS object per Alternative).
             osThreadId_t owner = nullptr;
+            volatile State   state_        = IDLE;
+            volatile uint32_t claimed_flag_ = 0;   // guard flag a partner claimed (state_ == CLAIMED)
         public:
+            // --- state word, inside a CSP critical section only ---
+            bool claimableLocked() const { return state_ == ENABLING || state_ == WAITING; }
+            bool enablingLocked() const  { return state_ == ENABLING; }
+            bool claimedForLocked(uint32_t flag) const { return state_ == CLAIMED && claimed_flag_ == flag; }
+            /// Commits this ALT to the guard with `flag` (it must select it).
+            void claimLocked(uint32_t flag) { state_ = CLAIMED; claimed_flag_ = flag; }
+
             AltScheduler() = default;
             AltScheduler(const AltScheduler&) = delete;
             AltScheduler& operator=(const AltScheduler&) = delete;
@@ -128,7 +144,6 @@ namespace csp {
             TimerGuard& operator=(const TimerGuard&) = delete;
             bool enable(AltScheduler* alt, uint32_t flag) override;
             bool disable() override;                       // returns: expired
-            bool confirm(bool expired) override { return expired; }
             bool activate() override { return true; }
         };
 

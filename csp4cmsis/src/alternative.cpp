@@ -1,4 +1,5 @@
 #include "csp/alt.h"
+#include "csp/csp_critical.h"
 #include <cstdio>
 // CMSIS compiler intrinsics (__CLZ, etc.) -- typically pulled in via the
 // device header, but included explicitly here since this file depends on
@@ -23,65 +24,62 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
     for (size_t i = 0; i < amount; ++i) wait_mask |= altFlag(i);
 
     size_t order[ALT_MAX_GUARDS];
+    bool   ready[ALT_MAX_GUARDS];
 
     for (;;) {
-        // Drop any wakeup left over from an earlier round or select().
+        // New round: drop wakeups left over from earlier rounds; the state
+        // word says "enabling" (partners may claim this ALT from now on).
         (void)osThreadFlagsClear(wait_mask);
+        { uint32_t s = csp_enter_critical(); state_ = ENABLING; claimed_flag_ = 0; csp_exit_critical(s); }
 
         // Phase 1: Enable, starting at 'offset' (fair ALT). Stops at the
-        // first guard that is ready now.
+        // first guard that is ready now (or that claimed its partner).
         size_t enabled = 0;
-        int ready_idx = -1;
+        bool any_ready = false;
         for (size_t i = 0; i < amount; ++i) {
             size_t idx = (i + offset) % amount;
             order[enabled++] = idx;
-            if (guardArray[idx]->enable(this, altFlag(idx))) {
-                ready_idx = (int)idx;
-                break;
+            if (guardArray[idx]->enable(this, altFlag(idx))) { any_ready = true; break; }
+        }
+
+        // Phase 2: Wait, unless something was ready or a partner claimed
+        // this ALT while it was enabling.
+        if (!any_ready) {
+            bool wait;
+            { uint32_t s = csp_enter_critical(); wait = (state_ == ENABLING); if (wait) state_ = WAITING; csp_exit_critical(s); }
+            if (wait) {
+                uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, osWaitForever);
+                if ((r & osFlagsError) != 0U) {
+                    for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
+                    fatal("CSP4CMSIS: Alternative: osThreadFlagsWait() failed");
+                }
+                // No trust in the flag itself: every guard is re-verified below.
             }
         }
 
-        // Phase 2: Wait (only if nothing was ready).
-        size_t selected;
-        if (ready_idx >= 0) {
-            selected = (size_t)ready_idx;
+        // Phase 3: Disable exactly the guards enabled in this round; each
+        // reports whether it can complete now (re-verification).
+        for (size_t k = 0; k < enabled; ++k) ready[k] = guardArray[order[k]]->disable();
+
+        // Phase 4: A claim wins (the partner is committed to this guard);
+        // otherwise the first ready guard in fairness order; else stale.
+        bool claimed; uint32_t cflag;
+        { uint32_t s = csp_enter_critical(); claimed = (state_ == CLAIMED); cflag = claimed_flag_; csp_exit_critical(s); }
+        int selected = -1;
+        if (claimed) {
+            for (size_t k = 0; k < enabled; ++k)
+                if (altFlag(order[k]) == cflag) { selected = (int)order[k]; break; }
+            if (selected < 0) fatal("CSP4CMSIS: Alternative: claimed for a guard that was not enabled");
         } else {
-            uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, osWaitForever);
-            if ((r & osFlagsError) != 0U) {
-                for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
-                fatal("CSP4CMSIS: Alternative: osThreadFlagsWait() failed");
-            }
-            uint32_t fired = (r & wait_mask) >> ALT_FLAG_SHIFT;
-            if (fired == 0U) {                       // not ours: disable, retry
-                for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
-                continue;
-            }
-            // Priority follows guard order starting at 'offset' (fair ALT):
-            // look at indices >= offset first, then wrap around. Within the
-            // chosen half the lowest set bit is isolated (x & -x) and __CLZ
-            // gives its index in O(1).
-            uint32_t offset_mask  = 0xFFFFFFFFU << offset;
-            uint32_t masked_fired = fired & offset_mask;
-            uint32_t candidate    = (masked_fired != 0U) ? masked_fired : fired;
-            uint32_t lowest_bit   = candidate & (uint32_t)(-(int32_t)candidate);
-            selected = 31U - __CLZ(lowest_bit);
+            for (size_t k = 0; k < enabled; ++k)
+                if (ready[k]) { selected = (int)order[k]; break; }
         }
+        if (selected < 0) continue;                                   // stale wakeup: new round
 
-        // Phase 3: Disable exactly the guards enabled in this round; they
-        // report whether they can complete now.
-        bool selected_ready = false;
-        for (size_t k = 0; k < enabled; ++k) {
-            bool ready = guardArray[order[k]]->disable();
-            if (order[k] == selected) selected_ready = ready;
-        }
-
-        // Phase 4: Re-verify (stale wakeups), then commit.
-        if (!guardArray[selected]->confirm(selected_ready)) continue;   // stale: not ready, re-register
-        // activate() == false: a competitor took the item/space (it made
-        // progress); a new round reads the updated readiness. Guards must
-        // not report readiness before the partner's operation is complete
-        // (buffered guards use the semaphore count), so this cannot spin.
+        // Phase 5: Commit. false = the partner went away / a competitor
+        // took the item or space (it made progress): new round.
         if (!guardArray[selected]->activate()) continue;
+        { uint32_t s = csp_enter_critical(); state_ = IDLE; csp_exit_critical(s); }
         return (unsigned int)selected;
     }
 }

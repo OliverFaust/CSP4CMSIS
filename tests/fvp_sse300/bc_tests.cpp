@@ -710,6 +710,23 @@ void test_T15i() {
 // select(), and the sender must complete.
 BlockChan<1>* t15s_x; csp::SignalChannel<>* t15s_sig; ThreadSlot t15s_rs, t15s_ss;
 osThreadId_t t15s_sender_tid; volatile int t15s_sel1 = -2, t15s_sel2 = -2, t15s_sent = 0;
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+void t15s_receiver(void*) {                  // 2.0: a signal is a data-less rendezvous
+    In xin(t15s_x); uint32_t xv = 0;
+    csp::Chanin<csp::Signal> sin = t15s_sig->reader(); csp::Signal sv;
+    csp::Alternative alt1({xin.getGuard(xv), sin.getGuard(sv)});
+    t15s_sel1 = alt1.priSelect();
+    csp::RelTimeoutGuard to(csp::Time(50));
+    csp::Alternative alt2({xin.getGuard(xv), sin.getGuard(sv), to.internal_guard_ptr});
+    t15s_sel2 = alt2.priSelect();
+    park();
+}
+void t15s_sender(void*) {
+    osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever);
+    csp::Chanout<csp::Signal> out = t15s_sig->writer(); out << csp::Signal{};
+    t15s_sent = 1; park();
+}
+#else
 void t15s_receiver(void*) {
     In xin(t15s_x); uint32_t xv = 0;
     auto* sig = t15s_sig->getInternal();
@@ -725,6 +742,7 @@ void t15s_sender(void*) {
     t15s_sig->getInternal()->output(nullptr);
     t15s_sent = 1; park();
 }
+#endif
 void test_T15s() {
     static BlockChan<1> x; static csp::SignalChannel<> sig; t15s_x = &x; t15s_sig = &sig;
     spawn(t15s_receiver, nullptr, osPriorityNormal, t15s_rs, "T15sR");
@@ -811,8 +829,13 @@ const char* volatile g_current_test = "-";
 // T16s -- SignalChannel putFromISR() to a receiver blocked in input(): it
 // must release the receiver (or return false).
 csp::SignalChannel<>* t16s_sig; ThreadSlot t16s_s; volatile int t16s_done = 0; volatile bool t16s_ok = false;
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+void t16s_receiver(void*) { csp::Chanin<csp::Signal> in = t16s_sig->reader(); csp::Signal s; in >> s; t16s_done = 1; park(); }
+void t16s_isr() { csp::Chanout<csp::Signal> out = t16s_sig->writer(); t16s_ok = out.putFromISR(csp::Signal{}); }
+#else
 void t16s_receiver(void*) { t16s_sig->getInternal()->input(nullptr); t16s_done = 1; park(); }
 void t16s_isr() { t16s_ok = t16s_sig->getInternal()->putFromISR(); }
+#endif
 void test_T16s() {
     static csp::SignalChannel<> sig; t16s_sig = &sig; g_current_test = "T16s";
     spawn(t16s_receiver, nullptr, osPriorityNormal, t16s_s, "T16s");

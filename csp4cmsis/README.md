@@ -29,8 +29,8 @@ This library enables embedded developers to move away from complex mutex/semapho
 
 ### `src/` (Implementation)
 * **`kernel.cpp`**: The glue between CSP logic and the underlying RTOS scheduler.
-* **`alternative.cpp`**: Logic for fair selection and bit-masking for multi-channel monitoring.
-* **`sync_channel.cpp`**: Core implementation of the synchronous rendezvous logic.
+* **`alternative.cpp`**: `select()`: fair selection, one-winner state word, re-verification of every wakeup.
+* **`alt_channel_sync.cpp`**: Rendezvous (and signal) channel core: one-winner ALT protocol with re-verification (OWRV).
 * **`glue.cpp`**: Internal adapters for CMSIS-compliant RTOS calls.
 
 ---

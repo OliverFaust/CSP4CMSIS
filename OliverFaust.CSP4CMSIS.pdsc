@@ -95,6 +95,7 @@
         <!-- Headers -->
         <file category="header" name="csp4cmsis/inc/csp/alt.h"/>
         <file category="header" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
+        <file category="header" name="csp4cmsis/inc/csp/csp_semaphore.h"/>
         <file category="header" name="csp4cmsis/inc/csp/barrier.h"/>
         <file category="header" name="csp4cmsis/inc/csp/buffered_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
@@ -106,7 +107,6 @@
         <file category="header" name="csp4cmsis/inc/csp/public_task.h"/>
         <file category="header" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/run.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/sync_channel.h"/>
         <file category="header" name="csp4cmsis/inc/csp/time.h"/>
         <file category="header" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
 
@@ -133,7 +133,6 @@
         <file category="source" name="csp4cmsis/src/channel_sync.cpp"/>
         <file category="source" name="csp4cmsis/src/csp_wrapper.cpp"/>
         <file category="source" name="csp4cmsis/src/glue.cpp"/>
-        <file category="source" name="csp4cmsis/src/sync_channel.cpp"/>
 
         <!-- kernel.cpp deliberately excluded: confirmed dead code all
              session (its ThreadFuncWrapper is entirely commented out; the

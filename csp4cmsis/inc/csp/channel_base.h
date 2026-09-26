@@ -96,19 +96,6 @@ namespace csp::internal {
         friend class ::csp::Alternative; 
     };
 
-    // =============================================================
-    // BaseAltChan (FULL SPECIALIZATION for void)
-    // =============================================================
-    template <>
-    class BaseAltChan<void> : public BaseChan<void> {
-    public:
-        virtual bool pending() = 0;
-        virtual bool space_available() = 0;
-        virtual bool putFromISR() = 0; // Added for signal consistency
-        virtual Guard* getInputGuard() = 0;
-        virtual Guard* getOutputGuard() = 0;
-    };
-
 } // namespace csp::internal
 
 #endif // CSP4CMSIS_CHANNEL_BASE_H

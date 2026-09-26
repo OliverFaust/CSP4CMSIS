@@ -3,7 +3,6 @@
 
 #include "rendezvous_channel.h"
 #include "buffered_channel.h"
-#include "sync_channel.h"
 
 // Largest element type that putFromISR() accepts (bytes). The element is
 // copied with BASEPRI raised (see buffered_channel.h, "Masked copy"), so
@@ -114,16 +113,22 @@ public:
     Chanin<T> reader() { return Chanin<T>(&internal_chan); }
 };
 
+/// Payload of a signal channel (no data).
+struct Signal {};
+
 /**
- * @brief Synchronous Signal Channel (void data).
+ * @brief Signal channel: a rendezvous that carries no data (csp::Signal).
+ * Same protocol as SamplingChannel (OWRV); use reader()/writer() like any
+ * channel, e.g. `out << csp::Signal{}`, `in >> s`, `in | s` in an ALT.
  */
 template <BufferPolicy P = BufferPolicy::Block>
 class SignalChannel {
 private:
-    internal::SyncChannel<P> internal_chan;
+    internal::RendezvousChannel<Signal, P> internal_chan;
 public:
     SignalChannel() = default;
-    internal::SyncChannel<P>* getInternal() { return &internal_chan; }
+    Chanout<Signal> writer() { return Chanout<Signal>(&internal_chan); }
+    Chanin<Signal> reader() { return Chanin<Signal>(&internal_chan); }
 };
 
 // =============================================================
