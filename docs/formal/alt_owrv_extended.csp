@@ -1,0 +1,319 @@
+-- =============================================================================
+-- CSP4CMSIS one-winner ALT with re-verification (OWRV): extensions required
+-- before implementation (review round 5). CSP-M (FDR4 dialect), checked with
+-- ProB 1.16.1; results at the end. Protocol as in alt_one_winner.csp:
+--  * per-ALT state word IDLE / ENABLING / WAITING / CLAIMED(c);
+--  * ALT-vs-ALT: whoever finds the other ALT registered and claimable
+--    (ENABLING or WAITING) claims BOTH state words in one critical section;
+--    a claim at activate() claims the partner's word only (the claimer has
+--    already disabled all its guards, so nobody can claim it any more);
+--  * the READER side performs the transfer; a writer-side ALT waits for it;
+--  * every wakeup is re-verified: disable all enabled guards; a CLAIMED guard
+--    wins, else the first ready guard (priority order), else a new round.
+--
+-- Part A (3a): symmetric crossing. A ALTs {c1!, c2?}, B ALTs {c1?, c2!} (B's
+--   guard order is a parameter: c1 first or c2 first); one select each; an
+--   optional stale flag. Correct: both select the SAME channel and exactly one
+--   communication happens. Mutation TOCTOU: the claim at enable() checks
+--   both state words in one critical section and writes them in a later one
+--   (check-then-act), i.e. the failure the atomic two-word claim prevents:
+--   both ALTs see each other claimable and claim crosswise.
+--   (A first mutation that only split the two WRITES passed: the first write
+--   already makes the partner unclaimable, and with two ALTs nobody else can
+--   interfere. It is not kept.)
+-- Part B (3b): mixed ALT. A ALTs {c0 rendezvous, c1 buffered}; a task partner
+--   on c0 (plain writer, or an ALT writer with one guard); an ISR writes one
+--   message into c1 (putFromISR: push, token release, registration snapshot
+--   and signal, atomic with respect to tasks); two selects; optional stale
+--   flag. The buffered guard is the verified 2.0 protocol (dd954a9): register
+--   (R) then token count (C); disable re-reads the count; activate() takes
+--   the token with timeout 0 or starts a new round. It never touches the
+--   ALT's state word.
+-- =============================================================================
+
+IDL = 0
+EN = 1
+WT = 2
+CL = 3
+claimable(s) = s == EN or s == WT
+MAXR = 6
+
+g2((a, b), i) = if i == 0 then a else b
+s2((a, b), i, x) = if i == 0 then (x, b) else (a, x)
+
+-- =============================================================================
+-- Part A: symmetric crossing
+-- =============================================================================
+P2 = {0, 1}            -- 0 = A, 1 = B
+C2 = {1, 2}            -- channels
+OK = 0
+TOCTOU = 1
+
+-- direction: is process x the READER on channel c?  A reads c2, B reads c1
+reader(x, c) = if x == 0 then c == 2 else c == 1
+oth(x) = 1 - x
+-- per-channel registration tuples are indexed by channel - 1
+rg(t, c) = g2(t, c - 1)
+srg(t, c, v) = s2(t, c - 1, v)
+
+channel x_rnd : P2
+channel x_en : P2.C2.{0, 2, 3}        -- 0 registered, 2 claimed both, 3 (TOCTOU) decided to claim, nothing written
+channel x_claim : P2.C2               -- TOCTOU: write both words afterwards
+channel x_sig : P2                    -- wake the other process (after the section)
+channel x_towait : P2.Bool
+channel x_wait : P2
+channel x_dis : P2.C2.Bool.Bool       -- ready, claimed for this guard
+channel x_act : P2.C2.Bool
+channel x_xw : P2                     -- writer side: transfer done
+channel x_sel : P2.C2.Bool            -- select() returned c; exactly one communication so far, on c?
+channel x_stale : P2
+channel x_idle : P2
+channel bound_a
+
+-- ra/rb: A / B registered on (c1, c2); st/ch: state words and claimed
+-- channels of (A, B); xf: writer released; nc/lc: number of communications
+-- (capped at 2) and the channel of the last one; fl: thread flags
+STA(v, ra, rb, st, ch, xf, nc, lc, fl) =
+     ([] x : P2 @ x_rnd.x -> STA(v, ra, rb, s2(st, x, EN), ch, xf, nc, lc, s2(fl, x, false)))
+  [] ([] x : P2 @ [] c : C2 @ x_en.x.c!enres(v, x, c, ra, rb, st) ->
+        (if enres(v, x, c, ra, rb, st) == 0
+         then (if x == 0 then STA(v, srg(ra, c, true), rb, st, ch, xf, nc, lc, fl)
+               else STA(v, ra, srg(rb, c, true), st, ch, xf, nc, lc, fl))
+         else if enres(v, x, c, ra, rb, st) == 2
+         then STA(v, ra, rb, (CL, CL), (c, c), xf, nc, lc, fl)
+         else STA(v, ra, rb, st, ch, xf, nc, lc, fl)))
+  [] ([] x : P2 @ [] c : C2 @ x_claim.x.c -> STA(v, ra, rb, (CL, CL), (c, c), xf, nc, lc, fl))
+  [] ([] x : P2 @ x_sig.x -> STA(v, ra, rb, st, ch, xf, nc, lc, s2(fl, oth(x), true)))
+  [] ([] x : P2 @ x_towait.x!(g2(st, x) == EN) ->
+        STA(v, ra, rb, if g2(st, x) == EN then s2(st, x, WT) else st, ch, xf, nc, lc, fl))
+  [] ([] x : P2 @ g2(fl, x) & x_wait.x -> STA(v, ra, rb, st, ch, xf, nc, lc, s2(fl, x, false)))
+  [] ([] x : P2 @ [] c : C2 @ x_dis.x.c!(otherreg(x, c, ra, rb) and claimable(g2(st, oth(x))))
+                                       !(g2(st, x) == CL and g2(ch, x) == c) ->
+        (if x == 0 then STA(v, srg(ra, c, false), rb, st, ch, xf, nc, lc, fl)
+         else STA(v, ra, srg(rb, c, false), st, ch, xf, nc, lc, fl)))
+  [] ([] x : P2 @ [] c : C2 @ x_act.x.c!actok(x, c, ra, rb, st, ch) ->
+        (if not actok(x, c, ra, rb, st, ch) then STA(v, ra, rb, st, ch, xf, nc, lc, fl)
+         else let st2 = if g2(st, x) == CL and g2(ch, x) == c then st else s2(st, oth(x), CL)
+                  ch2 = if g2(st, x) == CL and g2(ch, x) == c then ch else s2(ch, oth(x), c)
+              within
+              (if reader(x, c)                                  -- reader transfers, releases writer
+               then STA(v, ra, rb, st2, ch2, s2(xf, oth(x), true), if nc < 2 then nc + 1 else 2, c, fl)
+               else STA(v, ra, rb, st2, ch2, xf, nc, lc, fl))))   -- writer waits for the reader
+  [] ([] x : P2 @ g2(xf, x) & x_xw.x -> STA(v, ra, rb, st, ch, s2(xf, x, false), nc, lc, fl))
+  [] ([] x : P2 @ [] c : C2 @ x_sel.x.c!(nc == 1 and lc == c) -> STA(v, ra, rb, s2(st, x, IDL), ch, xf, nc, lc, fl))
+  [] ([] x : P2 @ x_stale.x -> STA(v, ra, rb, st, ch, xf, nc, lc, s2(fl, x, true)))
+
+otherreg(x, c, ra, rb) = if x == 0 then rg(rb, c) else rg(ra, c)
+enres(v, x, c, ra, rb, st) =
+  if otherreg(x, c, ra, rb) and g2(st, x) == EN and claimable(g2(st, oth(x)))
+  then (if v == TOCTOU then 3 else 2) else 0
+actok(x, c, ra, rb, st, ch) = (g2(st, x) == CL and g2(ch, x) == c)
+                              or (otherreg(x, c, ra, rb) and claimable(g2(st, oth(x))))
+
+FINX(x) = x_idle.x -> FINX(x)
+
+-- process x with guard order (g1, gb), n = rounds used
+PX(v, x, g1, gb, n) =
+  if n >= MAXR then bound_a -> STOP else
+  x_rnd.x -> x_en.x.g1?e1 ->
+    (if e1 != 0 then PCLM(v, x, g1, gb, n + 1, g1, e1, false)
+     else x_en.x.gb?e2 ->
+       (if e2 != 0 then PCLM(v, x, g1, gb, n + 1, gb, e2, true)
+        else x_towait.x?w -> (if w then x_wait.x -> PDIS(v, x, g1, gb, n + 1, true)
+                              else PDIS(v, x, g1, gb, n + 1, true))))
+PCLM(v, x, g1, gb, n, c, e, en2) =
+  if e == 3 then x_claim.x.c -> x_sig.x -> PDIS(v, x, g1, gb, n, en2)
+  else x_sig.x -> PDIS(v, x, g1, gb, n, en2)
+PDIS(v, x, g1, gb, n, en2) =
+  x_dis.x.g1?r1?m1 ->
+    (if en2 then x_dis.x.gb?r2?m2 -> PDEC(v, x, g1, gb, n, r1, m1, r2, m2)
+     else PDEC(v, x, g1, gb, n, r1, m1, false, false))
+PDEC(v, x, g1, gb, n, r1, m1, r2, m2) =
+  if m1 then PACT(v, x, g1, gb, n, g1) else if m2 then PACT(v, x, g1, gb, n, gb)
+  else if r1 then PACT(v, x, g1, gb, n, g1) else if r2 then PACT(v, x, g1, gb, n, gb)
+  else PX(v, x, g1, gb, n)                                         -- stale: new round
+PACT(v, x, g1, gb, n, c) =
+  x_act.x.c?ok ->
+    (if not ok then PX(v, x, g1, gb, n)
+     else if reader(x, c) then x_sig.x -> x_sel.x.c?_ -> FINX(x)     -- released the writer
+     else x_sig.x -> x_xw.x -> x_sel.x.c?_ -> FINX(x))               -- wait for the reader
+
+STALEA(s) = if s then (([] x : P2 @ x_stale.x -> SKIP) [] SKIP) else SKIP
+SA = {| x_rnd, x_en, x_claim, x_sig, x_towait, x_wait, x_dis, x_act, x_xw, x_sel, x_stale |}
+
+-- b1 = B's first guard (1: c1 then c2; 2: c2 then c1)
+SYSA(v, b1, s) =
+  (PX(v, 0, 1, 2, 0) ||| PX(v, 1, b1, 3 - b1, 0) ||| STALEA(s)) [| SA |]
+  STA(v, (false, false), (false, false), (IDL, IDL), (1, 1), (false, false), 0, 1, (false, false))
+
+OBSA = {| x_sel, x_idle |}
+SPECA = |~| c : C2 @ ((x_sel.0.c.true -> FINX(0)) ||| (x_sel.1.c.true -> FINX(1)))
+FREEA = diff(Events, union(SA, {| x_idle |}))
+
+-- =============================================================================
+-- Part B: mixed ALT (rendezvous guard + buffered guard, ISR on the buffered)
+-- =============================================================================
+AW = 0
+PW = 1
+channel a_start, a_rnd
+channel a_en0 : {0..2}                -- rendezvous: 0 registered, 1 plain writer pending, 2 claimed the ALT writer
+channel a_sigW
+channel b_reg                         -- buffered R: register (critical section)
+channel b_cnt : Bool                  -- buffered C: osSemaphoreGetCount(items) > 0
+channel a_towait : Bool
+channel a_wait : {0, 1}
+channel a_dis0 : Bool.Bool            -- rendezvous disable: ready, claimed
+channel b_dis : Bool                  -- buffered disable: unregister, token count > 0
+channel a_act0 : Bool
+channel b_act : Bool                  -- osSemaphoreAcquire(items, 0) + pop
+channel a_sel : {0, 1}.Bool.Bool      -- select() returned g; data of g? data of the other?
+channel p_out : Bool                  -- plain writer: pending (+ signal if A registered)
+channel p_sig, p_rel
+channel w_rnd
+channel w_en : {0..2}
+channel w_sigA, w_xw
+channel w_dis : Bool                 -- ALT writer disable: claimed?
+channel w_towait : Bool
+channel w_wait
+channel w_done : Bool
+channel isr_put                       -- ISR: push, release token, snapshot, signal (atomic)
+channel stale_a, stale_w
+channel idle, bound_b
+
+-- ast = A's state word; wst = ALT writer's state word; rreg = A registered on
+-- c0; wreg = ALT writer registered; pend/rel = plain writer; xf = ALT writer
+-- released; breg = A registered on the buffered channel; tok/cnt = items
+-- tokens / ring count; isrdone; d = data of (c0, c1) in this select; dl =
+-- task partner's value delivered; fA = A's flags (bit 0, bit 1); fW
+STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW) =
+     a_start -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, (false, false), dl, fA, fW)
+  [] a_rnd -> STB(EN, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, (false, false), fW)
+  [] a_en0!ben0(ast, wst, wreg, pend) ->
+       (if ben0(ast, wst, wreg, pend) == 0 then STB(ast, wst, true, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+        else if ben0(ast, wst, wreg, pend) == 1 then STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+        else STB(CL, CL, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW))
+  [] a_sigW -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, true)
+  [] b_reg -> STB(ast, wst, rreg, wreg, pend, rel, xf, true, tok, cnt, d, dl, fA, fW)
+  [] b_cnt!(tok > 0) -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] a_towait!(ast == EN) -> STB(if ast == EN then WT else ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] g2(fA, 0) & a_wait.0 -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, (false, false), fW)
+  [] (not g2(fA, 0)) and g2(fA, 1) & a_wait.1 -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, (false, false), fW)
+  [] a_dis0!(pend or (wreg and claimable(wst)))!(ast == CL) ->
+       STB(ast, wst, false, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] b_dis!(tok > 0) -> STB(ast, wst, rreg, wreg, pend, rel, xf, false, tok, cnt, d, dl, fA, fW)
+  [] a_act0!(ast == CL or pend or (wreg and claimable(wst))) ->
+       (if ast == CL or (not pend and wreg and claimable(wst))
+        then STB(ast, CL, rreg, false, pend, rel, true, breg, tok, cnt, s2(d, 0, true), true, fA, fW)
+        else if pend then STB(ast, wst, rreg, wreg, false, true, xf, breg, tok, cnt, s2(d, 0, true), true, fA, fW)
+        else STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW))
+  [] b_act!(tok > 0) ->
+       (if tok > 0 then STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok - 1, cnt - 1, s2(d, 1, true), dl, fA, fW)
+        else STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW))
+  [] ([] g : {0, 1} @ a_sel.g!g2(d, g)!g2(d, 1 - g) -> STB(IDL, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW))
+  [] p_out!(rreg) ->
+       STB(ast, wst, rreg, wreg, true, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] p_sig -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, s2(fA, 0, true), fW)
+  [] rel & p_rel -> STB(ast, wst, rreg, wreg, pend, false, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] w_rnd -> STB(ast, EN, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, false)
+  [] w_en!bwen(ast, wst, rreg) ->
+       (if bwen(ast, wst, rreg) == 0 then STB(ast, wst, rreg, true, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+        else STB(CL, CL, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW))
+  [] w_sigA -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, s2(fA, 0, true), fW)
+  [] w_towait!(wst == EN) -> STB(ast, if wst == EN then WT else wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] fW & w_wait -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, false)
+  [] w_dis!(wst == CL) -> STB(ast, wst, rreg, false, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] xf & w_xw -> STB(ast, wst, rreg, wreg, pend, rel, false, breg, tok, cnt, d, dl, fA, fW)
+  [] w_done!dl -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
+  [] cnt < 1 & isr_put ->
+       STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok + 1, cnt + 1, d, dl, if breg then s2(fA, 1, true) else fA, fW)
+  [] stale_a -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, s2(fA, 0, true), fW)
+  [] stale_w -> STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, true)
+
+ben0(ast, wst, wreg, pend) = if pend then 1 else if wreg and ast == EN and claimable(wst) then 2 else 0
+bwen(ast, wst, rreg) = if rreg and claimable(ast) and wst == EN then 2 else 0
+
+FIN = idle -> FIN
+
+-- A: two selects over {c0 (rendezvous), c1 (buffered)}; c = rounds used
+AB(n, c) = if n == 0 then FIN else a_start -> ABR(n, c)
+ABR(n, c) =
+  if c >= MAXR then bound_b -> STOP else
+  a_rnd -> a_en0?e ->
+    (if e == 2 then a_sigW -> ABDIS(n, c + 1, false)
+     else if e == 1 then ABDIS(n, c + 1, false)
+     else b_reg -> b_cnt?rdy ->
+       (if rdy then ABDIS(n, c + 1, true)
+        else a_towait?w -> (if w then a_wait?_ -> ABDIS(n, c + 1, true) else ABDIS(n, c + 1, true))))
+ABDIS(n, c, en1) =
+  a_dis0?r0?m0 -> (if en1 then b_dis?r1 -> ABDEC(n, c, r0, m0, r1) else ABDEC(n, c, r0, m0, false))
+ABDEC(n, c, r0, m0, r1) =
+  if m0 or r0 then a_act0?ok -> (if ok then a_sigW -> a_sel.0?_?_ -> AB(n - 1, c) else ABR(n, c))
+  else if r1 then b_act?ok -> (if ok then a_sel.1?_?_ -> AB(n - 1, c) else ABR(n, c))
+  else ABR(n, c)
+
+-- task partners on c0
+PWB = p_out?sig -> (if sig then p_sig -> p_rel -> w_done?_ -> SKIP else p_rel -> w_done?_ -> SKIP)
+AWB = w_rnd -> w_en?e ->
+        (if e == 2 then w_sigA -> w_xw -> w_done?_ -> SKIP
+         else w_towait?b -> (if b then w_wait -> AWD else AWD))
+-- re-verify: claimed -> wait for A's transfer; otherwise (stale) a new round
+AWD = w_dis?m -> (if m then w_xw -> w_done?_ -> SKIP else AWB)
+ISR = isr_put -> SKIP
+STALEB(s) = if s then ((stale_a -> SKIP) [] (stale_w -> SKIP) [] SKIP) else SKIP
+SB = {| a_start, a_rnd, a_en0, a_sigW, b_reg, b_cnt, a_towait, a_wait, a_dis0, b_dis, a_act0, b_act, a_sel,
+        p_out, p_sig, p_rel, w_rnd, w_en, w_sigA, w_towait, w_wait, w_dis, w_xw, w_done, isr_put, stale_a, stale_w |}
+
+SYSB(kd, s) =
+  (AB(2, 0) ||| (if kd == AW then AWB else PWB) ||| ISR ||| STALEB(s)) [| SB |]
+  STB(IDL, IDL, false, false, false, false, false, false, 0, 0, (false, false), false, (false, false), false)
+
+OBSB = {| a_sel, w_done, idle |}
+ASPECB = (a_sel.0.true.false -> a_sel.1.true.false -> FIN) |~| (a_sel.1.true.false -> a_sel.0.true.false -> FIN)
+WSPECB = ((w_done.true -> a_sel.0.true.false -> STOP) [] (a_sel.0.true.false -> w_done.true -> STOP))
+         |~| (a_sel.0.true.false -> w_done.true -> STOP)
+SPECB = ASPECB [| {a_sel.0.true.false} |] WSPECB
+FREEB = diff(Events, union(SB, {idle, bound_b}))
+
+-- =============================================================================
+-- Assertions
+-- =============================================================================
+-- Part A (3a). expected: PASS
+assert SPECA [FD= SYSA(OK, 1, true) \ diff(Events, OBSA)
+assert SPECA [FD= SYSA(OK, 2, true) \ diff(Events, OBSA)
+assert SYSA(OK, 1, true) :[deadlock free [F]]
+assert SYSA(OK, 2, true) :[deadlock free [F]]
+assert STOP [T= SYSA(OK, 1, true) \ diff(Events, {bound_a})
+assert STOP [T= SYSA(OK, 2, true) \ diff(Events, {bound_a})
+-- mutation: check-then-act claim, crossing guard orders. expected: FAILS
+assert SPECA [FD= SYSA(TOCTOU, 2, false) \ diff(Events, OBSA)
+-- the same mutation with identical guard orders: no crossing is possible
+-- (both try c1 first). expected: PASS -- shows the failure needs the crossing
+assert SPECA [FD= SYSA(TOCTOU, 1, false) \ diff(Events, OBSA)
+-- audit. expected: PASS
+assert STOP [T= SYSA(OK, 2, true) \ diff(Events, FREEA)
+
+-- Part B (3b). expected: PASS
+assert SPECB [FD= SYSB(PW, true) \ diff(Events, OBSB)
+assert SPECB [FD= SYSB(AW, true) \ diff(Events, OBSB)
+assert SYSB(PW, true) :[deadlock free [F]]
+assert SYSB(AW, true) :[deadlock free [F]]
+assert STOP [T= SYSB(AW, true) \ diff(Events, {bound_b})
+-- audit. expected: PASS
+assert STOP [T= SYSB(AW, true) \ diff(Events, FREEB)
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1, 2026-09-26; all as expected)
+--  #  assertion                                  expected  ProB  counterexample (visible events)
+--  1-2  Part A crossing, [FD=, both B orders     PASS      PASS
+--  3-4  Part A deadlock free, both orders        PASS      PASS
+--  5-6  Part A round bound, both orders          PASS      PASS
+--  7    TOCTOU [FD=, crossing orders             FAIL      FAIL  x_sel.0.2.false: A selects c2 but
+--                                                                there were two communications
+--                                                                (both ALTs claimed crosswise)
+--  8    TOCTOU [FD=, same orders                 PASS      PASS  (no crossing possible)
+--  9    Part A audit                             PASS      PASS
+-- 10-11 Part B mixed ALT [FD=, plain / ALT writer PASS     PASS
+-- 12-13 Part B deadlock free                     PASS      PASS
+-- 14    Part B round bound                       PASS      PASS
+-- 15    Part B audit                             PASS      PASS
+-- =============================================================================

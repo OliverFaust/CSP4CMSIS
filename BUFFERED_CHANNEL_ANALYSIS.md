@@ -1201,3 +1201,57 @@ waits in `i2c_sync >> dummy`. If the ISR fires first, `putFromISR()` finds no re
 | T15, T15s (round 3) | late wakeup SILENT/PHANTOM; lost signal | FAIL | FAIL | only a protocol change (B) |
 
 **Suite now (26 tests):** 2.0 PASS=21 FAIL=5 in all 12 configurations; v1.0.0 PASS=8 FAIL=17 SKIP=1.
+
+---
+
+# Review round 5: OWRV implementation
+
+## Decisions (from the review)
+
+1. **OWRV** (one-winner with re-verification) is the protocol for rendezvous and signal channels.
+   CLAIMNR (`rendezvous_commit_record.csp`) stays as a permanent mutation control.
+2. **C1:** `putFromISR()` is removed from `Chanout`. Buffered channels provide an ISR writer end, which
+   carries the size `static_assert`. **C2:** `KeepNewest`/`KeepOldest` only on buffered channels
+   (compile-time error otherwise). **The signal channel** becomes a data-less rendezvous on OWRV.
+3. The model is extended before implementing (below).
+
+## Why re-verification is safe in OWRV, and why it deadlocked before
+
+**Before (current code; assertion 22 / mutation REVER):**
+- In an ALT-vs-ALT rendezvous the *partner* completes the communication in its own `activate()`: it copies
+  the data and removes the woken ALT's registration, and only then signals.
+- The woken ALT re-verifies readiness, but the evidence (a registered partner) has already gone, *because
+  the communication already happened*.
+- The ALT concludes "stale", registers again and waits for a partner that has finished: a deadlock. That
+  is why those guards had to trust the wakeup, which in turn produced PHANTOM and SILENT (T15).
+
+**OWRV:**
+- **No partner ever completes a communication on the ALT's behalf.**
+  - A plain partner stays pending (blocked in `output()`/`input()`, its data in its own buffer) until the
+    ALT's `activate()` takes it.
+  - An ALT partner that claims this ALT sets both state words to `CLAIMED(c)` in one critical section. It
+    then waits for the reader side to perform the transfer; on a claimed guard, `activate()` cannot fail.
+- So the evidence of readiness (a pending partner, or the ALT's own `CLAIMED(c)`) cannot disappear
+  between the partner's offer and the ALT's `activate()`. Only the ALT itself removes it.
+- A wakeup that finds nothing ready and no claim is therefore genuinely stale, and a new round is safe.
+- The only readiness that can vanish is that of an ALT partner that has *registered* but not claimed, and
+  that then selects another guard. The ALT's `activate()` claim then fails and a new round starts. The
+  partner made progress, so this cannot repeat without bound (checked as the round bound).
+- Buffered and timer guards already re-verify (semaphore count, `fired`), so they need no change and
+  never touch the state word.
+
+## Model extensions (`docs/formal/alt_owrv_extended.csp`, ProB 1.16.1): all as expected
+
+**3a, symmetric crossing:** A ALTs {c1!, c2?}, B ALTs {c1?, c2!}, both guard orders for B, plus a stale
+flag.
+- Both select the same channel with exactly one communication: `[FD=` (divergence-free), deadlock-free,
+  round bound all hold.
+- **Mutation TOCTOU** (the claim checks both state words in one section and writes them in a later one):
+  **fails** with crossing guard orders: `x_sel.0.2.false` (both ALTs claimed crosswise, two
+  communications). With identical orders no crossing is possible, and it passes.
+- A first mutation that only split the two *writes* passed, because the first write already makes the
+  partner unclaimable. It is not kept.
+
+**3b, mixed ALT:** A ALTs {c0 rendezvous, c1 buffered}; an ISR writes c1 (atomic push, token, snapshot
+and signal); the task partner on c0 is a plain writer or an ALT writer; stale flag.
+- `[FD=`, deadlock freedom, round bound and audit hold for both partner kinds.
