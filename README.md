@@ -29,12 +29,16 @@ application-level concern, out of this library's scope.
 
 ## Design principles
 
-- **No dynamic allocation of its own.** CSP4CMSIS never calls `operator
-  new`/`operator delete` and performs no heap allocation internally — it's
-  usable in a zero-heap system. Whether *your* application code allocates
-  is entirely your own decision; see
-  [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-  for what that means in practice.
+- **No dynamic allocation of its own.** The library never calls an
+  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). With
+  `CSP4CMSIS_STATIC_ALLOCATION` every RTOS object it creates also has a
+  static control block, so it makes no dynamic RTOS allocation either.
+  Verified by the full test suite passing on FreeRTOS and RTX5 with RTOS
+  dynamic allocation disabled. A *completely* heap-free system additionally
+  needs RTOS configuration (and, for CMSIS-FreeRTOS, two workarounds) and
+  care with the C library's own heap; see
+  [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md),
+  sections 2 and 6.
 - **Portable critical sections.** Where the library needs to protect
   internal state (every channel kind, ALT state, ISR writes), it uses a
   CMSIS-Core-based (`BASEPRI`) critical section rather than an RTOS-

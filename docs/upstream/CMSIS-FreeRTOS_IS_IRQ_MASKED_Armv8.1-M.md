@@ -1,9 +1,9 @@
-# DRAFT: issue for ARM-software/CMSIS-FreeRTOS (not filed)
+# Issue for ARM-software/CMSIS-FreeRTOS: ready to file (NOT filed)
 
 **Title:** `IS_IRQ_MASKED()` ignores BASEPRI on Armv8.1-M (Cortex-M55/M85): RTOS2 calls with BASEPRI raised take the thread path and re-enable interrupts
 
 **Checked against:**
-- `main` @ `c3e5dc3c4531f02f47ed54cd05df0b3e16465155` (2026-09-01, pack version `11.3.1-dev`), `CMSIS/RTOS2/FreeRTOS/Source/cmsis_os2.c`
+- `main` @ `c3e5dc3c4531f02f47ed54cd05df0b3e16465155` (2026-09-01, pack version `11.3.1-dev`; still the head on 2026-09-27), `CMSIS/RTOS2/FreeRTOS/Source/cmsis_os2.c`
 - the released pack `ARM::CMSIS-FreeRTOS@11.3.0` (identical code)
 
 No existing issue matches (searched for "8_1M" and "BASEPRI" on 2026-09-26).
@@ -65,36 +65,64 @@ application critical section via `__set_BASEPRI_MAX()`):
 
 The behaviour of the same source therefore differs between an M33 (ISR path) and an M55 (thread path).
 
-### Reproduction (Cortex-M55, Corstone-300 FVP, Fast Models 11.28.32)
+### Reproduction (Cortex-M55, Corstone-300 FVP, Fast Models 11.28.32; verified 2026-09-27)
 
-The values below were observed with an equivalent sequence: `__set_BASEPRI_MAX(0xA0)`, then
-`osEventFlagsSet()` via a small wrapper, then reading BASEPRI; this is test T2 in the CSP4CMSIS
-analysis. The snippet shows the minimal form; it has not been run verbatim.
+Arm Compiler 6.24, CMSIS-Toolbox 2.14.1, `ARM::CMSIS-FreeRTOS@11.3.0`, board support
+`ARM::V2M_MPS3_SSE_300_BSP@1.5.0` (`__NVIC_PRIO_BITS` = 3), default `FreeRTOSConfig.h` with
+`configMAX_SYSCALL_INTERRUPT_PRIORITY` = 0xA0. The program below was run verbatim:
 
 ```c
-static osEventFlagsId_t ef;           // created with osEventFlagsNew(NULL)
+#include "cmsis_os2.h"
+#include "RTE_Components.h"
+#include CMSIS_device_header
+#include <stdio.h>
+
+static osEventFlagsId_t ef;
 static volatile int woken = 0;
 
-void high_prio_thread(void *arg) {    // priority above the caller
+static void high_prio_thread(void *arg) {
   osEventFlagsWait(ef, 1U, osFlagsWaitAny, osWaitForever);
   woken = 1;
   for (;;) osDelay(osWaitForever);
 }
 
-void caller(void) {                   // runs after the high-priority thread blocked
-  __set_BASEPRI_MAX(5U << (8U - __NVIC_PRIO_BITS));   // 0xA0 with 3 priority bits
+static void caller(void *arg) {
+  osDelay(5);                                           // high_prio_thread is now blocked
+  __set_BASEPRI_MAX(5U << (8U - __NVIC_PRIO_BITS));     // 0xA0 with 3 priority bits
   uint32_t before = __get_BASEPRI();
-  osEventFlagsSet(ef, 1U);
+  uint32_t ret    = osEventFlagsSet(ef, 1U);
   uint32_t after  = __get_BASEPRI();
   int ran_inside  = woken;
   __set_BASEPRI(0U);
-  // Observed: before = 0xA0, after = 0x00, ran_inside = 1
-  // Expected (as on Armv7-M / Armv8-M Mainline): after = 0xA0, ran_inside = 0,
-  //          osEventFlagsSet() handled via the ISR path.
+  printf("before=0x%02lx after=0x%02lx ran_inside=%d osEventFlagsSet=0x%08lx\r\n",
+         (unsigned long)before, (unsigned long)after, ran_inside, (unsigned long)ret);
+  for (;;) osDelay(osWaitForever);
+}
+
+void app_init(void) {                                   // called before osKernelStart()
+  ef = osEventFlagsNew(NULL);
+  osThreadAttr_t h = { .name = "high",   .priority = osPriorityHigh,   .stack_size = 1024 };
+  osThreadAttr_t c = { .name = "caller", .priority = osPriorityNormal, .stack_size = 1024 };
+  osThreadNew(high_prio_thread, NULL, &h);
+  osThreadNew(caller, NULL, &c);
 }
 ```
 
-In the disassembly of the linked image, `IRQ_Context` reads only `IPSR` and `PRIMASK`.
+**Output:**
+
+```
+__ARM_ARCH_8_1M_MAIN__ = 1
+__ARM_ARCH_8M_MAIN__ undefined
+before=0xa0 after=0x00 ran_inside=1 osEventFlagsSet=0x00000000
+```
+
+**Expected** (as on Armv7-M / Armv8-M Mainline):
+- `after = 0xa0`;
+- `ran_inside = 0`;
+- `osEventFlagsSet()` handled through the ISR path.
+
+The higher-priority thread ran *inside* the caller's BASEPRI section, and the section was left with
+BASEPRI 0. In the disassembly of the linked image, `IRQ_Context` reads only `IPSR` and `PRIMASK`.
 
 ### Suggested fix
 

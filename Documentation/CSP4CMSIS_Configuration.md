@@ -19,21 +19,25 @@ This selects the correct static-allocation control-block types in
 style bootstrap code path where one is needed. Leaving this undefined is a
 hard compile error (`#error`) by design -- CSP4CMSIS will not guess.
 
-## 2. Static allocation (optional)
+## 2. Static allocation (optional, required for a heap-free system)
 
-Define `CSP4CMSIS_STATIC_ALLOCATION` to back CSP4CMSIS's RTOS2 objects
-(thread TCBs, event flags) with static, no-heap storage instead of dynamic
-allocation. Requires (1) above to also be set, so the correct backend-
-specific control-block types can be resolved.
+Define `CSP4CMSIS_STATIC_ALLOCATION` to give **every** RTOS2 object that
+CSP4CMSIS creates a statically allocated control block. That covers:
+- process threads (`CSProcessStatic<N>`, `Run()`);
+- `Run()`'s completion semaphore;
+- the semaphores of buffered, rendezvous and signal channels and of `Barrier`;
+- the timers of `RelTimeoutGuard`.
 
-If you leave this undefined, CSP4CMSIS uses dynamic (heap) allocation for
-these objects -- genuinely portable across any CMSIS-RTOS2 backend, and
-the safe default if you haven't verified your backend's static-allocation
-control-block types yourself.
+Stacks are always static (`CSProcessStatic<N>`). The macro requires (1) above, so that the correct
+backend-specific control-block types are used.
 
-**This only governs CSP4CMSIS's own internal RTOS2 objects.** It has
-nothing to do with whether your own application code allocates -- see the
-note on `operator new`/`operator delete` at the end of this document.
+If you leave it undefined, those control blocks come from the RTOS's own
+allocator (FreeRTOS heap, RTX5 dynamic memory). That is portable across any
+CMSIS-RTOS2 backend, and the safe default if you haven't verified your
+backend's static control-block types yourself.
+
+**This only governs CSP4CMSIS's own RTOS2 objects.** What else a system
+needs to be completely heap-free is in section 6.
 
 ## 3. `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (always required)
 
@@ -155,15 +159,87 @@ Corstone-300 FVP, Arm Compiler 6 and GCC):
 - A channel must be constructed before any ISR write to it can run:
   enable the interrupt only after the channel exists.
 
-## Application-level dynamic allocation (not CSP4CMSIS's concern)
+## 6. Heap-free systems: what CSP4CMSIS guarantees, and what else you need
 
-CSP4CMSIS itself never calls `operator new`/`operator delete` and performs
-no dynamic allocation of its own -- it's designed to be usable in a
-zero-heap system. Whether *your application code* allocates (e.g. an
-inference pipeline using `std::vector`) is entirely your own architectural
-decision, and if you need a working global `operator new`/`operator
-delete`, that's your project's responsibility to provide -- not
-CSP4CMSIS's. If you do provide one, be aware that some newlib-nano/
-toolchain/port combinations do not wire up thread-safe malloc locking by
-default; verify yours does before relying on a plain unguarded `malloc`
-from multiple threads.
+### What CSP4CMSIS guarantees
+
+- **The library performs no dynamic memory allocation.** Its code never calls `malloc`/`free`,
+  `operator new`, `pvPortMalloc()` or any other allocator. (The compiler references sized
+  `operator delete` from the deleting destructors of classes with virtual destructors; CSP4CMSIS never
+  `delete`s anything, so it is never called.)
+- **With `CSP4CMSIS_STATIC_ALLOCATION`, it makes no dynamic RTOS allocation either:** every RTOS2
+  object it creates has a static control block (section 2). Channels, guards, `Alternative`s and
+  processes are ordinary objects that you place (statically or on a stack).
+- **How this is verified** (`tests/fvp_sse300/`, "Heap-free proof"): the full regression suite passes on
+  both backends with RTOS dynamic allocation disabled, with Arm Compiler 6 and GCC. The CSP4CMSIS object
+  files reference no allocation function, and test T17 constructs 50 × (rendezvous channel + signal
+  channel + `Barrier`) without a single RTOS allocation.
+
+**Not guaranteed by CSP4CMSIS** (your system's responsibility): the RTOS's own configuration, objects
+that your application creates, and the C library (below).
+
+### What a fully heap-free system additionally needs
+
+**Common to both backends:**
+- Define `CSP4CMSIS_STATIC_ALLOCATION` (and the backend define it requires).
+- Create every application thread and RTOS object with static memory (`cb_mem`/`cb_size`, and
+  `stack_mem`/`stack_size` for threads).
+- Verify the result in the map file: no allocator symbol (`pvPortMalloc` / RTX5 `os_mem`) where there
+  should be none.
+
+**FreeRTOS (CMSIS-FreeRTOS 11.3.0 adapter):**
+1. `FreeRTOSConfig.h`: `configSUPPORT_STATIC_ALLOCATION 1`, `configSUPPORT_DYNAMIC_ALLOCATION 0`,
+   `configKERNEL_PROVIDED_STATIC_MEMORY 1` (or provide `vApplicationGetIdleTaskMemory()` and
+   `vApplicationGetTimerTaskMemory()` yourself).
+2. Remove the Heap component (`ARM::RTOS&FreeRTOS:Heap&Heap_*`): `heap_*.c` stops the build with
+   `#error` when dynamic allocation is 0. csolution then reports a failed dependency validation
+   ("FreeRTOS Heap") as a warning; that is expected.
+3. **Workaround A: C library locks (Arm Compiler only).** The adapter's `clib_os.c` falls back to the
+   dynamic `xSemaphoreCreateMutex()` without checking `configSUPPORT_DYNAMIC_ALLOCATION`, so it does not
+   compile. Force-include a header in every compilation unit (csolution:
+   `misc: - C-CPP: [-include <path>/noheap_shim.h]`) containing
+   ```c
+   #define xSemaphoreCreateMutex() ((void *)0)
+   ```
+   The C library's mutexes then come only from the adapter's static pool (`OS_MUTEX_CLIB_NUM`, default
+   5). If the pool is too small, `_mutex_initialize()` fails and that C-library stream is unlocked;
+   raise `OS_MUTEX_CLIB_NUM` if you use many streams.
+4. **Workaround B: allocator references.** The adapter's `cmsis_os2.c` references `pvPortMalloc()` and
+   `vPortFree()` unconditionally (`osThreadEnumerate()`, `osMemoryPoolNew()`/`osMemoryPoolDelete()`).
+   With no heap implementation, Arm Compiler fails to link (`L6218E: Undefined symbol pvPortMalloc`).
+   Provide trap definitions that report a call and return NULL:
+   ```c
+   void *pvPortMalloc(size_t n) { (void)n; /* report */ return NULL; }
+   void vPortFree(void *p)      { (void)p; /* report */ }
+   ```
+   If nothing calls these functions, the linker removes the traps (Arm Compiler); with GCC they may
+   remain linked. Either way, a call at run time is reported instead of allocating.
+   `configUSE_OS2_THREAD_ENUMERATE 0` removes one of the two users.
+
+**Keil RTX5 (CMSIS-RTX 5.9.1):**
+1. `RTX_Config.h`: `OS_DYNAMIC_MEM_SIZE 0`. This removes the dynamic memory pool; any object created
+   without `cb_mem` then fails (CSP4CMSIS treats that as fatal). Object-specific pools
+   (`OS_*_OBJ_MEM`) are fixed, statically allocated arrays and may still be used.
+2. **Workaround C: C library locks (Arm Compiler only).** RTX5 creates the Arm C library's stream
+   mutexes with `osMutexNew(NULL)` (`rtx_lib.c`, `_mutex_initialize()`). Without dynamic memory they need
+   the static mutex pool: `OS_MUTEX_OBJ_MEM 1`, `OS_MUTEX_NUM 8` (the FVP harness uses 8). Without it
+   start-up stops in `osRtxErrorNotify(osRtxErrorClibMutex, …)` before `main()`.
+3. The idle and timer threads are static by default (`OS_IDLE_THREAD_*`, `OS_TIMER_THREAD_*`).
+
+The two CMSIS-FreeRTOS defects are reported upstream as drafts in `docs/upstream/` (not yet filed).
+
+### The C library heap: an application concern
+
+The C library has its own heap (`malloc`), independent of the RTOS:
+- **`printf` and other stdio functions may allocate.** Both the Arm C library and newlib are linked with
+  `malloc` in the FVP harness images, although CSP4CMSIS never calls it.
+- If your system must not have a C heap either: avoid stdio, or retarget output without it. Making a
+  stream unbuffered (`setvbuf(stdout, NULL, _IONBF, 0)` before first use) removes the stream buffer,
+  but not every allocation: newlib's floating-point `printf` formatting, for example, allocates through
+  its `dtoa` helpers. Check the map file for `malloc`, and size the heap region (`ARM_LIB_HEAP` /
+  newlib's heap between `_end` and the heap limit) to zero, so that any remaining use becomes a link or
+  run-time failure. (Not verified in the CSP4CMSIS test harness, which uses `printf`.)
+- Whether *your application code* allocates (e.g. an inference pipeline using `std::vector`) is your own
+  decision. If you provide a global `operator new`/`delete`, make sure your C library's `malloc` locking
+  is thread-safe with your RTOS (some newlib-nano/toolchain/port combinations do not wire it up by
+  default).

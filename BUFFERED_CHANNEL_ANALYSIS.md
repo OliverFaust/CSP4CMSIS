@@ -1289,7 +1289,7 @@ and `3b5e443` (heap-free build types).
 - **`RTX5-NoHeap`:** `OS_DYNAMIC_MEM_SIZE=0`, no dynamic pool.
 - Both compilers, both backends: PASS=25 FAIL=0 REPLACED=4, RTOS heap used 0 B.
 - Two CMSIS-FreeRTOS 11.3.0 adapter defects needed test-branch workarounds (issue draft
-  `docs/upstream/CMSIS-FreeRTOS_no_dynamic_allocation.md`, not filed).
+  `docs/upstream/CMSIS-FreeRTOS_clib_os_dynamic_mutex.md` and `CMSIS-FreeRTOS_pvPortMalloc_unconditional.md`, not filed).
 - RTX5 with the Arm C library needs its static mutex object pool for the library's own locks.
 
 **Other findings in this round:**

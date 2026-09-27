@@ -59,8 +59,9 @@ whole suite runs on them with Arm Compiler 6 and GCC.
   "heap used = 0 B" in the SUMMARY line; the CSP4CMSIS object files reference no `malloc`, `operator new`,
   `pvPortMalloc` or `osRtxMemoryAlloc`. (Sized `operator delete` is referenced by the deleting
   destructors of classes with virtual destructors, and is never called.)
-- **Workarounds needed only because of the RTOS packages** (test branch; upstream issue draft:
-  `docs/upstream/CMSIS-FreeRTOS_no_dynamic_allocation.md`, not filed):
+- **Workarounds needed only because of the RTOS packages** (test branch; upstream issues, ready to
+  file, not filed: `docs/upstream/CMSIS-FreeRTOS_clib_os_dynamic_mutex.md`,
+  `docs/upstream/CMSIS-FreeRTOS_pvPortMalloc_unconditional.md`):
   - CMSIS-FreeRTOS 11.3.0 `clib_os.c` (Arm C library locks, AC6) falls back to the dynamic
     `xSemaphoreCreateMutex()` without checking `configSUPPORT_DYNAMIC_ALLOCATION`. A forced include
     (`noheap_shim.h`) makes that fallback yield NULL, so the adapter's static pool of 5 mutexes is used.
