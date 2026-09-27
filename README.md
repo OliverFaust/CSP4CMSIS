@@ -52,8 +52,14 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add https://github.com/OliverFaust/CSP4CMSIS/releases/latest/download/OliverFaust.CSP4CMSIS.pdsc
+cpackget add https://github.com/OliverFaust/CSP4CMSIS/releases/download/v1.0.0/OliverFaust.CSP4CMSIS.1.0.0.pack
 ```
+> Confirmed working: the `.pack` archive from the concrete, versioned
+> release URL — not the bare `.pdsc`, and not `releases/latest/download/`.
+> `cpackget add` treats a `.pdsc`-only URL as a local-file reference; the
+> `.pack` is the installable unit that actually fetches over HTTPS.
+> Update to a newer release deliberately by changing the version in the
+> URL.
 
 Then reference the component in your `.cproject.yml`:
 
@@ -71,18 +77,13 @@ you might expect) on which RTOS backend you're using.
 
 ## Testing / examples
 
-This repo is the library alone — no board-specific test projects are
-kept here, since exercising CSP4CMSIS means bringing up a real
-CMSIS-RTOS2 target (device selection, BSP, Secure Enclave init, etc.),
-which is board/vendor-specific content, not part of a portable library.
-
-CSP4CMSIS's own RTOS2 migration, RTX5 validation, and pack-installability
-testing (raw-source and packaged-component builds, both hardware-verified)
-were all done on an Alif Ensemble E8 (Cortex-M55) DevKit, in a separate
-repo that holds that board's bring-up projects.
-<!-- TODO(OliverFaust): link the DK-E8 repo here once you've decided
-     whether/how to make it public — not linked here since its
-     name/location isn't confirmed from this pass. -->
+- [`csp4cmsis_alt_test/`](csp4cmsis_alt_test/) — a raw-source build
+  exercising the ALT/select path; the reference test used throughout this
+  library's own RTOS2 and RTX5 validation.
+- [`csp4cmsis_pack_test/`](csp4cmsis_pack_test/) — the same test, but
+  consuming CSP4CMSIS as a packaged component rather than raw source; this
+  is what proves the pack itself is genuinely installable and correct, not
+  just schema-valid.
 
 ## Known limitations
 
@@ -93,4 +94,3 @@ validated without it.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
-
