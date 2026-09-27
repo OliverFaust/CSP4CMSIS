@@ -4,7 +4,100 @@ Branch `buffered-channel-v2`. The version is **not** bumped yet: the pdsc still 
 has not been rebuilt. Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
 is in `tests/fvp_sse300/`.
 
-## Behaviour changes
+## Behaviour changes that applications can observe (with migration guide)
+
+Each item says what changed, who is affected, and what to do. Items 2–4 and 6 are **compile-time**
+changes: affected code no longer builds, so nothing breaks silently.
+
+### 1. ALT on both ends of a rendezvous channel now communicates
+
+- **1.0.0:** when both the reader and the writer of a rendezvous channel were in an `Alternative`
+  ("symmetric ALT", ALT-vs-ALT), the communication could fail to happen: one side waited until a timeout
+  guard fired, or forever. Related races could make `select()` report a channel without its data
+  (PHANTOM), or take the data while reporting another guard (SILENT) (FVP tests T15, T11).
+- **2.0:** the one-winner protocol (OWRV) pairs the two ALTs atomically. They communicate, and each
+  `select()` returns exactly the guard whose data moved.
+- **Migration:** remove timeouts or retry loops that only existed to break the ALT-vs-ALT hang. Tests
+  that *expect* the timeout (e.g. HimaxWE2 `csp4cmsis_alt_alt_test`) must now expect the message.
+  Timeout guards used for real deadlines keep working unchanged.
+
+### 2. Rendezvous channel elements must be trivially copyable
+
+- **1.0.0:** any `T` compiled; elements were copied with `memcpy` anyway, which is undefined behaviour
+  for non-trivially-copyable types.
+- **2.0:** `static_assert(std::is_trivially_copyable_v<T>)`, as for buffered channels.
+- **Migration:** use plain message structs (scalars, arrays, nested structs, enums, raw pointers). For
+  a payload with an owning type (e.g. `std::string`, `std::vector`), keep the objects in a static pool
+  and send an index or pointer (pattern in `buffered_channel.h`).
+
+### 3. ISR writes only into buffered channels (`putFromISR()` removed from `Chanout`)
+
+- **1.0.0:** `writer().putFromISR(v)` compiled for every channel kind. On a rendezvous channel it only
+  delivered if a plain reader was already waiting (otherwise the event was silently dropped). On an ALT
+  reader it reported the channel without data (T15i), and it raced with task-side locking (T16a). On a
+  signal channel it returned true without releasing the receiver (T16s).
+- **2.0:** only buffered channels have an ISR writer end: `auto isr = chan.isrWriter();`, then
+  `isr.putFromISR(v)` (`IsrChanout<T>`). Its element size is bounded by
+  `CSP4CMSIS_ISR_MAX_ELEMENT_SIZE` (default 64 bytes).
+- **Migration:** replace `Channel<T>` + `writer().putFromISR(v)` with
+  - `BufferedChannel<T, 1>` + `isrWriter().putFromISR(v)` for events that must not be lost (e.g. an I2C
+    completion; see `docs/upstream/himax_i2c_completion.md`), or
+  - `SamplingBufferedChannel<T, 1, BufferPolicy::KeepNewest>` for "latest value" data.
+
+  The reader side (`>>`, ALT) is unchanged. Unlike before, an event that arrives while the reader is busy
+  is kept.
+
+### 4. KeepNewest/KeepOldest only on buffered channels
+
+- **1.0.0:** `SamplingChannel<T, KeepNewest|KeepOldest>` (and `SignalChannel<…>`) were non-blocking
+  rendezvous channels: a value was delivered only if a receiver was waiting at that moment, else dropped.
+  With an ALT reader, the reader was woken and the value was dropped (T16n).
+- **2.0:** compile-time error ("KeepNewest/KeepOldest need a buffer").
+- **Migration:** `SamplingBufferedChannel<T, 1, P>`. The writer still never blocks. Difference: the value
+  is **kept until read** instead of being dropped when nobody waits at that instant. With `KeepNewest`
+  the reader gets the latest value; with `KeepOldest`, the first unread one. If the old "only if someone
+  is waiting right now" behaviour really is needed, it has to be built explicitly (e.g. an ALT with a
+  zero timeout on the writer side).
+
+### 5. `Barrier` is reusable
+
+- **1.0.0:** the last arrival released N tokens for N − 1 waiters, and reset the count outside the lock.
+  In the next phase a process could pass without waiting (FVP test T18: early departures, workers never
+  finish).
+- **2.0:** each phase releases exactly its N − 1 waiters, and processes that run ahead wait for the next
+  phase. `Barrier(0)` is fatal, and `Barrier` is not copyable.
+- **Migration:** none, except removing workarounds (extra `sync()` calls or delays). Code that copied a
+  `Barrier` no longer compiles.
+
+### 6. Signal channels: `reader()`/`writer()` with `csp::Signal`
+
+- **1.0.0:** `SignalChannel::getInternal()` returned a `SyncChannel` with `input(nullptr)` /
+  `output(nullptr)`, and could lose a signal when the receiver took another ALT guard (T15s).
+- **2.0:** a data-less rendezvous, used like any channel: `out << csp::Signal{}`, `in >> s`, `in | s`.
+- **Migration:** replace `getInternal()->output(nullptr)` with `writer() << csp::Signal{}`, and
+  `input(nullptr)` / `getInputGuard()` with `reader() >> s` / `reader() | s`. None of the known
+  application projects uses signal channels.
+
+### 7. Misuse is reported instead of hanging
+
+These now call `csp4cmsis_fatal_error()` (weak; override it to log or reset):
+- a second process ALTing on the same channel end (buffered or rendezvous);
+- RTOS object creation failure;
+- a failed `osThreadFlagsWait()`.
+
+Before, some of these hung silently or corrupted channel state.
+- **Migration:** give each channel end at most one ALTing process (any number of plain readers/writers
+  is fine), and provide a `csp4cmsis_fatal_error()` that suits your system.
+
+### 8. Guard priority in `select()`
+
+- **2.0:** among guards that are ready at the same time, `priSelect()` takes the first in guard order,
+  and `fairSelect()` takes the first after the previous winner. (1.0.0 used the set of wakeup flags, which
+  could favour a guard that was signalled but no longer ready.)
+- **Migration:** none expected. Code that relied on a particular order among simultaneously ready guards
+  should use `priSelect()` with the intended order.
+
+## Implementation changes (1.0.0 → 2.0)
 
 | Area | 1.0.0 | 2.0 |
 |---|---|---|
