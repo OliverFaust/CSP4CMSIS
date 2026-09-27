@@ -20,7 +20,7 @@ The FVP is instruction-accurate, not cycle-accurate. Some things it cannot show:
 
 **Setup:**
 - **Library:** the 2.0.0 pack built from `buffered-channel-v2` (`OliverFaust.CSP4CMSIS.2.0.0.pack`,
-  local, not published), installed into the DK-E8 pack root (`Alif/DK-E8/cmsis-packs`).
+  local, not published), installed into the DK-E8 project's pack root.
 - **Project:** a new `csp4cmsis_regression` project next to `csp4cmsis_alt_test`, with the same device
   (`:M55_HP`), RTX5 component, `CSP4CMSIS_RTOS2_BACKEND_RTX5`, `CSP4CMSIS_STATIC_ALLOCATION` and
   `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY: 128` (unshifted; 8 priority bits, so BASEPRI = 128).

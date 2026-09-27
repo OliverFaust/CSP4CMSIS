@@ -18,11 +18,11 @@ Locale settings and `GCONV_PATH` do not avoid it.
 git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/Open-CMSIS-Pack/devtools.git
 cmake -G Ninja -S devtools -B devtools/build -DCMAKE_BUILD_TYPE=Release
 ninja -C devtools/build packchk          # -> devtools/build/tools/packchk/linux-amd64/Release/packchk
-python3 scripts/build_pack.py /tmp/pack && cd /tmp/pack && unzip OliverFaust.CSP4CMSIS.2.0.0.pack -d x
+python3 scripts/build_pack.py <out-dir> && cd <out-dir> && unzip OliverFaust.CSP4CMSIS.2.0.0.pack -d x
 packchk --xsd <cmsis-toolbox>/etc/PACK.xsd \
-        -i ~/cmsis_packs/ARM/CMSIS/6.0.0/ARM.CMSIS.pdsc \
-        -i ~/cmsis_packs/ARM/CMSIS-RTX/5.9.1/ARM.CMSIS-RTX.pdsc \
-        -i ~/cmsis_packs/ARM/CMSIS-FreeRTOS/11.3.0/ARM.CMSIS-FreeRTOS.pdsc \
+        -i $CMSIS_PACK_ROOT/ARM/CMSIS/6.0.0/ARM.CMSIS.pdsc \
+        -i $CMSIS_PACK_ROOT/ARM/CMSIS-RTX/5.9.1/ARM.CMSIS-RTX.pdsc \
+        -i $CMSIS_PACK_ROOT/ARM/CMSIS-FreeRTOS/11.3.0/ARM.CMSIS-FreeRTOS.pdsc \
         -n packname.txt x/OliverFaust.CSP4CMSIS.pdsc
 ```
 

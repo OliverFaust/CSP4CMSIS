@@ -17,9 +17,9 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
-| 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`fcc29c5`), C1/C2 API (`bd3965f`), static Barrier (`c109660`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
+| 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
 | 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
-| v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `1ad3e11`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
+| v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `11858f6`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 
 - **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
   check in `tests/compile_checks/` proves the removal. Not counted as PASS.
@@ -41,13 +41,13 @@ AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test s
 `--wrap` detector and the race sweeps stay sensitive there.
 
 History:
-- `6920d1c` failed T13/T13b (livelock);
-- `a34d608` fixed it with a one-tick back-off;
-- `dd954a9` replaced the back-off with semaphore-count readiness.
+- `d39835b` failed T13/T13b (livelock);
+- `a85e17d` fixed it with a one-tick back-off;
+- `cb10b12` replaced the back-off with semaphore-count readiness.
 
 ## Heap-free proof (`FreeRTOS-NoHeap`, `RTX5-NoHeap` build types)
 
-Two extra build types of the harness (FVP test branch) disable RTOS dynamic allocation completely. The
+Two extra build types of the harness (local, unpublished harness project) disable RTOS dynamic allocation completely. The
 whole suite runs on them with Arm Compiler 6 and GCC.
 
 | Build type | RTOS configuration | What proves "no dynamic RTOS allocation" |
@@ -59,7 +59,7 @@ whole suite runs on them with Arm Compiler 6 and GCC.
   "heap used = 0 B" in the SUMMARY line; the CSP4CMSIS object files reference no `malloc`, `operator new`,
   `pvPortMalloc` or `osRtxMemoryAlloc`. (Sized `operator delete` is referenced by the deleting
   destructors of classes with virtual destructors, and is never called.)
-- **Workarounds needed only because of the RTOS packages** (test branch; upstream issues, ready to
+- **Workarounds needed only because of the RTOS packages** (harness project only; upstream issues, ready to
   file, not filed: `docs/upstream/CMSIS-FreeRTOS_clib_os_dynamic_mutex.md`,
   `docs/upstream/CMSIS-FreeRTOS_pvPortMalloc_unconditional.md`):
   - CMSIS-FreeRTOS 11.3.0 `clib_os.c` (Arm C library locks, AC6) falls back to the dynamic
@@ -76,8 +76,9 @@ whole suite runs on them with Arm Compiler 6 and GCC.
 
 ## Harness
 
-- **Project:** `helloworld_sse300` in the `arm_fvp_helloworld` repository, local branch
-  **`csp4cmsis-wt-tests`**. That repository's `origin` is not ours: never push it.
+- **Project:** the CSP4CMSIS test harness: a local, unpublished adaptation of the public Arm example project
+  `helloworld_sse300` (github.com/joseph-yiu/arm_fvp_helloworld, Apache-2.0). The harness
+  project itself (build types, RTOS configuration, heap-free shims) is not part of this repository.
 - **Target:** Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
   CMSIS-Toolbox 2.14.1.
 - **Build types** (`hello.csolution.yml`): each backend at three optimisation levels.
@@ -114,19 +115,19 @@ whole suite runs on them with Arm Compiler 6 and GCC.
 ```
 
 csolution reads `OliverFaust.CSP4CMSIS.pdsc` directly from the linked tree, so
-`OliverFaust::CSP4CMSIS:Core` compiles that tree's sources. The installed `OliverFaust::CSP4CMSIS@1.0.0` in
-`~/cmsis_packs` is **not** used, and nothing is registered with `cpackget`. The test source itself always
+`OliverFaust::CSP4CMSIS:Core` compiles that tree's sources. An installed `OliverFaust::CSP4CMSIS@1.0.0` in
+the pack root (`$CMSIS_PACK_ROOT`) is **not** used, and nothing is registered with `cpackget`. The test source itself always
 comes from this repository's working tree.
 
 ```sh
-cd <arm_fvp_helloworld>/helloworld_sse300
-ln -sfn ../../../../../../home/of6/src/CSP4CMSIS        csp4cmsis_under_test   # working tree (v2)
-ln -sfn ../../../../../../home/of6/src/CSP4CMSIS-v1.0.0 csp4cmsis_under_test   # v1.0.0 regression baseline
-#   (git -C ~/src/CSP4CMSIS worktree add --detach ~/src/CSP4CMSIS-v1.0.0 v1.0.0)
+cd <harness>/helloworld_sse300
+ln -sfn <CSP4CMSIS checkout>        csp4cmsis_under_test   # working tree (v2)
+ln -sfn <CSP4CMSIS v1.0.0 worktree> csp4cmsis_under_test   # v1.0.0 regression baseline
+#   (git -C <CSP4CMSIS checkout> worktree add --detach <CSP4CMSIS v1.0.0 worktree> v1.0.0)
 ```
 
 To verify which library was used:
-`grep -o '/home/of6/src/CSP4CMSIS[^/]*/csp4cmsis/src/[a-z_]*.cpp' out/MPS3-Corstone-300/*/compile_commands.json`
+`grep -o '[^"]*/csp4cmsis/src/[a-z_]*\.cpp' out/MPS3-Corstone-300/*/*/compile_commands.json | sort -u`
 
 ## Run
 
@@ -221,4 +222,4 @@ The workload drives every notification path:
 - `csp4cmsis_fatal_error()` is overridden: the test records the message and parks the calling thread.
 - RTX5: `osRtxErrorNotify()` is overridden to print the error code before halting.
 - `results/2026-09-26_fvp_run.txt` is the output of the earlier, v1.0.0-only analysis suite (commit
-  `21c0e09`), kept for reference.
+  `1b757e1`), kept for reference.

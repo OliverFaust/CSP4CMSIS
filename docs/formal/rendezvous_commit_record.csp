@@ -8,7 +8,7 @@
 -- The competing design (one-winner, JCSP/occam style) is in
 -- alt_one_winner.csp; both use the same scenarios, observations and SPEC.
 -- (Review round 3's single-channel version of this model is in git history,
--- commit a592848; its results are reproduced here as scenario SC1.)
+-- commit c4ce027; its results are reproduced here as scenario SC1.)
 --
 -- System: one ALT reader A over two channels c0 (index 0, priority) and c1,
 -- two selects; A resets its destination before every select. Each channel

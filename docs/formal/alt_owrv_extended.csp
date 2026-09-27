@@ -25,7 +25,7 @@
 --   on c0 (plain writer, or an ALT writer with one guard); an ISR writes one
 --   message into c1 (putFromISR: push, token release, registration snapshot
 --   and signal, atomic with respect to tasks); two selects; optional stale
---   flag. The buffered guard is the verified 2.0 protocol (dd954a9): register
+--   flag. The buffered guard is the verified 2.0 protocol (cb10b12): register
 --   (R) then token count (C); disable re-reads the count; activate() takes
 --   the token with timeout 0 or starts a new round. It never touches the
 --   ALT's state word.

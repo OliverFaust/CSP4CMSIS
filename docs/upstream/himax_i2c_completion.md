@@ -3,8 +3,7 @@
 **Status:** found by reading the code (review rounds 4–5). Not reproduced on hardware. The sibling
 repository is unchanged; this note only describes the problem and the fix.
 
-**Checked revision:** `HimaxWE2-CSP4CMSIS` @ `77124fa` (2026-09-25). The same code is also in
-`The_Way_of_Static_Process_Networks/GithubCode/CSP4CMSIS`.
+**Checked revision:** `HimaxWE2-CSP4CMSIS` @ `77124fa` (2026-09-25; github.com/OliverFaust/HimaxWE2-CSP4CMSIS).
 
 ## Affected applications
 

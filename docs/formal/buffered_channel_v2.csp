@@ -76,9 +76,9 @@
 -- Protocol versions modelled:
 --   (a) v1.0.0            : check-then-register (Part 1, SYS_OLD)
 --   (b) 2.0 draft/back-off: readiness from the ring count (Part 1,
---                           SYS_DRAFT = 6920d1c, SYS_NEW = a34d608)
+--                           SYS_DRAFT = d39835b, SYS_NEW = a85e17d)
 --   (c) 2.0 final         : readiness from the semaphore count (Part 1c,
---                           commit dd954a9)
+--                           commit cb10b12)
 --   (d) mutations of (c)  : C before R (m1), S before T (m2) (Part 1d)
 --   rendezvous / signal channels, "trust the wakeup" (Part 4)
 --
@@ -158,7 +158,7 @@ W_NEW = push_snap?r -> rel_items -> (if r then set_flag -> SKIP else SKIP)
 
 -- 2.0 ALT reader: rounds of enable / wait / disable / confirm / activate.
 -- bo = back-off after a failed activate() (the final design); without it
--- (first 2.0 draft, commit 6920d1c) a failed activate() retried at once.
+-- (first 2.0 draft, commit d39835b) a failed activate() retried at once.
 R_NEW(bo) = clear_flag -> enable_new?ready ->
           (if ready then unregister?r2 -> ROUND(bo, r2)
            else wait_flag -> unregister?r2 -> ROUND(bo, r2))
@@ -192,7 +192,7 @@ assert SYS_OLD :[deadlock free [F]]
 -- expected: FAILS (same trace; done never happens)
 assert DELIVERED [FD= SYS_OLD \ diff(Events, {done, idle})
 
--- expected: FAILS with DIVERGENCE -- the first 2.0 draft (6920d1c) livelocks:
+-- expected: FAILS with DIVERGENCE -- the first 2.0 draft (d39835b) livelocks:
 --           push_snap.false (writer preempted before rel_items), then the reader
 --           repeats clear_flag, enable_new.true, unregister.true, act_new.false
 --           forever (found by this model review; reproduced on the FVP by T13)
@@ -206,7 +206,7 @@ assert DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})
 assert STOP [T= SYS_NEW \ diff(Events, {error})
 
 -- -----------------------------------------------------------------------------
--- Part 1c -- (c) readiness from the SEMAPHORE count (final 2.0, dd954a9).
+-- Part 1c -- (c) readiness from the SEMAPHORE count (final 2.0, cb10b12).
 --   ALT reader  : R register (critical section), then C = token count > 0
 --   writer      : P ring update (critical), T token release, S snapshot of
 --                 the registration (critical), G signal

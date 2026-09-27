@@ -10,8 +10,8 @@ are analysis only. The tests are in `tests/fvp_sse300/`.
 
 | Commit | Content |
 |---|---|
-| `ca0297b` | Step 1: remove `OverwritingChannel` (header, pdsc `<file>` entry and description, README) |
-| `5c6bcbf` | `rendezvous_channel.h`: unused-parameter warning in the empty `beginExtInput()`, pre-existing in v1.0.0; the parameter name is commented out |
+| `b1c90ec` | Step 1: remove `OverwritingChannel` (header, pdsc `<file>` entry and description, README) |
+| `b8b1442` | `rendezvous_channel.h`: unused-parameter warning in the empty `beginExtInput()`, pre-existing in v1.0.0; the parameter name is commented out |
 | *(this commit)* | This document, `tests/fvp_sse300/` (tests, README, reference output) |
 
 ---
@@ -34,20 +34,21 @@ All tests: `tests/fvp_sse300/results/2026-09-26_fvp_run.txt`.
 
 ## Test setup (details in `tests/fvp_sse300/README.md`)
 
-- **Harness:** `helloworld_sse300`, local branch `csp4cmsis-wt-tests` of the FVP repository. It is never
-  pushed, and its `origin` is not ours.
+- **Harness:** the CSP4CMSIS test harness: a local, unpublished adaptation of the public Arm example project
+  `helloworld_sse300` (github.com/joseph-yiu/arm_fvp_helloworld, Apache-2.0). The harness
+  project is not published.
 - **Target:** Corstone-300 FVP (Cortex-M55, Armv8.1-M), AC6 6.24, CMSIS-RTOS2 over FreeRTOS 11.3.0
   (`ARM::CMSIS-FreeRTOS`).
 - **Configuration:** `CSP4CMSIS_STATIC_ALLOCATION`, `CSP4CMSIS_RTOS2_BACKEND_FREERTOS`,
   `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` (BASEPRI 0xA0).
 - **Build against this working tree:** the harness's `hello.cproject.yml` loads the pack by path,
-  `- pack: OliverFaust::CSP4CMSIS` / `path: <relative path to ~/src/CSP4CMSIS>`. csolution reads
+  `- pack: OliverFaust::CSP4CMSIS` / `path: <relative path to the CSP4CMSIS checkout>`. csolution reads
   `OliverFaust.CSP4CMSIS.pdsc` straight from this clone, so the `OliverFaust::CSP4CMSIS:Core` sources
   come from the working tree. The installed 1.0.0 pack is **not** used, and nothing is registered with
   `cpackget`, so the same pack version never appears twice. I verified this through
   `compile_commands.json`.
 - **Build result:** clean, 0 warnings with `-Wall -Wextra` over all CSP4CMSIS sources, `hello.c` and
-  the test file, after the `5c6bcbf` fix. Image with Step 1 applied: byte-for-byte the same section
+  the test file, after the `b8b1442` fix. Image with Step 1 applied: byte-for-byte the same section
   sizes as v1.0.0 (Code 52,428 / RO 5,540 / RW 52 / ZI 45,736), as expected for an unused header.
 - **Determinism:**
   - Two FVP runs of the same image produce **identical output** and the same instruction count
@@ -76,7 +77,7 @@ Removed:
   buffered policies;
 - the line in `csp4cmsis/README.md`.
 
-The prebuilt `OliverFaust.CSP4CMSIS.1.0.0.pack` is the released artefact and is left unchanged. It
+The prebuilt `OliverFaust.CSP4CMSIS.1.0.0.pack` is the released artefact and is left unchanged. (Later removed from the tree before the branch was published: it is an asset of the `v1.0.0` GitHub Release, where `<url>` in the pdsc points.) It
 still contains the header.
 
 **Sibling repositories** (read-only; shallow clones of the GitHub repos plus the local copies; not
@@ -93,7 +94,7 @@ Repositories covered:
 - CSP4CMSIS_for_NUCLEO-G474RE
 - CSP4CMSIS-B-L475E-IOT01A
 - Static_Process_Networks: there is no standalone GitHub repository, so I used the local copy in
-  `oliverfaust.github.io`, plus `The_Way_of_Static_Process_Networks/GithubCode`.
+  `oliverfaust.github.io`, plus a local (unpublished) copy of the book's code.
 
 ---
 
@@ -491,7 +492,7 @@ forbidding `putFromISR()` on KeepNewest channels.
 See `tests/fvp_sse300/README.md`. In short:
 
 ```sh
-cd <arm_fvp_helloworld>/helloworld_sse300 && git switch csp4cmsis-wt-tests && source ../env.sh
+cd <harness>/helloworld_sse300 && source ../env.sh
 cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild
 $FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a out/MPS3-Corstone-300/hello.axf \
     -C ethosu.num_macs=128 -f model_config_sse300.txt --simlimit 900 --stat
@@ -536,20 +537,20 @@ Compare the output with `tests/fvp_sse300/results/2026-09-26_fvp_run.txt`.
 - **CSP-M model:** write only; the maintainer runs FDR.
 - The pdsc version is **not** bumped and the pack is **not** rebuilt yet.
 
-## Commits (on top of `21c0e09`)
+## Commits (on top of `1b757e1`)
 
 | Commit | Change |
 |---|---|
-| `a7ee998` | tests: version- and backend-agnostic regression suite (PASS/FAIL), T2 via armlink `$Sub$$` interposition, T3i (real ISR), T8–T10 |
-| `5c827a4` | fatal-error hook (`csp_fatal.h`); static `TimerGuard` control block (FreeRTOS: `StaticTimer_t` + adapter callback wrapper); non-copyable timeout guards; `Alternative` binds by reference |
-| `7b293e1` | ALT via thread flags (bits 8–23; bit 0 = `RENDEZVOUS_FLAG`); `select()`: error check, disable only enabled guards, `confirm()`, `activate()` → bool; rendezvous `putFromISR()` snapshots then acts |
-| `203bffd` | guard state per channel-end handle (`GuardSlot` in `Chanin`/`Chanout`), rendezvous and buffered |
-| `302cc67` | tests: 1 KB worker stacks (RAM budget for the static T5 channel) |
-| `6920d1c` | `BufferedChannel<T, SIZE, P>`: design B |
-| `3709984` | tests: T11/T12 (rendezvous ALT regression), README, results |
-| `f1711cf` | tests: compile-time checks (`static_assert`s, deleted copy/move, by-reference bindings) |
-| `0af7731` | tests: T13/T13b (livelock of a high-priority ALT vs a preempted partner); **FAIL** on `6920d1c` |
-| `a34d608` | `select()` backs off (one tick) after a lost `activate()` race: fixes the livelock |
+| `0b55421` | tests: version- and backend-agnostic regression suite (PASS/FAIL), T2 via armlink `$Sub$$` interposition, T3i (real ISR), T8–T10 |
+| `e8e1773` | fatal-error hook (`csp_fatal.h`); static `TimerGuard` control block (FreeRTOS: `StaticTimer_t` + adapter callback wrapper); non-copyable timeout guards; `Alternative` binds by reference |
+| `ec293f5` | ALT via thread flags (bits 8–23; bit 0 = `RENDEZVOUS_FLAG`); `select()`: error check, disable only enabled guards, `confirm()`, `activate()` → bool; rendezvous `putFromISR()` snapshots then acts |
+| `2ac28b1` | guard state per channel-end handle (`GuardSlot` in `Chanin`/`Chanout`), rendezvous and buffered |
+| `c39558e` | tests: 1 KB worker stacks (RAM budget for the static T5 channel) |
+| `d39835b` | `BufferedChannel<T, SIZE, P>`: design B |
+| `37493d8` | tests: T11/T12 (rendezvous ALT regression), README, results |
+| `2465e00` | tests: compile-time checks (`static_assert`s, deleted copy/move, by-reference bindings) |
+| `c1445ab` | tests: T13/T13b (livelock of a high-priority ALT vs a preempted partner); **FAIL** on `d39835b` |
+| `a85e17d` | `select()` backs off (one tick) after a lost `activate()` race: fixes the livelock |
 | *(this commit)* | CSP-M model, CMSIS-FreeRTOS issue draft, `CHANGES_2.0.md`, this section |
 
 Each library commit was built with 0 warnings under `-Wall -Wextra` on both backends and run through the
@@ -558,12 +559,12 @@ regression suite on both backends:
 | After commit | FreeRTOS | RTX5 | Newly passing |
 |---|---|---|---|
 | v1.0.0 (baseline, 15-test suite) | 2 / 12 / 1 | 2 / 12 / 1 | — |
-| `5c827a4` | 3 / 11 / 1 | 3 / 11 / 1 | T6 |
-| `7b293e1` | 4 / 10 / 1 | 4 / 10 / 1 | T4b |
-| `203bffd` | 5 / 9 / 1 | 5 / 9 / 1 | T4c |
-| `6920d1c` | 15 / 0 / 0 (17 / 0 / 0 with T11–T12) | same | T1a T1b T2 T3 T3i T4a T5 T7a T9 T10 |
-| `6920d1c` + T13/T13b | 17 / **2** / 0 | 17 / **2** / 0 | — (livelock found) |
-| **`a34d608` (HEAD)** | **19 / 0 / 0** | **19 / 0 / 0** | T13 T13b |
+| `e8e1773` | 3 / 11 / 1 | 3 / 11 / 1 | T6 |
+| `ec293f5` | 4 / 10 / 1 | 4 / 10 / 1 | T4b |
+| `2ac28b1` | 5 / 9 / 1 | 5 / 9 / 1 | T4c |
+| `d39835b` | 15 / 0 / 0 (17 / 0 / 0 with T11–T12) | same | T1a T1b T2 T3 T3i T4a T5 T7a T9 T10 |
+| `d39835b` + T13/T13b | 17 / **2** / 0 | 17 / **2** / 0 | — (livelock found) |
+| **`a85e17d` (HEAD)** | **19 / 0 / 0** | **19 / 0 / 0** | T13 T13b |
 
 Entries are PASS / FAIL / SKIP. Rows before T11–T13 existed used the smaller suite of that time.
 
@@ -571,7 +572,7 @@ Entries are PASS / FAIL / SKIP. Rows before T11–T13 existed used the smaller s
 
 | Library | FreeRTOS 11.3.0 | Keil RTX5 5.9.1 |
 |---|---|---|
-| **2.0 @ `a34d608`** | **PASS 19, FAIL 0, SKIP 0** | **PASS 19, FAIL 0, SKIP 0** |
+| **2.0 @ `a85e17d`** | **PASS 19, FAIL 0, SKIP 0** | **PASS 19, FAIL 0, SKIP 0** |
 | v1.0.0 @ `a789d2a` | PASS 6, FAIL 12, SKIP 1 | PASS 6, FAIL 12, SKIP 1 |
 
 On v1.0.0, only T0, T8, T11, T12, T13 and T13b pass. T13/T13b pass there because v1.0.0 never retries
@@ -594,13 +595,13 @@ and `RelTimeoutGuard` use 0 B (T5, T6).
 
 ## Findings made during the implementation
 
-1. **Livelock in the first design-B commit (`6920d1c`), found by reviewing the CSP-M model.**
+1. **Livelock in the first design-B commit (`d39835b`), found by reviewing the CSP-M model.**
    - What happens: a high-priority ALT whose `enable()` reports ready (`count_ > 0`) while the
      semaphore token is not yet released, because a lower-priority writer was preempted between its
      critical section and `osSemaphoreRelease()`, retried `select()` immediately and spun forever.
    - The same applies to the output side, and to a blocking competitor holding the token.
    - Reproduced by T13/T13b on both backends (21–23 spins per sweep on FreeRTOS, 12–15 on RTX5).
-   - Fixed in `a34d608` with a one-tick back-off. The model file keeps the draft variant, whose assertion
+   - Fixed in `a85e17d` with a one-tick back-off. The model file keeps the draft variant, whose assertion
      is expected to fail with divergence.
    - **Residual cost:** in this rare race the ALT sees up to one tick of extra latency. It never
      busy-waits.
@@ -629,7 +630,7 @@ The model was written for FDR4 and was not run at that point; the "expected" ann
 intent.
 1. **ALT reader vs. one final message, no successor.**
    - v1.0.0 protocol: expected to deadlock (the lost wakeup) and to fail `[FD=`.
-   - The `6920d1c` draft: expected to fail `[FD=` with **divergence** (the livelock).
+   - The `d39835b` draft: expected to fail `[FD=` with **divergence** (the livelock).
    - 2.0 with back-off: expected deadlock-free, no take-from-empty, and eventual delivery, even with an
      adversarial stale signal.
 2. **KeepNewest, capacity 2, task writer and ISR writer.** The v1.0.0 two-step write should fail
@@ -654,7 +655,7 @@ Assumptions:
 - **Thread-flag collision** with native FreeRTOS index-0 task notifications on CSP threads (documented).
 - ~~**RTX5, channels constructed before `osKernelInitialize()`** may fail~~. Superseded (review round 2,
   T14): namespace-scope construction works on both backends.
-- ~~**The back-off** adds up to one tick of latency~~. Superseded: the back-off was removed in `dd954a9`
+- ~~**The back-off** adds up to one tick of latency~~. Superseded: the back-off was removed in `cb10b12`
   (review round 2).
 - **Test coverage:** Arm Compiler 6 at `-O0` only; FVP only, no hardware; the Cortex-M55 core only.
   The FreeRTOS ISR-path variant of item 2 (Armv7-M / Armv8-M Mainline) was not built.
@@ -665,20 +666,20 @@ Assumptions:
 
 | Commit | Change |
 |---|---|
-| `dd954a9` | BufferedChannel: ALT readiness from the semaphore count; **back-off removed** |
-| `8ba4bdb` | tests: T2 interposition for GCC (`--wrap`) |
-| `b5856a3` | tests: T14 (namespace-scope channels / pre-`main()` creation) |
-| `17cead1` | `buffered_channel.h`: masked element copy documented (comment only) |
+| `cb10b12` | BufferedChannel: ALT readiness from the semaphore count; **back-off removed** |
+| `2a3f7f3` | tests: T2 interposition for GCC (`--wrap`) |
+| `4f91ec4` | tests: T14 (namespace-scope channels / pre-`main()` creation) |
+| `0b2f991` | `buffered_channel.h`: masked element copy documented (comment only) |
 | *(this commit)* | results, README, CSP-M model extensions, this section |
 
-## 1. Livelock: structural fix instead of the back-off (implemented in `dd954a9`)
+## 1. Livelock: structural fix instead of the back-off (implemented in `cb10b12`)
 
-### Mechanism of the `6920d1c` livelock
+### Mechanism of the `d39835b` livelock
 
 - Readiness came from the ring state (`count_ > 0`), but `activate()` needs the semaphore token.
 - A partner preempted between its ring update and `osSemaphoreRelease()` created a state where
   "ready" was true while no token existed.
-- A higher-priority ALT then retried forever. `a34d608` hid this behind a one-tick sleep, which made
+- A higher-priority ALT then retried forever. `a85e17d` hid this behind a one-tick sleep, which made
   progress depend on the tick and on the preempted partner getting CPU time.
 
 ### Fix
@@ -719,7 +720,7 @@ S, G as in the header of `buffered_channel.h`:
   acquire, i.e. another writer made progress. The retry reads the new count and blocks if it is 0.
   **Each failed round implies another thread's progress, so there is no livelock** without any sleep.
 
-### Other changes in `dd954a9`
+### Other changes in `cb10b12`
 
 - **Cost:** one extra, short critical section per operation (S). The readiness check is an RTOS call
   (`osSemaphoreGetCount()`), made outside critical sections.
@@ -737,7 +738,7 @@ S, G as in the header of `buffered_channel.h`:
 
 **History.** FDR4 was not installed, and its licence needs the maintainer's registration, so the model
 was first committed unchecked. It was then checked with ProB (`probcli` 1.16.1-final, 716929f, SICStus
-4.9.0; Linux tarball from <https://prob.hhu.de>), which reads FDR-dialect CSP-M (commit `04a4a3d`).
+4.9.0; Linux tarball from <https://prob.hhu.de>), which reads FDR-dialect CSP-M (commit `8db3a49`).
 
 **What changed while checking.**
 - **Positive control #1 failed at first:** `SYS_OLD` synchronised on `S1`, which lacks `backoff_tick`.
@@ -761,9 +762,9 @@ model header.
 |---|---|---|
 | 1 | `SYS_OLD` deadlock free (positive control) | FAIL: `clear_flag, pending_chk.false, put_old, notify_old.false, register_old`, deadlock |
 | 2 | `DELIVERED [FD= SYS_OLD` | FAIL: `done` refused after the empty trace |
-| 3 | `DELIVERED [FD= SYS_DRAFT` (positive control) | FAIL: divergence (the `6920d1c` livelock) |
+| 3 | `DELIVERED [FD= SYS_DRAFT` (positive control) | FAIL: divergence (the `d39835b` livelock) |
 | 4–6 | `SYS_NEW` (back-off): deadlock, delivery, no take-from-empty | PASS |
-| 7–12 | `SYS_C`, `SYS_C2` (final, `dd954a9`): same three properties | PASS |
+| 7–12 | `SYS_C`, `SYS_C2` (final, `cb10b12`): same three properties | PASS |
 | 13, 14 | mutations m1, m2 deadlock free | FAIL: lost-wakeup deadlocks |
 | 15 | KeepNewest v1.0.0 | FAIL: `rd.2` |
 | 16, 17 | KeepNewest 2.0 `[T=`, `[FD=` | PASS |
@@ -784,9 +785,9 @@ added later):
 | Protocol | Systems | Expected |
 |---|---|---|
 | (a) v1.0.0 check-then-register | `SYS_OLD` | deadlock (lost wakeup); fails `[FD=` delivery |
-| (b) ring-count readiness | `SYS_DRAFT` (`6920d1c`) | divergence (livelock) |
-| (b) ring-count readiness + back-off | `SYS_NEW` (`a34d608`) | passes, under the stated fairness assumption |
-| **(c) semaphore-count readiness (`dd954a9`)** | `SYS_C` (stale-signal adversary); `SYS_C2` (competing blocking reader, two messages) | deadlock-free, divergence-free, never takes from an empty buffer, both readers served. No fairness assumption is needed. |
+| (b) ring-count readiness | `SYS_DRAFT` (`d39835b`) | divergence (livelock) |
+| (b) ring-count readiness + back-off | `SYS_NEW` (`a85e17d`) | passes, under the stated fairness assumption |
+| **(c) semaphore-count readiness (`cb10b12`)** | `SYS_C` (stale-signal adversary); `SYS_C2` (competing blocking reader, two messages) | deadlock-free, divergence-free, never takes from an empty buffer, both readers served. No fairness assumption is needed. |
 | KeepNewest, task writer + ISR writer | two-step (v1.0.0) vs. one atomic update (2.0) | v1.0.0 fails the serial specification; 2.0 passes |
 | Block buffer, items/spaces tokens | — | refines `BUFF` and keeps per-writer FIFO order |
 | **Rendezvous ALT-vs-ALT (trust path)** | `SYS_RV(true)` | completes |
@@ -858,9 +859,9 @@ Channel<Message>`) and ignoring vendored library copies:
 | This repo (CSP4CMSIS) | — | 0 (no examples) | 0 |
 | FVP `helloworld_sse300` demo | FreeRTOS / RTX5 harness | 0 | 2 |
 | Alif-DK-E8-CSP4CMSIS (`neuropathway`, `pack_test`) | FreeRTOS adapter | 0 | 4 |
-| Alif `csp4cmsis_alt_test` (uses `Alif/DK-E8/application.cpp`) | **RTX5** | 0 | 2 (`chan_A`/`chan_B` in `MainApp_Task`) |
+| Alif `csp4cmsis_alt_test` (uses `application.cpp` of the local, unpublished DK-E8 tree) | **RTX5** | 0 | 2 (`chan_A`/`chan_B` in `MainApp_Task`) |
 | HimaxWE2-CSP4CMSIS | FreeRTOS | 32 | 22 |
-| The_Way_of_Static_Process_Networks/GithubCode (copies of Himax and Nucleo) | FreeRTOS | 37 | 26 |
+| local copies of the Himax and Nucleo projects (unpublished) | FreeRTOS | 37 | 26 |
 | CSP4CMSIS-B-L475E-IOT01A | FreeRTOS | 1 | 1 |
 | CSP4CMSIS-Nucleo, CSP4CMSIS_for_NUCLEO-G474RE | FreeRTOS | 0 | 2 each |
 
@@ -903,7 +904,7 @@ Not implemented yet, as instructed.
 
 ## 5. `putFromISR()`: masked copy
 
-**Documented** in `buffered_channel.h` (`17cead1`):
+**Documented** in `buffered_channel.h` (`0b2f991`):
 - every element copy (`output()`, `input()`, `putFromISR()`, ALT `activate()`) runs with BASEPRI raised;
 - interrupts above `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` are unaffected;
 - the documentation includes the index/pointer pattern for large payloads.
@@ -944,8 +945,8 @@ Analysis only. The library is unchanged; the tests and the fix model are new.
 
 | Commit | Change |
 |---|---|
-| `cbb6ef8` | `.gitignore` for ProB caches; unused model channels removed; FDR section → ProB results |
-| `20862b4` | tests: T15i, T15s, T15 (FAIL expected); reference results for the 23-test suite |
+| `adb52f3` | `.gitignore` for ProB caches; unused model channels removed; FDR section → ProB results |
+| `1d6ef61` | tests: T15i, T15s, T15 (FAIL expected); reference results for the 23-test suite |
 | *(this commit)* | `docs/formal/rendezvous_commit_record.csp` (fix model, checked); this section |
 
 ## 1. What an application observes
@@ -1070,11 +1071,11 @@ That is T15 plus assertion 23's adversary. **Fix (FIX):**
 
 | Commit | Change |
 |---|---|
-| `cbdc9bc` | A1: `DSB; ISB` after raising BASEPRI |
-| `4ab6647` | A2: `putFromISR()` element-size limit (`CSP4CMSIS_ISR_MAX_ELEMENT_SIZE`, default 64) |
-| `57799f5` | A3: rule for where channels may be constructed (`Documentation/CSP4CMSIS_Configuration.md` §5) |
-| `6a6e439`, `73594b3` | B: `docs/formal/alt_one_winner.csp` (new), `rendezvous_commit_record.csp` generalised; checked |
-| `1ad3e11` | D: tests T16s, T16n, T16a; 26-test reference results |
+| `786c712` | A1: `DSB; ISB` after raising BASEPRI |
+| `62d2f78` | A2: `putFromISR()` element-size limit (`CSP4CMSIS_ISR_MAX_ELEMENT_SIZE`, default 64) |
+| `164521e` | A3: rule for where channels may be constructed (`Documentation/CSP4CMSIS_Configuration.md` §5) |
+| `5547fcb`, `53e7972` | B: `docs/formal/alt_one_winner.csp` (new), `rendezvous_commit_record.csp` generalised; checked |
+| `11858f6` | D: tests T16s, T16n, T16a; 26-test reference results |
 | *(this commit)* | this section |
 
 ## A. Cheap gates (implemented)
@@ -1097,7 +1098,7 @@ everywhere, and 0 T13/T13b spins. A3 is documentation only; its 12 images are by
   RTX5 start-up-hook rule; enable an interrupt only after its channel exists.
 - **Noticed, not changed:** `CSP4CMSIS_Configuration.md` §3 still says the priority define is needed only
   with `BufferedChannel`/`putFromISR()`. `rendezvous_channel.h` includes `csp_critical.h`, which `#error`s
-  without it, so every build needs it (FVP repo `UPSTREAM_ISSUES.md` #2).
+  without it, so every build needs it (also noted in the harness project's unpublished upstream-issues list, #2).
 
 ## B. ALT with rendezvous/signal channels: one-winner vs commit-record
 
@@ -1152,10 +1153,10 @@ two-word claim in one CSP critical section.
 | HimaxWE2 `csp4cmsis_allon_sensor_tflm` (book ch. 8) | `camera_process.cpp:19` | `Channel<trigger_t>` | plain `>>` | checked (`sent`) |
 | Book ch. 5 `nucleo-g474re_Interrupts` | `application.cpp:28` | `Channel<ButtonEvent>` | plain `>>` | ignored |
 | Book ch. 6 `nucleo-g474re_Sensor_Data_Processing_Network` | `application.cpp:39` | `Channel<trigger_t>` | plain `>>` | ignored |
-| Alif `DK-E8/critsec_isr_test.cpp` | `:91` | `BufferedOne2OneChannel<…, 16, KeepNewest>` | — | checked |
+| Alif `DK-E8/critsec_isr_test.cpp` (local, unpublished) | `:91` | `BufferedOne2OneChannel<…, 16, KeepNewest>` | — | checked |
 | Book site `CSP4CMSIS/api.md` | §3 example | "`my_chan`" (text describes buffer policies) | — | — |
 
-- The `The_Way_of_Static_Process_Networks/GithubCode/CSP4CMSIS` tree is a copy of the Himax apps.
+- A local (unpublished) copy of the Himax apps exists as well; it has the same uses.
 - **Signal-channel `putFromISR()`: no uses.**
 - **Every rendezvous use is ISR → a process blocked in plain input.** None uses ALT (so T15i's phantom does
   not hit them).
@@ -1181,7 +1182,7 @@ waits in `i2c_sync >> dummy`. If the ISR fires first, `putFromISR()` finds no re
 
 **Uses:** none in any code. The only occurrence is the declaration example in the book site's API page
 (`SamplingChannel<Message, BufferPolicy::KeepNewest/KeepOldest>`). The regex hits in Himax
-`csp4cmsis_lossy_policy_test` and Alif `critsec_isr_test` are `BufferedOne2OneChannel` (buffered).
+`csp4cmsis_lossy_policy_test` and the (local, unpublished) Alif `critsec_isr_test` are `BufferedOne2OneChannel` (buffered).
 
 **Semantics problem:** a non-blocking rendezvous writer cannot wait for an ALT reader's `activate()`.
 - Under the current code it wakes the ALT and drops the value (T16n: PHANTOM).
@@ -1190,7 +1191,7 @@ waits in `i2c_sync >> dummy`. If the ISR fires first, `putFromISR()` finds no re
 **Recommendation: restrict sampling policies to buffered channels.** Add a `static_assert(P == Block)` in
 `SamplingChannel`, and document `SamplingBufferedChannel<T, 1, KeepNewest>` as the "latest value" channel.
 
-## D. Code-read defects as FVP tests (commit `1ad3e11`)
+## D. Code-read defects as FVP tests (commit `11858f6`)
 
 | Test | Defect | 2.0 (12 configurations) | v1.0.0 | Disappears under |
 |---|---|---|---|---|
@@ -1260,14 +1261,14 @@ and signal); the task partner on c0 is a plain writer or an ALT writer; stale fl
 
 | Commit | Change | Suite (12 configurations) |
 |---|---|---|
-| `fcc29c5` | **OWRV** for rendezvous and signal channels. Per-ALT state word; `select()` re-verifies every wakeup; non-template `RendezvousCore` under CSP critical sections (no mutex, copies outside); ALT-vs-ALT claim of both words in one section, reader copies; signal channel = data-less rendezvous (`csp::Signal`); `SyncChannel` removed; all objects static (`csp_semaphore.h`) | PASS=25 FAIL=1 (T16n, until C2) |
-| `bd3965f` | **C1/C2:** ISR writes only via `SamplingBufferedChannel::isrWriter()` → `IsrChanout<T>` (size `static_assert`); `Chanout`/`BaseAltChan::putFromISR()` removed; Block-only rendezvous and signal channels (`static_assert`); 17 compile checks | PASS=22 FAIL=0 REPLACED=4 |
-| `0dc7fe9` | configuration §3: the priority define is always required (and unshifted) | unchanged, images identical |
-| `29d79cf` | harness on the 2.0 API (`IsrChanout`); T2 covers the OWRV paths; T17 (no heap) | PASS=23 FAIL=0 REPLACED=4 |
-| `c109660` | `Barrier`: static objects, phase-alternating release (fixes two 1.x reuse bugs); T18 | PASS=24 FAIL=0 REPLACED=4 |
-| `44325a4` | heap-free proof: T19, README, CMSIS-FreeRTOS issue draft | 12 standard: PASS=24; **4 heap-free: PASS=25**; FAIL=0 everywhere |
+| `08c6d8a` | **OWRV** for rendezvous and signal channels. Per-ALT state word; `select()` re-verifies every wakeup; non-template `RendezvousCore` under CSP critical sections (no mutex, copies outside); ALT-vs-ALT claim of both words in one section, reader copies; signal channel = data-less rendezvous (`csp::Signal`); `SyncChannel` removed; all objects static (`csp_semaphore.h`) | PASS=25 FAIL=1 (T16n, until C2) |
+| `0cca916` | **C1/C2:** ISR writes only via `SamplingBufferedChannel::isrWriter()` → `IsrChanout<T>` (size `static_assert`); `Chanout`/`BaseAltChan::putFromISR()` removed; Block-only rendezvous and signal channels (`static_assert`); 17 compile checks | PASS=22 FAIL=0 REPLACED=4 |
+| `b52d3ae` | configuration §3: the priority define is always required (and unshifted) | unchanged, images identical |
+| `f33fc1c` | harness on the 2.0 API (`IsrChanout`); T2 covers the OWRV paths; T17 (no heap) | PASS=23 FAIL=0 REPLACED=4 |
+| `7c176c7` | `Barrier`: static objects, phase-alternating release (fixes two 1.x reuse bugs); T18 | PASS=24 FAIL=0 REPLACED=4 |
+| `dff8277` | heap-free proof: T19, README, CMSIS-FreeRTOS issue draft | 12 standard: PASS=24; **4 heap-free: PASS=25**; FAIL=0 everywhere |
 
-FVP test branch: `f364bf2` (RTOS heap 16 KB; the static rendezvous objects pushed `.bss` past `RW_RAM0`)
+Harness project (local, unpublished): `f364bf2` (RTOS heap 16 KB; the static rendezvous objects pushed `.bss` past `RW_RAM0`)
 and `3b5e443` (heap-free build types).
 
 **The formerly failing tests:**
@@ -1281,7 +1282,7 @@ and `3b5e443` (heap-free build types).
 | T16s (signal `putFromISR()` to a blocked receiver) | **replaced** | `neg_signal_isr.cpp`, `neg_signal_putfromisr.cpp` |
 | T16n (KeepNewest rendezvous PHANTOM) | **replaced** | `neg_rendezvous_policy.cpp` (and `neg_signal_policy.cpp`) |
 
-(Between `fcc29c5` and `bd3965f`, T15i, T16s and T16a also passed at run time; T16n failed.)
+(Between `08c6d8a` and `0cca916`, T15i, T16s and T16a also passed at run time; T16n failed.)
 
 **Heap-free proof** (details in `tests/fvp_sse300/README.md`):
 - **`FreeRTOS-NoHeap`:** `configSUPPORT_DYNAMIC_ALLOCATION=0`, no heap implementation linked. AC6: no
@@ -1307,7 +1308,7 @@ and `3b5e443` (heap-free build types).
 Every project needs the **2.0 library itself** first:
 - the vendored copies under `lib/csp4cmsis` / `lib/CSP4CMSIS` (B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo
   and its CubeIDE workspaces, the book's `nucleo-g474re_*` repositories);
-- `EPII_CM55M_APP_S/library/csp4cmsis` (HimaxWE2 and its GithubCode copy), `Alif/DK-E8/csp4cmsis`;
+- `EPII_CM55M_APP_S/library/csp4cmsis` (HimaxWE2 and a local copy), the local, unpublished DK-E8 tree (`csp4cmsis/`);
 - the `OliverFaust::CSP4CMSIS` pack (Alif-DK-E8-CSP4CMSIS clone), which also requires a 2.0 pack.
 
 It also needs the usual defines (`CSP4CMSIS_RTOS2_BACKEND_*`, `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`,
@@ -1324,10 +1325,10 @@ optionally `CSP4CMSIS_STATIC_ALLOCATION`).
 | Book ch. 6 `nucleo-g474re_Sensor_Data_Processing_Network` | `Channel<trigger_t> g_trigger_chan` → buffered; `isrWriter()` |
 | Book ch. 3, 4, 7 (`The_Process`, `Processes_and_Channels`, `Alternation`) | library update only (ch. 7's ALT now uses OWRV; no source change) |
 | Book site `CSP4CMSIS/api.md` | §2: remove `SamplingChannel<…, KeepNewest/KeepOldest>` (now a compile error) and the "captured only if a receiver is already waiting" policy text; point to `SamplingBufferedChannel<T, 1, P>`. §3: `writer().putFromISR()` → `isrWriter().putFromISR()`, buffered channels only. Signal channel: `reader()`/`writer()` with `csp::Signal` |
-| Alif `DK-E8/critsec_isr_test.cpp` | `Chanout<Message>* s_isr_writer` → `IsrChanout<Message>` from `isrWriter()` (the channel is already buffered, KeepNewest) |
+| Alif `DK-E8/critsec_isr_test.cpp` (local, unpublished) | `Chanout<Message>* s_isr_writer` → `IsrChanout<Message>` from `isrWriter()` (the channel is already buffered, KeepNewest) |
 | Alif-DK-E8-CSP4CMSIS clone (`neuropathway`, `csp4cmsis_pack_test`, `csp4cmsis_alt_test`) | library/pack update only |
 | B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo (+ CubeIDE workspaces) | library update only (no ISR writes, no sampling rendezvous, no signal channels) |
-| FVP `csp4cmsis-pack-migration` demo | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
+| FVP pack-migration demo (local harness project) | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
 
 ---
 
@@ -1335,9 +1336,9 @@ optionally `CSP4CMSIS_STATIC_ALLOCATION`).
 
 | Commit | Change |
 |---|---|
-| `7c0600f` | heap-free guarantee and per-backend requirements (`CSP4CMSIS_Configuration.md` §2, §6), README claims, website patch (`docs/website/heap_claims.patch`, not applied), three CMSIS-FreeRTOS issues ready to file (not filed) |
-| `52d4d0b` | `CHANGES_2.0.md`: behaviour changes with a migration guide per item |
-| `636bf00` | pdsc 2.0.0, `scripts/build_pack.py`, `packchk` clean (0 errors, 0 warnings), known-issues updated |
+| `ffe661f` | heap-free guarantee and per-backend requirements (`CSP4CMSIS_Configuration.md` §2, §6), README claims, website patch (`docs/website/heap_claims.patch`, not applied), three CMSIS-FreeRTOS issues ready to file (not filed) |
+| `37674be` | `CHANGES_2.0.md`: behaviour changes with a migration guide per item |
+| `13ec05c` | pdsc 2.0.0, `scripts/build_pack.py`, `packchk` clean (0 errors, 0 warnings), known-issues updated |
 | *(this commit)* | `docs/hardware_test_plan.md`; this section |
 
 **`IS_IRQ_MASKED` issue: the reproduction now runs verbatim** (FVP, AC6, Cortex-M55):

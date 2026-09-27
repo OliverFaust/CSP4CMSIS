@@ -2,7 +2,8 @@
 
 Branch `buffered-channel-v2`. The pdsc is at **2.0.0** (release notes included). The pack builds with
 `scripts/build_pack.py` and passes `packchk` with 0 errors and 0 warnings (see `docs/known-issues.md`).
-It is neither committed, tagged nor published yet. Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
+It is neither committed, tagged nor published yet. Pack archives are not kept in the tree: they belong on
+GitHub Releases (the 1.0.0 pack is an asset of the `v1.0.0` release). Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
 is in `tests/fvp_sse300/`.
 
 ## Behaviour changes that applications can observe (with migration guide)
