@@ -1,7 +1,8 @@
 # CSP4CMSIS 2.0 (in development): changes and migration notes
 
-Branch `buffered-channel-v2`. The version is **not** bumped yet: the pdsc still says 1.0.0 and the pack
-has not been rebuilt. Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
+Branch `buffered-channel-v2`. The pdsc is at **2.0.0** (release notes included). The pack builds with
+`scripts/build_pack.py` and passes `packchk` with 0 errors and 0 warnings (see `docs/known-issues.md`).
+It is neither committed, tagged nor published yet. Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
 is in `tests/fvp_sse300/`.
 
 ## Behaviour changes that applications can observe (with migration guide)

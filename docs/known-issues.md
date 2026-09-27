@@ -1,6 +1,43 @@
 # Known Issues
 
-## `OliverFaust.CSP4CMSIS.pdsc` was never run through `packchk`
+## `OliverFaust.CSP4CMSIS.pdsc` was never run through `packchk` (resolved for 2.0.0)
+
+**Resolved 2026-09-27.** The 2.0.0 pack passes `packchk` with **0 errors and 0 warnings**.
+
+**Root cause of the crash.** The released Linux `packchk` binaries (1.4.2, 1.4.4, 1.4.5 and 1.4.6 were
+tried; all crash) are statically linked:
+- Xerces-C (the XML parser) calls `iconv_open()`.
+- For a non-builtin encoding, the embedded glibc `dlopen()`s the *system's* gconv modules and shared
+  glibc (`__gconv_find_shlib` → `__libc_early_init`), which crashes on this host's glibc 2.41.
+
+Locale settings and `GCONV_PATH` do not avoid it.
+
+**What worked:** building `packchk` from source (dynamically linked against the system libraries):
+
+```sh
+git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/Open-CMSIS-Pack/devtools.git
+cmake -G Ninja -S devtools -B devtools/build -DCMAKE_BUILD_TYPE=Release
+ninja -C devtools/build packchk          # -> devtools/build/tools/packchk/linux-amd64/Release/packchk
+python3 scripts/build_pack.py /tmp/pack && cd /tmp/pack && unzip OliverFaust.CSP4CMSIS.2.0.0.pack -d x
+packchk --xsd <cmsis-toolbox>/etc/PACK.xsd \
+        -i ~/cmsis_packs/ARM/CMSIS/6.0.0/ARM.CMSIS.pdsc \
+        -i ~/cmsis_packs/ARM/CMSIS-RTX/5.9.1/ARM.CMSIS-RTX.pdsc \
+        -i ~/cmsis_packs/ARM/CMSIS-FreeRTOS/11.3.0/ARM.CMSIS-FreeRTOS.pdsc \
+        -n packname.txt x/OliverFaust.CSP4CMSIS.pdsc
+```
+
+- **Build used:** devtools `ce6763d`, GCC 14.2, CMake 3.31.
+- **The `-i` packs** provide the `CMSIS:CORE` and `CMSIS:RTOS2` components that the pack's condition
+  requires. Without them `packchk` reports M317/M362 (unresolved dependencies), which says nothing about
+  this pack.
+- **The 1.0.0 pdsc** also had M387/M388 (descriptions over 128 characters, with unsupported characters);
+  2.0.0 fixes them.
+- **Consumption test:** the 2.0.0 archive's contents are byte-identical to the working tree, and a
+  project consuming the extracted pack (`OliverFaust::CSP4CMSIS@2.0.0`) builds and runs (FVP demo, same
+  output as the 1.0.0 reference apart from throughput).
+
+The text below is the original (1.0.0) record.
+
 
 `OliverFaust.CSP4CMSIS.pdsc` (repo root) and the `.pack` archives built from it
 (`OliverFaust.CSP4CMSIS.<version>.pack`) have **not** been validated by
