@@ -1328,3 +1328,90 @@ optionally `CSP4CMSIS_STATIC_ALLOCATION`).
 | Alif-DK-E8-CSP4CMSIS clone (`neuropathway`, `csp4cmsis_pack_test`, `csp4cmsis_alt_test`) | library/pack update only |
 | B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo (+ CubeIDE workspaces) | library update only (no ISR writes, no sampling rendezvous, no signal channels) |
 | FVP `csp4cmsis-pack-migration` demo | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
+
+---
+
+# Review round 6: release preparation (no push, no tag)
+
+| Commit | Change |
+|---|---|
+| `7c0600f` | heap-free guarantee and per-backend requirements (`CSP4CMSIS_Configuration.md` §2, §6), README claims, website patch (`docs/website/heap_claims.patch`, not applied), three CMSIS-FreeRTOS issues ready to file (not filed) |
+| `52d4d0b` | `CHANGES_2.0.md`: behaviour changes with a migration guide per item |
+| `636bf00` | pdsc 2.0.0, `scripts/build_pack.py`, `packchk` clean (0 errors, 0 warnings), known-issues updated |
+| *(this commit)* | `docs/hardware_test_plan.md`; this section |
+
+**`IS_IRQ_MASKED` issue: the reproduction now runs verbatim** (FVP, AC6, Cortex-M55):
+`before=0xa0 after=0x00 ran_inside=1`. The compiler defines `__ARM_ARCH_8_1M_MAIN__ = 1` and leaves
+`__ARM_ARCH_8M_MAIN__` undefined. Upstream `main` is still `c3e5dc3`, identical to the 11.3.0 pack.
+
+## Does OWRV still need trivially copyable rendezvous elements?
+
+**Who copies, and where.** Every element copy is one `memcpy(dst, src, sizeof(T))` in the non-template
+`RendezvousCore`, made by *whichever task completes the rendezvous*:
+
+| Situation | Copying task | Direction |
+|---|---|---|
+| plain writer finds a pending plain reader | the writer | writer's value → reader's variable |
+| plain reader finds a pending plain writer | the reader | writer's value → reader's variable |
+| ALT reader activates (plain writer pending, or claimed/claimable ALT writer) | the ALT reader | writer's value → ALT's variable |
+| ALT writer activates with a pending plain reader | the ALT writer | ALT's value → reader's variable |
+
+- The copy runs in **task context, outside any critical section**, never in an ISR (C1 removed the ISR
+  path). The partner is blocked (pending or claimed) until the copy is done and `RENDEZVOUS_FLAG` is set.
+- The destination is the reader's existing object, so the copy acts as **assignment**, not
+  construction.
+
+**Relaxing is technically possible:** `RendezvousChannel<T>` could hand the core a type-erased copy
+function (`*static_cast<T*>(d) = *static_cast<const T*>(s)`; one pointer per channel). None of the
+critical-section or ISR arguments that force `memcpy` in buffered channels applies here. But:
+1. **It runs in the partner's thread:** on the partner's stack (whose size the user did not budget for
+   the copy) and at the partner's priority. A long or allocating copy extends the time the other process
+   stays blocked or claimed, possibly a high-priority ALT.
+2. **Failure modes:** a throwing copy (where exceptions are enabled) would leave the partner blocked for
+   ever. An allocating copy (e.g. `std::string`) brings heap use back into the communication path,
+   against the heap-free guarantee.
+3. **Consistency:** buffered channels must stay trivially copyable (their copies run with BASEPRI
+   raised, and `putFromISR()` copies from an ISR). Different rules per channel kind would make
+   switching a channel from rendezvous to buffered (the C1/C2 migration path) a source change.
+4. **No demand:** every rendezvous message type found in the sibling projects is a plain struct (text
+   check). 1.x `memcpy`'d all types, i.e. it never actually supported non-trivial ones.
+
+**Recommendation: keep the requirement for 2.0.** If a real need appears, add an opt-in later (e.g. a
+channel variant that requires `std::is_nothrow_copy_assignable_v<T>` and documents that the copy runs in
+the partner's thread). For owning payloads, the index/pointer-into-a-static-pool pattern already avoids
+the issue.
+
+## Pack-migration demo on 2.0 (FVP, AC6, FreeRTOS, 24 s as in the migration reference)
+
+**Output.** Built from the dev tree and from the extracted 2.0.0 pack, the unmodified application
+compiles. Its output is identical to `migrated_output.txt` except for the progress count:
+
+| | Messages verified at 24 s |
+|---|---|
+| 1.0.0 | 460,000 |
+| 2.0 | **690,000 (+50%)** |
+
+No `DATA ERROR` in either run. (The pre-migration native FreeRTOS build reached 610,000.)
+
+**Memory.** Measured with the same scratch monitor thread in both builds (static stack; not committed):
+
+| | 1.0.0 | 2.0 | Difference |
+|---|---|---|---|
+| Static RAM (RW + ZI in `RW_RAM0`; includes the 32 KB FreeRTOS heap array) | 44,924 B | 45,312 B | +388 B: the two static rendezvous channels now hold their semaphore control blocks (`application.o` +384 B, `glue.o` +4 B) |
+| RTOS heap in use after start-up | 184 B | 16 B | −168 B: no per-channel mutexes |
+| Peak RTOS heap (`configTOTAL_HEAP_SIZE` − minimum-ever free) | 8,488 B | 8,320 B | −168 B; the peak is the demo's own `MainApp` thread (dynamic 8 KB stack, freed on exit) |
+| Stack high-water, Receiver (2 KB) | 568 B used | 656 B used | +88 B |
+| Stack high-water, Senders (1 KB each) | 400 / 400 B used | 416 / 400 B used | +16 B / 0 |
+| Image size (ROM + RAM, `size -A` total) | 132,672 B | 130,556 B | −2.1 KB |
+
+## Hardware test plan
+
+`docs/hardware_test_plan.md`:
+- **Stage 1:** Alif DK-E8, M55_HP, RTX5, via the 2.0.0 pack; AC6 and GCC; heap-free variant.
+- **Stage 2:** NUCLEO-G474RE: FreeRTOS through ST's CMSIS-RTOS2 wrapper, Armv7E-M, 128 KB RAM.
+
+It covers which tests run as-is (all CSP-only tests and the self-calibrating sweeps), what needs
+porting (the software-interrupt source, UART, T2's `--wrap` flags in STM32CubeIDE, T5 and the RAM
+budget on the G474), and how results are collected. It also defines the pass criteria, including T16a as
+a hardware-only positive control against v1.0.0 with a 1-cycle interrupt sweep (FAIL expected; PASS
+inconclusive).
