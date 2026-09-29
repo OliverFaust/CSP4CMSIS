@@ -1,10 +1,24 @@
 # CSP4CMSIS 2.0.0: changes and migration notes
 
-Branch `buffered-channel-v2`. The pdsc is at **2.0.0** (release notes included). The pack builds with
+Released as tag `v2.0.0`; the pack `OliverFaust.CSP4CMSIS.2.0.0.pack` and its pdsc are assets of the
+[v2.0.0 GitHub release](https://github.com/OliverFaust/CSP4CMSIS/releases/tag/v2.0.0). The pack builds with
 `scripts/build_pack.py` and passes `packchk` with 0 errors and 0 warnings (see `docs/known-issues.md`).
-The pdsc is committed; the release is not yet tagged or published. Pack archives are not kept in the tree: they belong on
-GitHub Releases (the 1.0.0 pack is an asset of the `v1.0.0` release). Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the regression suite
-is in `tests/fvp_sse300/`.
+Pack archives are not kept in the tree. Background and evidence are in `BUFFERED_CHANNEL_ANALYSIS.md`; the
+regression suite is in `tests/fvp_sse300/`.
+
+## Upgrading the pack
+
+1. Install 2.0.0 (1.0.0 can stay installed):
+   ```bash
+   cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.0/OliverFaust.CSP4CMSIS.2.0.0.pack
+   ```
+   `cpackget` will not offer the upgrade by itself if you have 1.0.0 (`docs/known-issues.md`).
+2. Change the pin in your `*.csolution.yml` or `*.cproject.yml` to `OliverFaust::CSP4CMSIS@2.0.0`. A
+   pin such as `@^1.0.0` never selects 2.0.0 (a new major version), and `@1.0.0` keeps 1.0.0.
+3. Build. The lock file (`*.cbuild-pack.yml`) is regenerated with `OliverFaust::CSP4CMSIS@2.0.0` on the
+   next build; commit it with the pin.
+4. Adapt your code where it uses the changes listed below. Applications that use none of them build
+   unchanged.
 
 ## Verified configurations
 

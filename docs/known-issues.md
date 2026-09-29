@@ -1,5 +1,18 @@
 # Known Issues
 
+## `cpackget` never offers 2.0.0 to users of 1.0.0 (1.0.0 pdsc)
+
+The 1.0.0 pdsc's `<url>` is a placeholder, `https://github.com/YourOrg/CSP4CMSIS/releases/latest/download/`.
+`cpackget` fetches `<url>/OliverFaust.CSP4CMSIS.pdsc` to look for newer versions, so with 1.0.0 installed
+`cpackget update-index` fails for this pack ("bad request") and `cpackget list --updates` never shows
+2.0.0. The published 1.0.0 pack cannot be changed.
+
+**Upgrade by URL** instead: `cpackget add -a
+https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.0/OliverFaust.CSP4CMSIS.2.0.0.pack`, then
+pin `OliverFaust::CSP4CMSIS@2.0.0` (see "Upgrading the pack" in `docs/CHANGES_2.0.md`). From 2.0.0 on, the
+pdsc's `<url>` is the real `…/releases/latest/download/`, where the release also carries the pdsc, so the
+update check works for later versions.
+
 ## `scripts/build_pack.py` does not build byte-identical packs (planned fix: 2.0.1)
 
 **What varies.** Two builds of the same commit have identical contents (same files, same bytes, same
