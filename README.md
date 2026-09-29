@@ -100,12 +100,18 @@ you might expect) on which RTOS backend you're using.
 
 Board examples live in
 [Alif-DK-E8-CSP4CMSIS](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS) (Alif DevKit-E8,
-Cortex-M55). They still use CSP4CMSIS **1.0.0**:
+Cortex-M55). All use the published pack, pinned `OliverFaust::CSP4CMSIS@2.0.0`:
 
 - [`csp4cmsis_alt_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_alt_test)
-  — ALT/select smoke test (two senders, one fair-select receiver) on RTX5, consuming the pack.
+  — ALT/select smoke test (two senders, one fair-select receiver) on RTX5.
 - [`csp4cmsis_pack_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_pack_test)
-  — the same application on the FreeRTOS adapter, consuming the pack.
+  — the same application on the FreeRTOS adapter.
+- [`neuropathway`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/neuropathway)
+  — Sensor → Inference → Console network: IMU windows classified on the Ethos-U55 NPU (ExecuTorch),
+  FreeRTOS.
+
+Their move from 1.0.0 to 2.0.0 (no source change needed; board runs before and after) is recorded in
+[`docs/migration-2.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-2.0).
 
 The 2.0 regression suite and its results are in [`tests/fvp_sse300/`](tests/fvp_sse300/).
 

@@ -18,7 +18,11 @@ regression suite is in `tests/fvp_sse300/`.
 3. Build. The lock file (`*.cbuild-pack.yml`) is regenerated with `OliverFaust::CSP4CMSIS@2.0.0` on the
    next build; commit it with the pin.
 4. Adapt your code where it uses the changes listed below. Applications that use none of them build
-   unchanged.
+   unchanged. Example: the three Alif DK-E8 projects of
+   [Alif-DK-E8-CSP4CMSIS](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS) needed no source change, only
+   the pin and the lock file, and behave on the board as before
+   ([`docs/migration-2.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-2.0),
+   with their 1.0.0 and 2.0.0 board runs).
 
 ## Verified configurations
 
