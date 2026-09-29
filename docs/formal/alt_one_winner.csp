@@ -1,0 +1,267 @@
+-- =============================================================================
+-- CSP4CMSIS rendezvous/signal ALT: the classic one-winner protocol (JCSP /
+-- occam style, after Welch & Martin). ANALYSIS MODEL -- not implemented.
+-- CSP-M (FDR4 dialect). Checked with ProB 1.16.1; results at the end.
+-- Same system, scenarios, observations and SPEC as rendezvous_commit_record.csp
+-- (read that header first).
+--
+-- Protocol (OW):
+--  * Per-ALT state word  st in {IDLE, ENABLING, WAITING, READY, CLAIMED(i)}.
+--    ALT writers have one too (they can be ALTs).
+--  * A partner NEVER writes into the ALT's destination. A plain partner
+--    registers as pending (its data stays in its own buffer), and "schedules"
+--    the ALT: ENABLING/WAITING -> READY (+ signal if it was WAITING). A second
+--    partner finds READY and only stays pending.
+--  * ALT-vs-ALT: the second of the two to enable CLAIMS the pair atomically
+--    (one CSP critical section over both state words): both become
+--    CLAIMED(i). The claimed ALT must select i. The READER-side ALT performs
+--    the transfer in activate(); the writer-side ALT stays blocked until then.
+--  * The ALT waits only while its state is WAITING: a flag that finds another
+--    state is stale and is ignored (wait again). After waking: disable every
+--    enabled guard; a guard reports ready = partner pending / claimable; a
+--    CLAIMED(i) guard wins; otherwise the first ready guard (priority).
+--    activate() performs the transfer and releases the partner; if the
+--    partner can no longer be claimed, a new round starts.
+--  * Signal channels are rendezvous channels without data (partner = PW).
+--
+-- Variants (v): OW, OWRV, and the mutations
+--   OWRV     OW without the WAITING check after a wakeup: every wakeup is
+--            re-verified (disable all; a CLAIMED or ready guard wins; if none,
+--            a new round). This is what buffered and timer guards already
+--            do, so they need not touch the ALT's state word.
+--   OWTRUST  the ALT does not check its state after waking and, if nothing is
+--            ready, returns the fired guard (trust the wakeup)
+--   OWSPLIT  the ALT's claim of an ALT writer is split into two critical
+--            sections (claim the partner, then set its own state)
+-- =============================================================================
+
+OW = 0
+OWTRUST = 1
+OWSPLIT = 2
+OWRV = 3
+
+AW = 0
+PW = 1
+SW = 2
+
+IDL = 0
+EN = 1
+WT = 2
+RD = 3
+CL = 4
+
+MAXR = 6
+I = {0, 1}
+
+g2((a, b), i) = if i == 0 then a else b
+s2((a, b), i, x) = if i == 0 then (x, b) else (a, x)
+claimable(s) = s == EN or s == WT
+eff(kd) = if kd == SW then PW else kd
+
+channel a_start, a_rnd                -- A: new select (destination reset) / new round (ENABLING, flags cleared)
+channel a_en : I.{0..2}               -- enable: 0 registered, 1 ready (plain pending), 2 claimed the ALT writer
+channel a_self : I                    -- OWSPLIT only: A sets its own state after claiming the writer
+channel a_sigW : I                    -- A wakes ALT writer i (after the section)
+channel a_towait : Bool               -- ENABLING -> WAITING (true) or already READY/CLAIMED (false)
+channel a_wait : I
+channel a_chk : Bool                  -- after waking: still WAITING (stale flag)?
+channel a_dis : I.Bool.Bool           -- disable: ready, claimed for this guard
+channel a_act : I.Bool                -- activate: transfer done?
+channel a_sel : I.Bool.Bool
+channel p_out : I.Bool                -- plain writer: pending + schedule; true = must signal A
+channel p_sig : I
+channel p_rel : I
+channel w_rnd : I
+channel w_en : I.{0..2}               -- ALT writer enable: 0 registered, 1 claimed A, 2 claimed A (must signal)
+channel w_sigA : I
+channel w_towait : I.Bool
+channel w_wait : I
+channel w_chk : I.Bool
+channel w_dis : I
+channel w_xw : I                      -- ALT writer: transfer done (released by A)
+channel w_done : I.Bool
+channel stale_a, stale_w : I
+channel idle, bound_exceeded
+
+-- A's enable result for guard i
+aen(ast, wst, wreg, pend, i) = if g2(pend, i) then 1
+                               else if g2(wreg, i) and ast == EN and claimable(g2(wst, i)) then 2
+                               else 0
+-- ALT writer i's enable result
+wen(ast, wst, rreg, i) = if g2(rreg, i) and (ast == EN or ast == WT or ast == RD) and g2(wst, i) == EN
+                         then (if ast == WT then 2 else 1) else 0
+actok(ast, ach, wst, wreg, pend, i) = (ast == CL and ach == i) or g2(pend, i) or (g2(wreg, i) and claimable(g2(wst, i)))
+
+-- state: ast/ach = A's state word (+ claimed channel), wst = ALT writers'
+-- state words, rreg = A registered on i, wreg = ALT writer i registered,
+-- pend = plain writer i pending, rel = plain writer released, xf = ALT
+-- writer i's transfer done, d/dl/fA/fW as in rendezvous_commit_record.csp
+ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW) =
+     a_start -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, (false, false), dl, fA, fW)
+  [] a_rnd   -> ST(v, EN, ach, wst, rreg, wreg, pend, rel, xf, d, dl, (false, false), fW)
+  [] ([] i : I @ a_en.i!aen(ast, wst, wreg, pend, i) ->
+        (if aen(ast, wst, wreg, pend, i) == 0
+         then ST(v, ast, ach, wst, s2(rreg, i, true), wreg, pend, rel, xf, d, dl, fA, fW)
+         else if aen(ast, wst, wreg, pend, i) == 1
+         then ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW)
+         else if v == OWSPLIT                                           -- claim the writer only
+         then ST(v, ast, ach, s2(wst, i, CL), rreg, wreg, pend, rel, xf, d, dl, fA, fW)
+         else ST(v, CL, i, s2(wst, i, CL), rreg, wreg, pend, rel, xf, d, dl, fA, fW)))
+  [] ([] i : I @ a_self.i -> ST(v, CL, i, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ a_sigW.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, s2(fW, i, true)))
+  [] a_towait!(ast == EN) -> ST(v, if ast == EN then WT else ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW)
+  [] g2(fA, 0) & a_wait.0 -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, (false, false), fW)
+  [] (not g2(fA, 0)) and g2(fA, 1) & a_wait.1 -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, (false, false), fW)
+  [] a_chk!(ast == WT) -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW)
+  [] ([] i : I @ a_dis.i!(g2(pend, i) or (g2(wreg, i) and claimable(g2(wst, i))))!(ast == CL and ach == i) ->
+        ST(v, ast, ach, wst, s2(rreg, i, false), wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ a_act.i!actok(ast, ach, wst, wreg, pend, i) ->
+        (if (ast == CL and ach == i) or (not g2(pend, i) and g2(wreg, i) and claimable(g2(wst, i)))
+         then ST(v, ast, ach, s2(wst, i, CL), rreg, s2(wreg, i, false), pend, rel, s2(xf, i, true),
+                 s2(d, i, true), s2(dl, i, true), fA, fW)                     -- from the ALT writer
+         else if g2(pend, i)
+         then ST(v, ast, ach, wst, rreg, wreg, s2(pend, i, false), s2(rel, i, true), xf,
+                 s2(d, i, true), s2(dl, i, true), fA, fW)                     -- from the plain writer
+         else ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW)))
+  [] ([] g : I @ a_sel.g!g2(d, g)!g2(d, 1 - g) -> ST(v, IDL, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ p_out.i!(g2(rreg, i) and ast == WT) ->
+        ST(v, if g2(rreg, i) and claimable(ast) then RD else ast, ach, wst, rreg, wreg,
+           s2(pend, i, true), rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ p_sig.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ g2(rel, i) & p_rel.i -> ST(v, ast, ach, wst, rreg, wreg, pend, s2(rel, i, false), xf, d, dl, fA, fW))
+  [] ([] i : I @ w_rnd.i -> ST(v, ast, ach, s2(wst, i, EN), rreg, wreg, pend, rel, xf, d, dl, fA, s2(fW, i, false)))
+  [] ([] i : I @ w_en.i!wen(ast, wst, rreg, i) ->
+        (if wen(ast, wst, rreg, i) == 0
+         then ST(v, ast, ach, wst, rreg, s2(wreg, i, true), pend, rel, xf, d, dl, fA, fW)
+         else ST(v, CL, i, s2(wst, i, CL), rreg, wreg, pend, rel, xf, d, dl, fA, fW)))
+  [] ([] i : I @ w_sigA.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ w_towait.i!(g2(wst, i) == EN) ->
+        ST(v, ast, ach, if g2(wst, i) == EN then s2(wst, i, WT) else wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ g2(fW, i) & w_wait.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, s2(fW, i, false)))
+  [] ([] i : I @ w_chk.i!(g2(wst, i) == WT) -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ w_dis.i -> ST(v, ast, ach, wst, rreg, s2(wreg, i, false), pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ g2(xf, i) & w_xw.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, s2(xf, i, false), d, dl, fA, fW))
+  [] ([] i : I @ w_done.i!g2(dl, i) -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, fW))
+  [] ([] i : I @ stale_a.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ stale_w.i -> ST(v, ast, ach, wst, rreg, wreg, pend, rel, xf, d, dl, fA, s2(fW, i, true)))
+
+FIN = idle -> FIN
+
+-- A: n selects left, c = rounds used in this run (bounded)
+AR(v, k, n, c) = if n == 0 then FIN else a_start -> AROUND(v, k, n, c)
+AROUND(v, k, n, c) =
+  if c >= MAXR then bound_exceeded -> STOP else
+  a_rnd -> a_en.0?e0 ->
+    (if e0 != 0 then ACLAIMED(v, k, n, c + 1, 0, e0, false)
+     else a_en.1?e1 ->
+       (if e1 != 0 then ACLAIMED(v, k, n, c + 1, 1, e1, true)
+        else a_towait?w -> (if w then AWAIT(v, k, n, c + 1) else ADIS(v, k, n, c + 1, true, 0))))
+ACLAIMED(v, k, n, c, i, e, en1) =
+  if e == 2 then (if v == OWSPLIT then a_self.i -> a_sigW.i -> ADIS(v, k, n, c, en1, i)
+                  else a_sigW.i -> ADIS(v, k, n, c, en1, i))
+  else ADIS(v, k, n, c, en1, i)
+AWAIT(v, k, n, c) =
+  a_wait?g -> (if v == OWTRUST or v == OWRV then ADIS(v, k, n, c, true, g)
+               else a_chk?still -> (if still then AWAIT(v, k, n, c) else ADIS(v, k, n, c, true, g)))
+ADIS(v, k, n, c, en1, g) =
+  a_dis.0?r0?m0 ->
+    (if en1 then a_dis.1?r1?m1 -> ADEC(v, k, n, c, g, r0, m0, r1, m1)
+     else ADEC(v, k, n, c, g, r0, m0, false, false))
+ADEC(v, k, n, c, g, r0, m0, r1, m1) =
+  if m0 then AACT(v, k, n, c, 0) else if m1 then AACT(v, k, n, c, 1)
+  else if r0 then AACT(v, k, n, c, 0) else if r1 then AACT(v, k, n, c, 1)
+  else if v == OWTRUST then AACT(v, k, n, c, g)
+  else AROUND(v, k, n, c)
+AACT(v, k, n, c, i) =
+  a_act.i?ok ->
+    (if ok then (if g2(k, i) == AW then a_sigW.i -> ARET(v, k, n, c, i) else ARET(v, k, n, c, i))
+     else if v == OWTRUST then ARET(v, k, n, c, i)
+     else AROUND(v, k, n, c))
+ARET(v, k, n, c, i) = a_sel.i?_?_ -> AR(v, k, n - 1, c)
+
+-- ALT writer on channel i (one guard): blocked until A has transferred
+WR(i) = w_rnd.i -> w_en.i?e ->
+          (if e == 2 then w_sigA.i -> WXF(i)
+           else if e == 1 then WXF(i)
+           else w_towait.i?b -> (if b then WWAIT(i) else WDIS(i)))
+WWAIT(i) = w_wait.i -> w_chk.i?still -> (if still then WWAIT(i) else WDIS(i))
+WDIS(i) = w_dis.i -> WXF(i)
+WXF(i) = w_xw.i -> w_done.i?_ -> SKIP
+PWR(i) = p_out.i?sig -> (if sig then p_sig.i -> PREL(i) else PREL(i))
+PREL(i) = p_rel.i -> w_done.i?_ -> SKIP
+PART(i, kd) = if kd == AW then WR(i) else PWR(i)
+
+STALE(s) = if s then (([] i : I @ stale_a.i -> SKIP) [] ([] i : I @ stale_w.i -> SKIP) [] SKIP) else SKIP
+
+SS = {| a_start, a_rnd, a_en, a_self, a_sigW, a_towait, a_wait, a_chk, a_dis, a_act, a_sel,
+        p_out, p_sig, p_rel, w_rnd, w_en, w_sigA, w_towait, w_wait, w_chk, w_dis, w_xw, w_done,
+        stale_a, stale_w |}
+
+SYS(v, k0, k1, s) =
+  let k = (eff(k0), eff(k1)) within
+  (AR(v, k, 2, 0) ||| PART(0, eff(k0)) ||| PART(1, eff(k1)) ||| STALE(s)) [| SS |]
+  ST(v, IDL, 0, (IDL, IDL), (false, false), (false, false), (false, false), (false, false), (false, false),
+     (false, false), (false, false), (false, false), (false, false))
+
+-- Observation and specification: identical to rendezvous_commit_record.csp
+OBS = {| a_sel, w_done, idle |}
+ASPEC = (a_sel.0.true.false -> a_sel.1.true.false -> FIN) |~| (a_sel.1.true.false -> a_sel.0.true.false -> FIN)
+WSPEC(i) = ((w_done.i.true -> a_sel.i.true.false -> STOP) [] (a_sel.i.true.false -> w_done.i.true -> STOP))
+           |~| (a_sel.i.true.false -> w_done.i.true -> STOP)
+SPEC = ASPEC [| {a_sel.0.true.false, a_sel.1.true.false} |] (WSPEC(0) ||| WSPEC(1))
+FREE = diff(Events, union(SS, {idle, bound_exceeded}))
+
+-- SC1 (T15): c0 = ALT writer, c1 = plain writer, one stale flag. expected: PASS x3
+assert SPEC [FD= SYS(OW, AW, PW, true) \ diff(Events, OBS)
+assert SYS(OW, AW, PW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OW, AW, PW, true) \ diff(Events, {bound_exceeded})
+-- SC2: two ALT writers on different channels race to claim A. expected: PASS x3
+assert SPEC [FD= SYS(OW, AW, AW, true) \ diff(Events, OBS)
+assert SYS(OW, AW, AW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OW, AW, AW, true) \ diff(Events, {bound_exceeded})
+-- SC3 (T15s): c0 = plain writer, c1 = signal sender. expected: PASS x2
+assert SPEC [FD= SYS(OW, PW, SW, true) \ diff(Events, OBS)
+assert SYS(OW, PW, SW, true) :[deadlock free [F]]
+-- OWRV (re-verification instead of the WAITING check). expected: PASS x8
+assert SPEC [FD= SYS(OWRV, AW, PW, true) \ diff(Events, OBS)
+assert SYS(OWRV, AW, PW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OWRV, AW, PW, true) \ diff(Events, {bound_exceeded})
+assert SPEC [FD= SYS(OWRV, AW, AW, true) \ diff(Events, OBS)
+assert SYS(OWRV, AW, AW, true) :[deadlock free [F]]
+assert STOP [T= SYS(OWRV, AW, AW, true) \ diff(Events, {bound_exceeded})
+assert SPEC [FD= SYS(OWRV, PW, SW, true) \ diff(Events, OBS)
+assert SYS(OWRV, PW, SW, true) :[deadlock free [F]]
+-- mutations. expected: FAIL each
+assert SPEC [FD= SYS(OWTRUST, AW, PW, true) \ diff(Events, OBS)
+assert SPEC [FD= SYS(OWSPLIT, AW, AW, false) \ diff(Events, OBS)
+assert SYS(OWSPLIT, AW, AW, false) :[deadlock free [F]]
+-- alphabet audit. expected: PASS each
+assert STOP [T= SYS(OW, AW, PW, true) \ diff(Events, FREE)
+assert STOP [T= SYS(OW, AW, AW, true) \ diff(Events, FREE)
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1, 2026-09-26; all as expected)
+--  #  scenario / assertion                       expected  ProB  counterexample (visible events)
+--  1  SC1 (T15)  OW [FD= (stale flag)            PASS      PASS
+--  2  SC1        OW deadlock free                PASS      PASS
+--  3  SC1        OW round bound                  PASS      PASS
+--  4  SC2 (race) OW [FD= (stale flag)            PASS      PASS
+--  5  SC2        OW deadlock free                PASS      PASS
+--  6  SC2        OW round bound                  PASS      PASS
+--  7  SC3 (T15s) OW [FD= (stale flag)            PASS      PASS
+--  8  SC3        OW deadlock free                PASS      PASS
+--  9-16 OWRV: the same eight checks          PASS      PASS  (all eight)
+-- 17  SC1  OWTRUST [FD=                          FAIL      FAIL  a_sel.1.true.false, a_sel.0.false.false (PHANTOM)
+-- 18  SC2  OWSPLIT [FD=                          FAIL      FAIL  a_sel.1.true.false, then refuses w_done.0
+-- 19  SC2  OWSPLIT deadlock free                 FAIL      FAIL  a_en.0.0, w_en.1.0, a_en.1.2 (A claims
+--                                                                W1), w_en.0.1 (W0 claims A: A still
+--                                                                ENABLING), a_self.1 (overrides W0's
+--                                                                claim), ... W0 waits for a transfer
+--                                                                that never comes
+-- 20-21 alphabet audit                           PASS      PASS
+--
+-- NOT covered: ISR partners (putFromISR), ALT writers with more than one
+-- guard (argument: a claim needs BOTH state words claimable in one critical
+-- section, so two ALTs can never claim each other crosswise), more than two
+-- channels, KeepNewest/KeepOldest rendezvous.
+-- =============================================================================

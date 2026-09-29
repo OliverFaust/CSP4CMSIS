@@ -24,7 +24,7 @@ namespace csp { /* Forward declare namespace content here if needed */ }
 // Include all C++-specific headers that define classes/templates.
 #include "alt.h"             // Required for ALT functionality
 #include "channel_base.h"    // Base classes for internal channel implementations
-#include "sync_channel.h"    // Core Rendezvous/Alt implementation
+#include "rendezvous_channel.h" // Rendezvous (and signal) channels, OWRV ALT protocol
 #include "buffered_channel.h"// For future implementation
 #include "barrier.h"         // Standard CSP primitive
 #include "public_channel.h"  // Includes One2OneChannel<T>

@@ -1,4 +1,5 @@
 #include "csp/alt.h"
+#include "csp/csp_critical.h"
 #include <cstdio>
 // CMSIS compiler intrinsics (__CLZ, etc.) -- typically pulled in via the
 // device header, but included explicitly here since this file depends on
@@ -12,127 +13,97 @@ namespace csp::internal {
 // =============================================================
 // AltScheduler Implementation
 // =============================================================
-AltScheduler::AltScheduler() {
-    initForCurrentTask();
-}
-
-AltScheduler::~AltScheduler() {
-    if (event_group) osEventFlagsDelete(event_group);
-}
-
-void AltScheduler::initForCurrentTask() {
-    waiting_task_handle = osThreadGetId();
-
-    osEventFlagsAttr_t attr = {};
-    attr.name = "AltEventFlags";
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-    // Static allocation: event_group_buffer is a csp_static_eventflags_
-    // storage_t member of AltScheduler (see alt.h, csp_rtos_static.h).
-    // This keeps AltScheduler -- and therefore every Alternative, since
-    // it owns one AltScheduler -- free of heap allocation. Each backend's
-    // own static osEventFlagsNew() path recognizes a caller-supplied
-    // control block via cb_mem/cb_size (confirmed directly against each
-    // backend's source in csp_rtos_static.h, not assumed).
-    attr.cb_mem  = &event_group_buffer;
-    attr.cb_size = sizeof(event_group_buffer);
-#endif
-    // When CSP4CMSIS_STATIC_ALLOCATION isn't defined, cb_mem/cb_size stay
-    // at their zero-initialized default (NULL/0) -- every CMSIS-RTOS2
-    // backend supports this as its dynamic (heap-backed) path.
-    event_group = osEventFlagsNew(&attr);
-}
 
 unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offset) {
     if (amount == 0) return 0;
+    if (amount > ALT_MAX_GUARDS) fatal("CSP4CMSIS: Alternative: more than 16 guards");
+
+    owner = osThreadGetId();
 
     uint32_t wait_mask = 0;
-    for(size_t i = 0; i < amount; ++i) wait_mask |= (1 << i);
+    for (size_t i = 0; i < amount; ++i) wait_mask |= altFlag(i);
 
-    osEventFlagsClear(event_group, wait_mask);
+    size_t order[ALT_MAX_GUARDS];
+    bool   ready[ALT_MAX_GUARDS];
 
-    int ready_idx = -1;
+    for (;;) {
+        // New round: drop wakeups left over from earlier rounds; the state
+        // word says "enabling" (partners may claim this ALT from now on).
+        (void)osThreadFlagsClear(wait_mask);
+        { uint32_t s = csp_enter_critical(); state_ = ENABLING; claimed_flag_ = 0; csp_exit_critical(s); }
 
-    // Phase 1: Enable
-    // We poll guards starting from 'offset' to support Fair ALT
-    for(size_t i = 0; i < amount; ++i) {
-        size_t idx = (i + offset) % amount;
-
-        // If enable() returns true, that guard is ready IMMEDIATELY
-        if(guardArray[idx]->enable(this, (1 << idx))) {
-            ready_idx = (int)idx;
-            break;
+        // Phase 1: Enable, starting at 'offset' (fair ALT). Stops at the
+        // first guard that is ready now (or that claimed its partner).
+        size_t enabled = 0;
+        bool any_ready = false;
+        for (size_t i = 0; i < amount; ++i) {
+            size_t idx = (i + offset) % amount;
+            order[enabled++] = idx;
+            if (guardArray[idx]->enable(this, altFlag(idx))) { any_ready = true; break; }
         }
+
+        // Phase 2: Wait, unless something was ready or a partner claimed
+        // this ALT while it was enabling.
+        if (!any_ready) {
+            bool wait;
+            { uint32_t s = csp_enter_critical(); wait = (state_ == ENABLING); if (wait) state_ = WAITING; csp_exit_critical(s); }
+            if (wait) {
+                uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, osWaitForever);
+                if ((r & osFlagsError) != 0U) {
+                    for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
+                    fatal("CSP4CMSIS: Alternative: osThreadFlagsWait() failed");
+                }
+                // No trust in the flag itself: every guard is re-verified below.
+            }
+        }
+
+        // Phase 3: Disable exactly the guards enabled in this round; each
+        // reports whether it can complete now (re-verification).
+        for (size_t k = 0; k < enabled; ++k) ready[k] = guardArray[order[k]]->disable();
+
+        // Phase 4: A claim wins (the partner is committed to this guard);
+        // otherwise the first ready guard in fairness order; else stale.
+        bool claimed; uint32_t cflag;
+        { uint32_t s = csp_enter_critical(); claimed = (state_ == CLAIMED); cflag = claimed_flag_; csp_exit_critical(s); }
+        int selected = -1;
+        if (claimed) {
+            for (size_t k = 0; k < enabled; ++k)
+                if (altFlag(order[k]) == cflag) { selected = (int)order[k]; break; }
+            if (selected < 0) fatal("CSP4CMSIS: Alternative: claimed for a guard that was not enabled");
+        } else {
+            for (size_t k = 0; k < enabled; ++k)
+                if (ready[k]) { selected = (int)order[k]; break; }
+        }
+        if (selected < 0) continue;                                   // stale wakeup: new round
+
+        // Phase 5: Commit. false = the partner went away / a competitor
+        // took the item or space (it made progress): new round.
+        if (!guardArray[selected]->activate()) continue;
+        { uint32_t s = csp_enter_critical(); state_ = IDLE; csp_exit_critical(s); }
+        return (unsigned int)selected;
     }
-
-    // Phase 2: Wait
-    uint32_t fired = 0;
-    if (ready_idx != -1) {
-        // We already found a winner in the Enable phase
-        fired = (1 << ready_idx);
-    } else {
-        // Block until a channel becomes ready or a timer expires.
-        // osFlagsWaitAny + default clears matched bits on return, matching
-        // the original xEventGroupWaitBits(..., pdTRUE, pdFALSE, ...)'s
-        // "clear on exit" behavior.
-        fired = osEventFlagsWait(event_group, wait_mask, osFlagsWaitAny, osWaitForever);
-    }
-
-    // Phase 2.5: Identify which guard fired.
-    //
-    // Priority follows bit order (bit 0 = highest), but fairSelect()
-    // rotates the starting priority via 'offset' each call to avoid
-    // starvation. We therefore look first at bits >= offset, and only
-    // wrap around to bits < offset if nothing fired there. Within
-    // whichever half is chosen, the lowest set bit is isolated with the
-    // standard two's-complement trick (x & -x), and __CLZ resolves its
-    // index in O(1) -- a single cycle on any Cortex-M core with a
-    // hardware CLZ instruction (Cortex-M3/M4/M7 and Armv8-M Mainline),
-    // and a short bounded software emulation on cores without one
-    // (Cortex-M0/M0+/M1/M23), since __CLZ is a CMSIS intrinsic rather
-    // than raw inline assembly.
-    size_t selected = 0;
-    if (fired != 0) {
-        uint32_t offset_mask = 0xFFFFFFFFU << offset;
-        uint32_t masked_fired = fired & offset_mask;
-
-        uint32_t candidate = (masked_fired != 0) ? masked_fired : fired;
-        uint32_t lowest_set_bit = candidate & (uint32_t)(-(int32_t)candidate);
-        selected = 31 - __CLZ(lowest_set_bit);
-    }
-
-    // Phase 3: Disable
-    // Crucial: We tell guards we are leaving. If disable() returns true for a
-    // guard we didn't 'select', it means a rendezvous almost happened but we
-    // missed it—this is handled by the internal channel state machines.
-    for(size_t i = 0; i < amount; ++i) {
-        guardArray[i]->disable();
-    }
-
-    // Phase 4: Activate
-    // The "Commit" phase. For Rendezvous, this moves the data.
-    // For sampling channels, this might result in a 'no-op' if data was dropped.
-    guardArray[selected]->activate();
-
-    return (unsigned int)selected;
 }
 
-void AltScheduler::wakeUp(uint32_t bit) {
-    if(!event_group) return;
-
-    // CMSIS-RTOS2 detects IRQ context internally -- osEventFlagsSet() is
-    // safe to call from either context, unlike FreeRTOS's split
-    // xEventGroupSetBits()/xEventGroupSetBitsFromISR()+portYIELD_FROM_ISR
-    // pair. One call replaces both.
-    osEventFlagsSet(event_group, bit);
+void AltScheduler::wakeUp(uint32_t flag) {
+    osThreadId_t t = owner;
+    if (t != nullptr) (void)osThreadFlagsSet(t, flag);
 }
 
 // =============================================================
 // TimerGuard Implementation
 // =============================================================
 TimerGuard::TimerGuard(csp::Time delay)
-    : parent_alt(nullptr), delay_ticks(delay.to_ticks()), assigned_bit(0)
+    : delay_ticks(delay.to_ticks()), timer_handle(nullptr),
+      wake_thread(nullptr), wake_flag(0), fired(false)
 {
-    timer_handle = osTimerNew(TimerCallback, osTimerOnce, this, NULL);
+    osTimerAttr_t attr = {};
+    attr.name = "CspTimeout";
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+    attr.cb_mem  = &timer_storage;
+    attr.cb_size = sizeof(timer_storage);
+#endif
+    timer_handle = osTimerNew(TimerCallback, osTimerOnce, this, &attr);
+    if (timer_handle == nullptr) fatal("CSP4CMSIS: TimerGuard: osTimerNew() failed");
 }
 
 TimerGuard::~TimerGuard() {
@@ -140,29 +111,29 @@ TimerGuard::~TimerGuard() {
 }
 
 void TimerGuard::TimerCallback(void* argument) {
-    // CMSIS-RTOS2 passes the argument given to osTimerNew() straight to
-    // the callback -- no TimerHandle_t-to-owner lookup needed (FreeRTOS's
-    // pvTimerGetTimerID(x) is gone entirely, not just renamed).
+    // Runs in the RTOS timer thread. Works from the snapshot taken in
+    // enable(); a callback that races with disable() only leaves a stale
+    // flag, which select() clears/re-verifies.
     auto* s = static_cast<TimerGuard*>(argument);
-    if(s && s->parent_alt) {
-        s->parent_alt->wakeUp(s->assigned_bit);
-    }
+    s->fired = true;
+    osThreadId_t t = s->wake_thread;
+    if (t != nullptr) (void)osThreadFlagsSet(t, s->wake_flag);
 }
 
-bool TimerGuard::enable(AltScheduler* a, uint32_t b) {
-    parent_alt = a;
-    assigned_bit = b;
-    if (delay_ticks == 0) return true; // Instant timeout
-    osTimerStart(timer_handle, delay_ticks);
+bool TimerGuard::enable(AltScheduler* a, uint32_t flag) {
+    fired = false;
+    wake_flag = flag;
+    wake_thread = a->ownerThread();
+    if (delay_ticks == 0) { fired = true; return true; }   // instant timeout
+    (void)osTimerStart(timer_handle, delay_ticks);
     return false;
 }
 
 bool TimerGuard::disable() {
-    if (timer_handle) osTimerStop(timer_handle);
-    return true;
+    (void)osTimerStop(timer_handle);
+    wake_thread = nullptr;
+    return fired;
 }
-
-void TimerGuard::activate() {}
 
 } // namespace csp::internal
 

@@ -1,0 +1,336 @@
+-- =============================================================================
+-- CSP4CMSIS rendezvous/signal ALT: current code ("trust the wakeup") vs. the
+-- partner-commits design (per-round commit record, optionally a per-ALT
+-- claim). ANALYSIS MODEL -- nothing here is implemented.
+-- CSP-M (FDR4 dialect). Checked with ProB 1.16.1 (probcli 1.16.1-final,
+-- 716929f); results at the end. Reproduce with
+--   probcli rendezvous_commit_record.csp -csp_assertion '<assertion>'
+-- The competing design (one-winner, JCSP/occam style) is in
+-- alt_one_winner.csp; both use the same scenarios, observations and SPEC.
+-- (Review round 3's single-channel version of this model is in git history,
+-- commit c4ce027; its results are reproduced here as scenario SC1.)
+--
+-- System: one ALT reader A over two channels c0 (index 0, priority) and c1,
+-- two selects; A resets its destination before every select. Each channel
+-- has one partner that sends ONE message:
+--   AW  ALT writer, one guard (ChanOutGuard; the victim of T15)
+--   PW  plain blocking writer (rendezvous output())
+--   SW  signal sender (SyncChannel::output(); in the fixed designs a signal
+--       is a rendezvous without data, i.e. behaves as PW)
+-- plus optionally ONE adversarial stale thread flag (any thread, any bit).
+--
+-- Scenarios (the FVP tests they correspond to):
+--   SC1 = (AW, PW)  T15: late wakeup -> SILENT then PHANTOM
+--   SC2 = (AW, AW)  two ALT partners on DIFFERENT channels commit into the
+--                   same ALT round
+--   SC3 = (PW, SW)  T15s: a signal arrives while A takes c0 -> lost signal
+--
+-- Abstraction as in buffered_channel_v2.csp: every section under a channel
+-- mutex (or a CSP critical section) is one event; osThreadFlagsSet() after
+-- the section is a separate event. Single core.
+--
+-- Variants (v):
+--   CUR     current 2.0 code: trust the wakeup, activate() "case 3" = true,
+--           SyncChannel resets the channel in unregisterAltIn()
+--   FIX     partner commits under the mutex with a record for the ALT's round;
+--           committed guard wins; other wakeups re-verified; activate()
+--           without partner -> new round (the design of review round 3)
+--   CLAIM   FIX + per-ALT claim: a partner may commit into round r only if it
+--           atomically claims r (at most one commit per round); readiness
+--           seen by a partner = "A registered AND round r not claimed"
+--   mutations: NORC (no round check, record kept), NORCCLR (no round check,
+--           record consumed), REVER (re-verify by readiness, no record),
+--           NOWIN (committed guard does not win), CASE3 (activate() without
+--           partner returns true), CLAIMNR (claim, but partner readiness
+--           ignores it)
+-- =============================================================================
+
+CUR = 0
+FIX = 1
+NORC = 2
+NORCCLR = 3
+REVER = 4
+NOWIN = 5
+CASE3 = 6
+CLAIM = 7
+CLAIMNR = 8
+
+AW = 0
+PW = 1
+SW = 2
+
+MAXR = 6                 -- round numbers 1..MAXR per thread; exceeding it is reported
+Rnd = {0..MAXR}          -- 0 = none
+I = {0, 1}
+
+g2((a, b), i) = if i == 0 then a else b
+s2((a, b), i, x) = if i == 0 then (x, b) else (a, x)
+
+records(v) = member(v, {FIX, NORC, NORCCLR, NOWIN, CASE3, CLAIM, CLAIMNR})
+claims(v) = v == CLAIM or v == CLAIMNR
+committed(v, com, r) = if member(v, {FIX, NOWIN, CASE3, CLAIM, CLAIMNR}) then com == r
+                       else if v == NORC or v == NORCCLR then com != 0
+                       else false
+consume(v, done, com) = if v == NORCCLR and done then 0 else com
+eff(v, kd) = if kd == SW and v != CUR then PW else kd
+
+channel a_start, a_clr                -- A: new select (destination reset) / new round (flags cleared)
+channel a_en : I.Rnd.Bool             -- enable guard i in round r: partner ready? (else register)
+channel a_wait : I                    -- woken; lowest set bit
+channel a_dis : I.Rnd.Bool.Bool       -- disable: ready, committed in round r
+channel a_act : I.Bool                -- activate: partner present?
+channel a_wakeW : I                   -- A (as partner of ALT writer i) wakes it, after the mutex
+channel a_sel : I.Bool.Bool           -- select() returned g; data of g written? data of the other written?
+channel w_clr : I
+channel w_en : I.Rnd.Bool
+channel w_wait : I
+channel w_dis : I.Rnd.Bool.Bool
+channel w_act : I.Bool
+channel w_wakeA : I                   -- ALT writer i wakes A, after the mutex (the late wakeup)
+channel w_done : I.Bool               -- partner i finished; was its message delivered?
+channel p_out : I                     -- plain writer: output() (registers, wakes A inside the mutex)
+channel p_rel : I                     -- plain writer released by A's activate()
+channel s_out : I.Bool                -- SyncChannel output(): A registered (snapshot + clear)?
+channel s_wake : I                    -- SyncChannel output(): wakeup after the mutex
+channel s_acq : I                     -- SyncChannel sender: sender_sem acquired
+channel stale_a, stale_w : I
+channel idle, bound_exceeded
+
+rdyA(wreg, pend, i) = g2(wreg, i) != 0 or g2(pend, i)
+-- readiness seen by ALT writer i; with CLAIM a round already claimed does not count
+rdyW(v, rreg, acl, i) = g2(rreg, i) != 0 and (v != CLAIM or acl != g2(rreg, i))
+-- may ALT writer i commit into A's registration now?
+wok(v, rreg, acl, i) = g2(rreg, i) != 0 and (not claims(v) or acl != g2(rreg, i))
+actp(k, wreg, pend, ssig, i) = if g2(k, i) == AW then g2(wreg, i) != 0
+                               else if g2(k, i) == PW then g2(pend, i)
+                               else g2(pend, i) or g2(ssig, i)
+
+-- shared state: rreg/wreg = registered round of A / ALT writer i on channel i
+-- (0 = none), pend = plain writer waiting, ssig = SyncChannel "sender signalled
+-- an ALT" (state still RECEIVER_WAITING), rel = writer released / sender_sem,
+-- rcom/wcom = commit records, acl = A's claimed round, d = data of channel i
+-- written into A's destination in this select, dl = message i delivered,
+-- fA/fW = thread flags
+ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW) =
+     a_start -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, (false, false), dl, fA, fW)
+  [] a_clr   -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, (false, false), fW)
+  [] ([] i : I @ a_en.i?r!rdyA(wreg, pend, i) ->
+        ST(v, k, if rdyA(wreg, pend, i) then rreg else s2(rreg, i, r),
+           wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW))
+  [] g2(fA, 0) & a_wait.0 -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, (false, false), fW)
+  [] (not g2(fA, 0)) and g2(fA, 1) & a_wait.1 ->
+        ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, (false, false), fW)
+  [] ([] i : I @ a_dis.i?r!rdyA(wreg, pend, i)!committed(v, g2(rcom, i), r) ->
+        ST(v, k, s2(rreg, i, 0), wreg, pend,
+           if v == CUR and g2(k, i) == SW and not g2(pend, i) then s2(ssig, i, false) else ssig,  -- SyncChannel reset()
+           rel, s2(rcom, i, consume(v, committed(v, g2(rcom, i), r), g2(rcom, i))),
+           wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ a_act.i!actp(k, wreg, pend, ssig, i) ->
+        (if g2(k, i) == AW and g2(wreg, i) != 0 then
+           ST(v, k, rreg, s2(wreg, i, 0), pend, ssig, rel, rcom,
+              if records(v) then s2(wcom, i, g2(wreg, i)) else wcom,
+              acl, s2(d, i, true), s2(dl, i, true), fA, fW)
+         else if g2(k, i) == PW and g2(pend, i) then
+           ST(v, k, rreg, wreg, s2(pend, i, false), ssig, s2(rel, i, true), rcom, wcom,
+              acl, s2(d, i, true), s2(dl, i, true), fA, fW)
+         else if g2(k, i) == SW then                     -- CUR SyncChannel activate(): release, reset
+           ST(v, k, rreg, wreg, s2(pend, i, false), s2(ssig, i, false), s2(rel, i, true), rcom, wcom,
+              acl, s2(d, i, g2(pend, i) or g2(ssig, i)), s2(dl, i, g2(dl, i) or g2(pend, i) or g2(ssig, i)),
+              fA, fW)
+         else ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW)))
+  [] ([] i : I @ a_wakeW.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, s2(fW, i, true)))
+  [] ([] g : I @ a_sel.g!g2(d, g)!g2(d, 1 - g) -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ w_clr.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, s2(fW, i, false)))
+  [] ([] i : I @ w_en.i?w!rdyW(v, rreg, acl, i) ->
+        ST(v, k, rreg, if rdyW(v, rreg, acl, i) then wreg else s2(wreg, i, w),
+           pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ g2(fW, i) & w_wait.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, s2(fW, i, false)))
+  [] ([] i : I @ w_dis.i?w!rdyW(v, rreg, acl, i)!committed(v, g2(wcom, i), w) ->
+        ST(v, k, rreg, s2(wreg, i, 0), pend, ssig, rel, rcom,
+           s2(wcom, i, consume(v, committed(v, g2(wcom, i), w), g2(wcom, i))), acl, d, dl, fA, fW))
+  [] ([] i : I @ w_act.i!wok(v, rreg, acl, i) ->
+        (if wok(v, rreg, acl, i) then
+           ST(v, k, s2(rreg, i, 0), wreg, pend, ssig, rel,
+              if records(v) then s2(rcom, i, g2(rreg, i)) else rcom, wcom,
+              if claims(v) then g2(rreg, i) else acl,
+              s2(d, i, true), s2(dl, i, true), fA, fW)
+         else ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW)))
+  [] ([] i : I @ w_wakeA.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ w_done.i!g2(dl, i) -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ p_out.i ->
+        ST(v, k, rreg, wreg, s2(pend, i, true), ssig, rel, rcom, wcom, acl, d, dl,
+           if g2(rreg, i) != 0 then s2(fA, i, true) else fA, fW))
+  [] ([] i : I @ g2(rel, i) & p_rel.i -> ST(v, k, rreg, wreg, pend, ssig, s2(rel, i, false), rcom, wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ s_out.i!(g2(rreg, i) != 0) ->
+        (if g2(rreg, i) != 0
+         then ST(v, k, s2(rreg, i, 0), wreg, pend, s2(ssig, i, true), rel, rcom, wcom, acl, d, dl, fA, fW)
+         else ST(v, k, rreg, wreg, s2(pend, i, true), ssig, rel, rcom, wcom, acl, d, dl, fA, fW)))
+  [] ([] i : I @ s_wake.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ g2(rel, i) & s_acq.i -> ST(v, k, rreg, wreg, pend, ssig, s2(rel, i, false), rcom, wcom, acl, d, dl, fA, fW))
+  [] ([] i : I @ stale_a.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, s2(fA, i, true), fW))
+  [] ([] i : I @ stale_w.i -> ST(v, k, rreg, wreg, pend, ssig, rel, rcom, wcom, acl, d, dl, fA, s2(fW, i, true)))
+
+FIN = idle -> FIN
+
+-- A: n selects left, r = last round number used
+AR(v, k, n, r) = if n == 0 then FIN else a_start -> AROUND(v, k, n, r)
+AROUND(v, k, n, r) =
+  if r >= MAXR then bound_exceeded -> STOP else
+  a_clr -> a_en.0.(r + 1)?rd0 ->
+    (if rd0 then ADIS(v, k, n, r + 1, 0, false)             -- c0 ready: c1 not enabled
+     else a_en.1.(r + 1)?rd1 ->
+       (if rd1 then ADIS(v, k, n, r + 1, 1, true)
+        else a_wait?g -> ADIS(v, k, n, r + 1, g, true)))
+ADIS(v, k, n, r, g, en1) =
+  a_dis.0.r?rdy0?dn0 ->
+    (if en1 then a_dis.1.r?rdy1?dn1 -> ADEC(v, k, n, r, g, rdy0, dn0, rdy1, dn1)
+     else ADEC(v, k, n, r, g, rdy0, dn0, false, false))
+ADEC(v, k, n, r, g, rdy0, dn0, rdy1, dn1) =
+  if v == CUR then AACT(v, k, n, r, g)                                     -- trust
+  else if dn0 and (v != NOWIN or g == 0) then ARET(v, k, n, r, 0)          -- committed guard wins
+  else if dn1 and (v != NOWIN or g == 1) then ARET(v, k, n, r, 1)
+  else if (if g == 0 then rdy0 else rdy1) then AACT(v, k, n, r, g)
+  else AROUND(v, k, n, r)                                                  -- stale: new round
+AACT(v, k, n, r, g) =
+  a_act.g?p ->
+    (if p and g2(k, g) == AW then a_wakeW.g -> ARET(v, k, n, r, g)
+     else if p or v == CUR or v == CASE3 then ARET(v, k, n, r, g)
+     else AROUND(v, k, n, r))
+ARET(v, k, n, r, g) = a_sel.g?_?_ -> AR(v, k, n - 1, r)
+
+-- ALT writer on channel i, w = last round number used
+WR(v, i, w) =
+  if w >= MAXR then bound_exceeded -> STOP else
+  w_clr.i -> w_en.i.(w + 1)?rdy -> (if rdy then WDIS(v, i, w + 1) else w_wait.i -> WDIS(v, i, w + 1))
+WDIS(v, i, w) =
+  w_dis.i.w?rdy?dn ->
+    (if v == CUR then w_act.i?p -> (if p then w_wakeA.i -> w_done.i?_ -> SKIP else w_done.i?_ -> SKIP)
+     else if dn then w_done.i?_ -> SKIP
+     else if rdy then w_act.i?p -> (if p then w_wakeA.i -> w_done.i?_ -> SKIP
+                                    else if v == CASE3 then w_done.i?_ -> SKIP else WR(v, i, w))
+     else WR(v, i, w))
+PWR(i) = p_out.i -> p_rel.i -> w_done.i?_ -> SKIP
+SWR(i) = s_out.i?snap -> (if snap then s_wake.i -> s_acq.i -> w_done.i?_ -> SKIP
+                          else s_acq.i -> w_done.i?_ -> SKIP)
+PART(v, i, kd) = if kd == AW then WR(v, i, 0) else if kd == PW then PWR(i) else SWR(i)
+
+STALE(s) = if s then (([] i : I @ stale_a.i -> SKIP) [] ([] i : I @ stale_w.i -> SKIP) [] SKIP) else SKIP
+
+SS = {| a_start, a_clr, a_en, a_wait, a_dis, a_act, a_wakeW, a_sel, w_clr, w_en, w_wait, w_dis,
+        w_act, w_wakeA, w_done, p_out, p_rel, s_out, s_wake, s_acq, stale_a, stale_w |}
+
+SYS(v, k0, k1, s) =
+  let k = (eff(v, k0), eff(v, k1)) within
+  (AR(v, k, 2, 0) ||| PART(v, 0, eff(v, k0)) ||| PART(v, 1, eff(v, k1)) ||| STALE(s)) [| SS |]
+  ST(v, k, (0, 0), (0, 0), (false, false), (false, false), (false, false), (0, 0), (0, 0), 0,
+     (false, false), (false, false), (false, false), (false, false))
+
+-- ---------------------------------------------------------------------------
+-- Observation and specification (identical in alt_one_winner.csp)
+-- A selects each channel exactly once, WITH that channel's data and WITHOUT
+-- the other channel's (a_sel.g.true.false), in either order; every partner's
+-- message is delivered (w_done.i.true). Liveness: A always progresses;
+-- partner i's completion may be refused until A has selected i and must be
+-- offered afterwards.
+-- ---------------------------------------------------------------------------
+OBS = {| a_sel, w_done, idle |}
+ASPEC = (a_sel.0.true.false -> a_sel.1.true.false -> FIN) |~| (a_sel.1.true.false -> a_sel.0.true.false -> FIN)
+WSPEC(i) = ((w_done.i.true -> a_sel.i.true.false -> STOP) [] (a_sel.i.true.false -> w_done.i.true -> STOP))
+           |~| (a_sel.i.true.false -> w_done.i.true -> STOP)
+SPEC = ASPEC [| {a_sel.0.true.false, a_sel.1.true.false} |] (WSPEC(0) ||| WSPEC(1))
+-- no event outside the synchronisation set except the observables
+FREE = diff(Events, union(SS, {idle, bound_exceeded}))
+
+-- ---------------------------------------------------------------------------
+-- SC1 (T15): c0 = ALT writer, c1 = plain writer
+-- ---------------------------------------------------------------------------
+-- positive control, no adversary needed. expected: FAILS (SILENT a_sel.1.true.true)
+assert SPEC [T= SYS(CUR, AW, PW, false) \ diff(Events, OBS)
+-- expected: PASS
+assert SPEC [FD= SYS(FIX, AW, PW, true) \ diff(Events, OBS)
+assert SYS(FIX, AW, PW, true) :[deadlock free [F]]
+assert STOP [T= SYS(FIX, AW, PW, true) \ diff(Events, {bound_exceeded})
+assert SPEC [FD= SYS(CLAIM, AW, PW, true) \ diff(Events, OBS)
+-- mutations. expected: FAIL, FAIL, (see results), FAIL, FAIL, FAIL
+assert SPEC [FD= SYS(NORC, AW, PW, true) \ diff(Events, OBS)
+assert SPEC [FD= SYS(REVER, AW, PW, true) \ diff(Events, OBS)
+assert SPEC [FD= SYS(NORCCLR, AW, PW, true) \ diff(Events, OBS)
+assert SPEC [FD= SYS(NOWIN, AW, PW, true) \ diff(Events, OBS)
+assert SPEC [FD= SYS(CASE3, AW, PW, true) \ diff(Events, OBS)
+assert SYS(REVER, AW, PW, false) :[deadlock free [F]]
+
+-- ---------------------------------------------------------------------------
+-- SC2: two ALT writers on different channels race into the same ALT round
+-- ---------------------------------------------------------------------------
+-- positive control. expected: FAILS
+assert SPEC [T= SYS(CUR, AW, AW, false) \ diff(Events, OBS)
+-- the round-3 design without a claim. expected: FAILS (both commit; one lost)
+assert SPEC [T= SYS(FIX, AW, AW, false) \ diff(Events, OBS)
+-- with the per-ALT claim. expected: PASS
+assert SPEC [FD= SYS(CLAIM, AW, AW, true) \ diff(Events, OBS)
+assert SYS(CLAIM, AW, AW, true) :[deadlock free [F]]
+assert STOP [T= SYS(CLAIM, AW, AW, true) \ diff(Events, {bound_exceeded})
+-- mutation: claim, but a losing partner keeps seeing "ready". expected: FAILS
+assert SPEC [FD= SYS(CLAIMNR, AW, AW, false) \ diff(Events, OBS)
+-- the same mutation: the losing partner retries without bound. expected: FAILS
+assert STOP [T= SYS(CLAIMNR, AW, AW, false) \ diff(Events, {bound_exceeded})
+
+-- ---------------------------------------------------------------------------
+-- SC3 (T15s): c0 = plain writer (X), c1 = signal sender
+-- ---------------------------------------------------------------------------
+-- positive control. expected: FAILS (lost signal)
+assert SPEC [FD= SYS(CUR, PW, SW, false) \ diff(Events, OBS)
+assert SYS(CUR, PW, SW, false) :[deadlock free [F]]
+-- expected: PASS
+assert SPEC [FD= SYS(CLAIM, PW, SW, true) \ diff(Events, OBS)
+assert SYS(CLAIM, PW, SW, true) :[deadlock free [F]]
+
+-- ---------------------------------------------------------------------------
+-- alphabet audit (expected: PASS each)
+-- ---------------------------------------------------------------------------
+assert STOP [T= SYS(CUR, AW, PW, true) \ diff(Events, FREE)
+assert STOP [T= SYS(CLAIM, AW, AW, true) \ diff(Events, FREE)
+assert STOP [T= SYS(CUR, PW, SW, true) \ diff(Events, FREE)
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1, 2026-09-26; all as expected)
+--  #  scenario / assertion                       expected  ProB  counterexample (visible events)
+--  SC1 (T15)
+--  1  CUR  [T=                                   FAIL      FAIL  a_sel.1.true.true (SILENT)
+--  2  FIX  [FD=  (stale flag)                    PASS      PASS
+--  3  FIX  deadlock free                         PASS      PASS
+--  4  FIX  round bound                           PASS      PASS
+--  5  CLAIM [FD=                                 PASS      PASS
+--  6  NORC [FD=                                  FAIL      FAIL  a_sel.0.true.false, w_done.0.true, a_sel.0.false.false
+--  7  REVER [FD=                                 FAIL      FAIL  w_done.0.true, a_sel.1.true.true
+--  8  NORCCLR [FD=                               --        PASS  (consume-on-read = round check here)
+--  9  NOWIN [FD=                                 FAIL      FAIL  a_sel.1.true.true
+-- 10  CASE3 [FD=                                 FAIL      FAIL  a_sel.1.true.false, w_done.0.false
+-- 11  REVER deadlock free                        FAIL      FAIL  writer 0 commits in A's round 1, A sees
+--                                                                "not ready", takes c1, waits forever
+--  SC2 (two ALT writers, different channels)
+-- 12  CUR  [T=                                   FAIL      FAIL  w_done.0.true, a_sel.0.true.false, w_done.1.false
+-- 13  FIX  [T=  (no claim)                       FAIL      FAIL  w_done.0.true, a_sel.0.true.true (both
+--                                                                partners committed into one round)
+-- 14  CLAIM [FD= (stale flag)                    PASS      PASS  (449 s)
+-- 15  CLAIM deadlock free                        PASS      PASS
+-- 16  CLAIM round bound                          PASS      PASS
+-- 17  CLAIMNR [FD=                               FAIL      FAIL  w_done.0.true, a_sel.0.true.false, then A
+--                                                                refuses everything
+-- 18  CLAIMNR round bound                        FAIL      FAIL  the losing writer retries without bound
+--                                                                (livelock on hardware)
+--  SC3 (T15s, lost signal)
+-- 19  CUR  [FD=                                  FAIL      FAIL  a_sel.0.true.false, w_done.0.true,
+--                                                                a_sel.1.false.false
+-- 20  CUR  deadlock free                         FAIL      FAIL  s_out.1.true, p_out.0, ..., a_sel.0,
+--                                                                s_wake.1 (before the next round's clear),
+--                                                                second select waits forever (= T15s)
+-- 21  CLAIM [FD=                                 PASS      PASS
+-- 22  CLAIM deadlock free                        PASS      PASS
+--  alphabet audit
+-- 23-25                                          PASS      PASS
+--
+-- NOT covered: ISR partners, ALT writers with more than one guard (the
+-- claim then also has to cover the writer's own ALT), more than two
+-- channels, KeepNewest/KeepOldest rendezvous.
+-- =============================================================================

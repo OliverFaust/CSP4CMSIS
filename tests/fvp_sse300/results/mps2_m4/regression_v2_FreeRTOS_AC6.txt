@@ -1,0 +1,96 @@
+# target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
+# config: lib=v2 build type=FreeRTOS toolchain=AC6 image=out/MPS2-Cortex-M4/FreeRTOS/AC6/m4.axf
+# library: <CSP4CMSIS checkout> @ 73f46b7cf20a21764316885490d8d0ce6b07c556 dirty=0
+# library sources compiled from: <CSP4CMSIS checkout>/csp4cmsis/src
+# test source: <CSP4CMSIS checkout>/tests/fvp_sse300/bc_tests.cpp
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal0: Listening for serial connection on port 5000
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal2: Listening for serial connection on port 5002
+
+MPS2 Cortex-M4 FVP, SystemCoreClock=25000000 Hz
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter); library: v2 API (ring buffer); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
+RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=1 (CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)); A done=1, B done=0
+RESULT T4a: PASS -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: PASS -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 10
+RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=1 fatal=0 heap delta=0
+RESULT T5: PASS -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 0 B heap while alive; Alternative: 0 B; 200 loop constructions -> 0 allocations
+RESULT T6: PASS -- RelTimeoutGuard and Alternative use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 0 allocations, heap delta 0 B, fatal=0
+RESULT T17: PASS -- rendezvous and signal channels and Barrier use no RTOS heap
+   [T18] 3 threads x 20 phases: finished=3, early departures=0
+RESULT T18: PASS -- reusable Barrier: nobody leaves a phase before all arrived
+   [T7a] writer woken: reader uses input()=1, reader uses ALT=1
+RESULT T7a: PASS -- a read via ALT wakes a writer blocked in ALT
+   [T8] 3 writers x 20 values: sum=60630 (expect 60630), writers done=3
+RESULT T8: PASS -- three blocking writers on one Block channel, no loss
+   [T9] returns after stale flag=0; after real data: returns=1 value=42
+RESULT T9: PASS -- stale ALT wakeup is re-verified, not selected
+   [T10] second ALT reader rejected=1 (CSP4CMSIS: BufferedChannel: second ALTing reader (at most one per channel)); reader1 done=1 reader2 done=0
+RESULT T10: PASS -- a second ALTing reader is rejected by assert; the first is served
+   [T11] reader selected 0 (value 77); writer selected 0, done=1 (0 = channel, 1 = timeout)
+RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
+   [T12] received a=500 b=500, per-channel order ok=1
+RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
+   [T14] before main(): kernel state=Inactive; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
+   [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
+RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
+RESULT T15i: REPLACED -- rendezvous putFromISR() no longer exists (ISR writes go to buffered channels via isrWriter()) (compile check neg_rendezvous_isr.cpp)
+   [T15s] select 1 -> 0 (0 = X); select 2 -> 1 (1 = signal, 2 = timeout); sender completed=1
+RESULT T15s: PASS -- a signal that arrives while the ALT receiver takes another guard is not lost
+RESULT T16s: REPLACED -- signal channels have no ISR writer (data-less rendezvous, task-only) (compile check neg_signal_isr.cpp)
+RESULT T16n: REPLACED -- KeepNewest/KeepOldest rendezvous channels are rejected at compile time (use SamplingBufferedChannel<T, 1, P>) (compile check neg_rendezvous_policy.cpp)
+   [T1a] kb=25029 k=23529..26029 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1a] kb=24619 k=23119..25619 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
+   [T1b] kb=25029 k=23529..26029 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T1b] kb=24619 k=23119..25619 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
+   [T3] kb=25030 k=23530..26030 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T3] kb=24620 k=23120..25620 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
+   [T3i] kb=25030 k=23530..26030 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T3i] kb=24620 k=23120..25620 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
+   [T13] kb=25029 k=23529..26029 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T13] kb=24620 k=23120..25620 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
+   [T13] spins detected: 0
+   [T13b] kb=25029 k=23529..26029 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+   [T13b] kb=24620 k=23120..25620 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
+   [T13b] spins detected: 0
+   [T15] kb=25019 k=23519..26019 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+   [T15] kb=24609 k=23109..25609 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T15: PASS -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
+   [T15] bad trials=0: PHANTOM (C selected, no data)=0, SILENT (X selected, C data written)=0
+RESULT T16a: REPLACED -- no ISR path into rendezvous channels, so no mutex/BASEPRI race (their state is task-only) (compile check neg_rendezvous_isr.cpp)
+SUMMARY: PASS=24 FAIL=0 SKIP=0 REPLACED=4; heap used=96 B; runner stack min free=7092 B
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS2_Cortex_M4 statistics: --------------------------------------------
+Simulated time                          : 811.551650s
+User time at initialisation             : 0.186275s
+User time                               : 93.265752s
+System time at initialisation           : 0.116171s
+System time                             : 0.046792s
+Wall time at initialisation             : 0.288597s
+Wall time                               : 93.874554s
+Performance index                       : 8.65
+armcortexm4ct                           : 216.12 MIPS ( 20288456145 Inst)
+Memory highwater mark at initialisation : 0xe1b5000 bytes ( 0.220 GB )
+Memory highwater mark                   : 0xe841000 bytes ( 0.227 GB )
+-------------------------------------------------------------------------------
