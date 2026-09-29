@@ -8,7 +8,11 @@ The same source builds against:
 - **either library generation:** v1.0.0 (`BufferedChannel<T, P>(capacity)`) or v2
   (`BufferedChannel<T, SIZE, P>`, detected via `CSP4CMSIS_BUFFERED_CHANNEL_API`);
 - **either CMSIS-RTOS2 backend:** FreeRTOS 11.3.0 through `ARM::CMSIS-FreeRTOS`, or Keil RTX5 5.9.1
-  through `ARM::CMSIS-RTX`.
+  through `ARM::CMSIS-RTX`;
+- **three targets:** the Corstone-300 FVP (Cortex-M55, this README), the MPS2 Cortex-M4 FVP (Armv7E-M,
+  `results/mps2_m4/`, below) and the Alif DK-E8 board (`docs/hardware_results_dk_e8.md`). Target
+  differences are the `BC_*` macros at the top of `bc_tests.cpp` (software-interrupt source and
+  priority, sweep ranges); their defaults are the Corstone-300 values.
 
 Each test prints `RESULT <id>: PASS | FAIL | SKIP -- <property>`, where FAIL means the defect is present.
 A `SUMMARY` line follows, and then EOT, which ends the FVP run.
@@ -20,6 +24,8 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 | 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
 | 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
 | v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `11858f6`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
+| **MPS2 Cortex-M4 FVP** (Armv7E-M), 2.0 @ `73f46b7` (library sources as `c60665d`) | **8**: AC6 and GCC × `-O0`/`-O2` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 8**; every sweep BUG=0/ANOMALY=0, both regimes; T13/T13b 0 spins; T15 0 bad trials |
+| MPS2 Cortex-M4 FVP, v1.0.0 @ `a789d2a` (current suite) | AC6 `-O0` and GCC `-O2`, FreeRTOS and RTX5 | PASS=8 FAIL=18 SKIP=2 in all 4 (the same 18 failures) |
 
 - **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
   check in `tests/compile_checks/` proves the removal. Not counted as PASS.
@@ -41,7 +47,9 @@ AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test s
 `--wrap` detector and the race sweeps stay sensitive there.
 
 History:
-- `d39835b` failed T13/T13b (livelock);
+- `d39835b` failed T13/T13b (livelock); this is the only positive control for T13/T13b, since v1.0.0
+  never had that livelock. (`6920d1c` is the same commit, identical tree, before the history rewrite of
+  2026-09-27 that removed the co-author trailers; it is on no branch.)
 - `a85e17d` fixed it with a one-tick back-off;
 - `cb10b12` replaced the back-off with semaphore-count readiness.
 
@@ -80,6 +88,12 @@ whole suite runs on them with Arm Compiler 6 and GCC.
   `helloworld_sse300` (github.com/joseph-yiu/arm_fvp_helloworld, Apache-2.0). The harness
   project itself (build types, RTOS configuration, heap-free shims) is not part of this repository.
 - **Target:** Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
+- **Second target (Armv7E-M):** `helloworld_mps2_m4/` in the same local harness repository:
+  `FVP_MPS2_Cortex-M4` (Fast Models 11.28.32), device `ARM::ARMCM4` (Cortex_DFP 1.2.0), stdout on the
+  CMSDK UART0, `BC_SWI_IRQn = Interrupt0_IRQn`, 25 MHz core clock, 100 Hz tick, the same RTOS test
+  settings (plus the Armv7-M `vPortSVCHandler`/`xPortPendSVHandler` aliases for FreeRTOS). Build types
+  `FreeRTOS`, `FreeRTOS-O2`, `RTX5`, `RTX5-O2`; `run_m4.sh` builds against the chosen library tree and
+  writes the logs in `results/mps2_m4/`.
   CMSIS-Toolbox 2.14.1.
 - **Build types** (`hello.csolution.yml`): each backend at three optimisation levels.
 
@@ -178,7 +192,7 @@ done; wait
 | T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
-| T16a | *sweep*, rendezvous `putFromISR()` against a plain reader entering `input()`. The task path locks with the mutex, the ISR path with BASEPRI; an ISR between the two stores of `registerWaitingTask()` copies through a null pointer. Correct: `putFromISR()` true → the reader has the value; false → the runner's kick value. (Passes on the FVP; see "Current results".) A `HardFault_Handler` in the test file reports CFSR/HFSR/BFAR and ends the run if a fault happens |
+| T16a | *sweep*, rendezvous `putFromISR()` against a plain reader entering `input()`. The task path locks with the mutex, the ISR path with BASEPRI; an ISR between the two stores of `registerWaitingTask()` (`waiting_in_task`, then `non_alt_in_data_ptr`) sees a waiting reader with no destination. The copy is skipped (v1.0.0 checks the pointer), `putFromISR()` returns true and wakes the reader, which returns without the value. The second store then leaves a stale destination pointer in the channel. Correct: `putFromISR()` true → the reader has the value; false → the runner's kick value. **Passes on both FVPs and in the DK-E8's regular sweep**, whose steps (~10 instructions) miss the 1–2-instruction window. On the DK-E8 a cycle-step sweep hits it (`docs/hardware_results_dk_e8.md`): at `-O0` the trial fails as described, and afterwards the run hangs (next rendezvous on the same channel) or overwrites the runner's stack (fresh channel per failure); at `-O2` the board stops silently in the race region. No run showed a copy through a null pointer. A `HardFault_Handler` in the test file reports CFSR/HFSR/BFAR and ends the run if a fault happens |
 | T15 | *sweep*, ALT-vs-ALT rendezvous: the ALT writer (the victim) completes the transfer in `activate()` and wakes the ALT reader only after releasing the mutex. If the reader has meanwhile taken X and started a new `select()`, the late flag lands in the new round. Per trial, **PHANTOM** = C returned with its destination unchanged, **SILENT** = X returned although C's data was written. This is the implementation form of CSP-M assertion 23 |
 
 ### T2 method
