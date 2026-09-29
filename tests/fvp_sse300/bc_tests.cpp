@@ -15,6 +15,9 @@
 // Test code, not library code: it uses csp::internal classes on purpose.
 // Timing: the FVP tick runs at ~312.5 Hz on both backends; only tick counts
 // are used. See README.md for the method and BUFFERED_CHANNEL_ANALYSIS.md.
+//
+// Other targets (MPS2 Cortex-M4 FVP, Alif DK-E8) set the BC_* platform macros
+// below; their defaults are the Corstone-300 FVP values.
 // =============================================================================
 #include "csp/csp4cmsis.h"
 #include "cmsis_os2.h"
@@ -23,6 +26,33 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+
+// ---- platform parameters (defaults: Corstone-300 FVP) ------------------------
+// Software-interrupt source for the ISR-side operations (T2, T3i, T15i, T16s,
+// T16a). The handler is linked into the vector table at build time, so this
+// also works where the vector table is in read-only memory.
+#ifndef BC_SWI_IRQn
+#define BC_SWI_IRQn     I2S_IRQn
+#define BC_SWI_HANDLER  I2S_Handler
+#endif
+// NVIC priority of that interrupt, as passed to NVIC_SetPriority(). Must be
+// numerically >= CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY (masked by CSP
+// critical sections). Corstone-300 and MPS2 Cortex-M4: 6 of 0..7 (3 bits);
+// DK-E8: 192 of 0..255 (8 bits).
+#ifndef BC_SWI_PRIO
+#define BC_SWI_PRIO     6
+#endif
+// Phase sweeps: binary-search upper bound for kb (spin iterations; must exceed
+// the iterations per tick), and the swept range kb-BELOW .. kb+ABOVE.
+#ifndef BC_SEARCH_HI
+#define BC_SEARCH_HI    400000u
+#endif
+#ifndef BC_SWEEP_BELOW
+#define BC_SWEEP_BELOW  1500u
+#endif
+#ifndef BC_SWEEP_ABOVE
+#define BC_SWEEP_ABOVE  1000u
+#endif
 
 #if defined(RTE_CMSIS_RTOS2_FreeRTOS)
   #include "FreeRTOS.h"
@@ -171,16 +201,17 @@ void result(const char* id, int verdict /*1 pass, 0 fail, -1 skip*/, const char*
 }
 
 // ---------------------------------------------------------------------------
-// Software interrupt: I2S_IRQn is unused on the FVP; the aggressor pends it
-// and the handler runs the ISR-side operation of the current test.
-// Priority 6 (of 0..7) is below CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5,
-// i.e. masked by CSP critical sections, as required for putFromISR().
+// Software interrupt BC_SWI_IRQn (Corstone-300: I2S_IRQn, unused): the
+// aggressor pends it and the handler runs the ISR-side operation of the
+// current test. Priority BC_SWI_PRIO is below
+// CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY, i.e. masked by CSP critical
+// sections, as required for putFromISR().
 // ---------------------------------------------------------------------------
 void (* volatile g_isr_op)() = nullptr;
-void isr_init() { NVIC_SetPriority(I2S_IRQn, 6); NVIC_ClearPendingIRQ(I2S_IRQn); NVIC_EnableIRQ(I2S_IRQn); }
-void isr_fire() { NVIC_SetPendingIRQ(I2S_IRQn); __DSB(); __ISB(); }
+void isr_init() { NVIC_SetPriority(BC_SWI_IRQn, BC_SWI_PRIO); NVIC_ClearPendingIRQ(BC_SWI_IRQn); NVIC_EnableIRQ(BC_SWI_IRQn); }
+void isr_fire() { NVIC_SetPendingIRQ(BC_SWI_IRQn); __DSB(); __ISB(); }
 } // namespace
-extern "C" void I2S_Handler(void) { if (g_isr_op) g_isr_op(); }
+extern "C" void BC_SWI_HANDLER(void) { if (g_isr_op) g_isr_op(); }
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -243,7 +274,7 @@ struct SweepResult { uint32_t kb, lo, hi, n[4], first_bug, last_bug; };
 
 SweepResult& sweep(Case& c, uint32_t below, uint32_t above) {
     static SweepResult s; s = SweepResult{};
-    uint32_t lo = 0, hi = 400000;
+    uint32_t lo = 0, hi = BC_SEARCH_HI;
     while (hi - lo > 1) {
         uint32_t mid = lo + (hi - lo) / 2;
         if (trial(c, mid) == LATE) hi = mid; else lo = mid;
@@ -268,7 +299,7 @@ void sweep_verdict(Case& c, const char* what) {
     static SweepResult a, b;
     // The EARLY/LATE boundary search can land up to ~600 iterations below the
     // true boundary (per-trial state shifts timing), so sweep well above kb.
-    a = sweep(c, 1500, 1000); b = sweep(c, 1500, 1000);
+    a = sweep(c, BC_SWEEP_BELOW, BC_SWEEP_ABOVE); b = sweep(c, BC_SWEEP_BELOW, BC_SWEEP_ABOVE);
     bool ok = a.n[BUG] == 0 && b.n[BUG] == 0 && a.n[ANOMALY] == 0 && b.n[ANOMALY] == 0
               && a.n[EARLY] > 0 && a.n[LATE] > 0;            // both regimes covered
     result(c.id, ok ? 1 : 0, what);
