@@ -13,14 +13,26 @@ Cortex-M.
 ## Portability
 
 CSP4CMSIS calls only the standard `cmsis_os2.h` API — it does not assume a
-specific RTOS underneath. This is verified, not just claimed: the library
-has been built and hardware-tested, with matching runtime behavior, on
-both:
+specific RTOS underneath. Version 2.0 is verified with the regression suite
+on both the CMSIS-RTOS2-over-FreeRTOS adapter and native
+[RTX5](https://github.com/ARM-software/CMSIS-RTX), in exactly these
+configurations:
 
-- the CMSIS-RTOS2-over-FreeRTOS adapter, and
-- native [RTX5](https://github.com/ARM-software/CMSIS-RTX)
+| Core (architecture) | Target | CMSIS-RTOS2 backends | Toolchains | Builds | Result |
+|---|---|---|---|---|---|
+| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | all pass (PASS=24, heap-free 25; REPLACED=4) |
+| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | all pass |
 
-on an Alif Ensemble E8 (Cortex-M55).
+Each target also has a v1.0.0 positive control (its known defects are detected; on the board for
+RTX5 with Arm Compiler 6 only). Details:
+`tests/fvp_sse300/README.md` (both FVPs) and `docs/hardware_results_dk_e8.md` (board).
+
+**Not verified:** other cores (Cortex-M3, M7, M33, M85, …); Armv7E-M on real hardware. Armv6-M and
+Armv8-M Baseline cores (Cortex-M0/M0+/M23) have no `BASEPRI`, which the critical section
+(`csp_critical.h`) uses, so they are not supported (not attempted);
+other CMSIS-RTOS2 implementations (e.g. ST's STM32Cube CMSIS-RTOS2 wrapper over FreeRTOS); IAR and Arm
+LLVM (Clang) toolchains.
 
 CSP4CMSIS deliberately stops at the boundary of a single CMSIS-RTOS2
 instance. It does not manage multicore or inter-processor communication —

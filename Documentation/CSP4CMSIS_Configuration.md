@@ -109,8 +109,24 @@ at or below `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` waits for that copy.
 To keep this bounded, `IsrChanout<T>` contains
 `static_assert(sizeof(T) <= CSP4CMSIS_ISR_MAX_ELEMENT_SIZE)`. Rendezvous
 and signal channels have no ISR writer.
-The default of 64 bytes (a 16-word copy) costs about as much as an RTOS
-queue operation.
+**Measured on hardware** (Alif DK-E8, Cortex-M55 at 400 MHz, code in ITCM,
+RTX5, Arm Compiler 6.24; `docs/hardware_results_dk_e8.md`). An interrupt
+*above* `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` is not delayed at all. One
+*below* it can be delayed by at most the masked copy:
+
+| Element size | `-O0`: `putFromISR()` / worst added delay | `-O2`: `putFromISR()` / worst added delay |
+|---|---|---|
+| 4 B | 158 cycles / 64 cycles (0.16 µs) | 43 cycles / 24 cycles (0.06 µs) |
+| 64 B (default limit) | 211 cycles / 117 cycles (0.29 µs) | 97 cycles / 77 cycles (0.19 µs) |
+| 1024 B (limit raised) | 511 cycles / 417 cycles (1.04 µs) | 368 cycles / 212 cycles (0.53 µs) |
+
+`putFromISR()` is measured for a `KeepNewest` write into a full channel (copy
+only, no RTOS call). The added delay is the latency of a probe interrupt
+triggered at random points during back-to-back copies, minus the latency with
+plain copies. For comparison, the RTOS part of a `putFromISR()` that wakes a
+waiting reader takes about 750 cycles at `-O0` and 220 at `-O2`. So the
+64-byte default adds less delay than one RTOS operation. Other cores and
+clocks scale roughly with the copy loop (bytes per cycle).
 
 - Only code that takes an ISR writer end (`isrWriter()`) is checked; channels
   of large types used only between tasks are unaffected.
