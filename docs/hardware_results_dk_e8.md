@@ -4,10 +4,10 @@
 **Board:** Alif DevKit-E8, AE822FA0E5597LS0 rev A1, RTSS-HP (Cortex-M55) at 400 MHz, I- and D-cache on,
 all code in ITCM. **Libraries:** 2.0 = `buffered-channel-v2` @ `c60665d` (`-O0` runs) and @ `73f46b7`
 (`-O2`/`-Os` runs; same library sources, the commit only adds the harness's `BC_*` macros); v1.0.0 =
-`a789d2a`. **Harness:** Alif-DK-E8-CSP4CMSIS, branch `csp4cmsis-2.0-hwtest` @ `45ce31f`
-(<https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/csp4cmsis-2.0-hwtest/csp4cmsis_hwtest>;
-the results are those of that commit, the branch head `62f1ef0` only adds licence information),
-`csp4cmsis_hwtest/`: the FVP suite (`tests/fvp_sse300/bc_tests.cpp`) with platform macros, RTX5
+`a789d2a`. **Harness:** Alif-DK-E8-CSP4CMSIS, tag `hwtest-2.0-evidence`
+(<https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/hwtest-2.0-evidence/csp4cmsis_hwtest>,
+frozen; branch `csp4cmsis-2.0-hwtest`). The results were recorded at `45ce31f`; the tagged commit
+`6324657` adds only licence information and a README note. `csp4cmsis_hwtest/` holds the FVP suite (`tests/fvp_sse300/bc_tests.cpp`) with platform macros, RTX5
 5.9.1 and FreeRTOS 11.3.0 (ARM CMSIS-FreeRTOS adapter), tick 1 kHz, SWI = CANFD0 (IRQ 104) at priority
 192, `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` = 128 (8 priority bits). One log per run in
 `csp4cmsis_hwtest/results/`, each naming the library commit.
