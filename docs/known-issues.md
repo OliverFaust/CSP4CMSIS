@@ -1,5 +1,23 @@
 # Known Issues
 
+## `scripts/build_pack.py` does not build byte-identical packs (planned fix: 2.0.1)
+
+**What varies.** Two builds of the same commit have identical contents (same files, same bytes, same
+order) but different SHA-256 values:
+- the `include/` directory entry is written with `ZipFile.writestr(name, '')`, which stamps it with the
+  **current time** (the build time); this alone changes the archive on every build;
+- the file entries take the **modification time** of the files on disk, so they differ between a
+  `git clone` (checkout time) and a `git archive` export (commit time for a commit, tagger time for an
+  annotated tag).
+
+The 2.0.0 release asset (`OliverFaust.CSP4CMSIS.2.0.0.pack`, SHA-256 `cad3c617…d5`) is therefore one
+particular build. It was checked to contain exactly the files of tag `v2.0.0`; rebuilds from the tag
+gave the same contents with other hashes.
+
+**Planned fix (2.0.1):** give every entry a fixed timestamp (the commit time from
+`git log -1 --format=%ct`, or `SOURCE_DATE_EPOCH` if set), with fixed permissions and sorted names, so
+that a build from any checkout of a commit is byte-identical and the release hash can be reproduced.
+
 ## `OliverFaust.CSP4CMSIS.pdsc` was never run through `packchk` (resolved for 2.0.0)
 
 **Resolved 2026-09-27.** The 2.0.0 pack passes `packchk` with **0 errors and 0 warnings**.

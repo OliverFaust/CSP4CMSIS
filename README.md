@@ -68,8 +68,11 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.0/OliverFaust.CSP4CMSIS.2.0.0.pack
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.0/OliverFaust.CSP4CMSIS.2.0.0.pack
 ```
+`-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
+script or CI job (no terminal input) it declines and installs nothing.
+
 > Confirmed working: the `.pack` archive from the concrete, versioned
 > release URL — not the bare `.pdsc`, and not `releases/latest/download/`.
 > `cpackget add` treats a `.pdsc`-only URL as a local-file reference; the
@@ -84,22 +87,27 @@ components:
   - component: OliverFaust::CSP4CMSIS:Core
 ```
 
-**Three project-level defines are required** — see
+**Two project-level defines are required and one is optional** — see
 [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-for what each one means and how to derive the right value for your board,
-in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
+for what each one means (required: the backend, `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or
+`CSP4CMSIS_RTOS2_BACKEND_RTX5`, and `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
+`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system) and how to derive the right
+value for your board, in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
 value depends on your board's peripheral interrupt priorities, not (as
 you might expect) on which RTOS backend you're using.
 
 ## Testing / examples
 
-- [`csp4cmsis_alt_test/`](csp4cmsis_alt_test/) — a raw-source build
-  exercising the ALT/select path; the reference test used throughout this
-  library's own RTOS2 and RTX5 validation.
-- [`csp4cmsis_pack_test/`](csp4cmsis_pack_test/) — the same test, but
-  consuming CSP4CMSIS as a packaged component rather than raw source; this
-  is what proves the pack itself is genuinely installable and correct, not
-  just schema-valid.
+Board examples live in
+[Alif-DK-E8-CSP4CMSIS](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS) (Alif DevKit-E8,
+Cortex-M55). They still use CSP4CMSIS **1.0.0**:
+
+- [`csp4cmsis_alt_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_alt_test)
+  — ALT/select smoke test (two senders, one fair-select receiver) on RTX5, consuming the pack.
+- [`csp4cmsis_pack_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_pack_test)
+  — the same application on the FreeRTOS adapter, consuming the pack.
+
+The 2.0 regression suite and its results are in [`tests/fvp_sse300/`](tests/fvp_sse300/).
 
 ## Known limitations
 
