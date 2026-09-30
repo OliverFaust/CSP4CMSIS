@@ -21,8 +21,22 @@
 // =============================================================================
 #include "csp/csp4cmsis.h"
 #include "cmsis_os2.h"
+// Device header and backend: pack builds get them from RTE_Components.h;
+// builds without packs (STM32CubeIDE) from CSP4CMSIS_DEVICE_HEADER and the
+// CSP4CMSIS_RTOS2_BACKEND_* define, as the library itself does.
+#if __has_include("RTE_Components.h")
 #include "RTE_Components.h"
+#endif
+#if defined(CMSIS_device_header)
 #include CMSIS_device_header
+#else
+#include CSP4CMSIS_DEVICE_HEADER
+#endif
+#if defined(RTE_CMSIS_RTOS2_FreeRTOS) || (!defined(RTE_CMSIS_RTOS2_RTX5) && defined(CSP4CMSIS_RTOS2_BACKEND_FREERTOS))
+#define BC_FREERTOS 1
+#elif defined(RTE_CMSIS_RTOS2_RTX5) || defined(CSP4CMSIS_RTOS2_BACKEND_RTX5)
+#define BC_RTX5 1
+#endif
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -54,9 +68,13 @@
 #define BC_SWEEP_ABOVE  1000u
 #endif
 
-#if defined(RTE_CMSIS_RTOS2_FreeRTOS)
+#if defined(BC_FREERTOS)
   #include "FreeRTOS.h"
+  #ifdef BC_BACKEND_NAME
+  #define BACKEND_NAME BC_BACKEND_NAME
+  #else
   #define BACKEND_NAME "FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter)"
+  #endif
   #if (configSUPPORT_DYNAMIC_ALLOCATION == 0)
     // Heap-free build: no dynamic-allocation API exists; not touching the
     // heap keeps heap_4 (pvPortMalloc) out of the linked image.
@@ -66,7 +84,7 @@
     #define HEAP_MODE "RTOS heap enabled"
     static uint32_t heap_used() { return (uint32_t)(configTOTAL_HEAP_SIZE - xPortGetFreeHeapSize()); }
   #endif
-#elif defined(RTE_CMSIS_RTOS2_RTX5)
+#elif defined(BC_RTX5)
   #include "rtx_os.h"
   #define BACKEND_NAME "Keil RTX5 5.9.1"
   // RTX5 dynamic memory pool: mem_head_t { uint32_t size; uint32_t used; } (rtx_memory.c).
@@ -664,7 +682,7 @@ void test_T18() {
 // ---------------------------------------------------------------------------
 extern "C" __attribute__((weak)) volatile unsigned int noheap_alloc_calls;
 void test_T19() {
-#if defined(RTE_CMSIS_RTOS2_FreeRTOS) && (configSUPPORT_DYNAMIC_ALLOCATION == 0)
+#if defined(BC_FREERTOS) && (configSUPPORT_DYNAMIC_ALLOCATION == 0)
     if (&noheap_alloc_calls == nullptr) {
         // The linker removed the traps: nothing in the image references
         // pvPortMalloc()/vPortFree() at all (strongest outcome).
@@ -675,7 +693,7 @@ void test_T19() {
         printf("   [T19] FreeRTOS heap-free build: pvPortMalloc()/vPortFree() trap calls during the suite: %u\r\n", calls);
         result("T19", calls == 0 ? 1 : 0, "heap-free build: no dynamic RTOS allocation attempted");
     }
-#elif defined(RTE_CMSIS_RTOS2_RTX5)
+#elif defined(BC_RTX5)
     if (osRtxInfo.mem.common == nullptr) {
         printf("   [T19] RTX5 heap-free build: no dynamic memory pool (osRtxInfo.mem.common == NULL); fatal errors=%lu\r\n",
                (unsigned long)g_fatal_count);
@@ -1157,8 +1175,13 @@ void runner(void*) {
 } // namespace
 
 // A fault (e.g. T16a's copy through a null pointer) ends the run with a report
-// instead of hanging in the startup file's default handler.
-extern "C" void HardFault_Handler(void) {
+// instead of hanging in the startup file's default handler. Where the project
+// already defines HardFault_Handler (STM32CubeMX), BC_HARDFAULT_HANDLER renames
+// this one and the project's handler calls it.
+#ifndef BC_HARDFAULT_HANDLER
+#define BC_HARDFAULT_HANDLER HardFault_Handler
+#endif
+extern "C" void BC_HARDFAULT_HANDLER(void) {
     printf("!! HardFault during %s: CFSR=0x%08lx HFSR=0x%08lx BFAR=0x%08lx MMFAR=0x%08lx\r\n", g_current_test,
            (unsigned long)SCB->CFSR, (unsigned long)SCB->HFSR, (unsigned long)SCB->BFAR, (unsigned long)SCB->MMFAR);
     printf("SUMMARY: aborted by HardFault\r\n\x04");
