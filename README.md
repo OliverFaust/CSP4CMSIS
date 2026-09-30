@@ -1,7 +1,7 @@
 # CSP4CMSIS
 
-A CSP (Communicating Sequential Processes)-style concurrency library —
-channels, ALT/select, and process composition — for
+A CSP (Communicating Sequential Processes)-style concurrency library, which offers 
+channels, ALT/select, and process composition, for
 [CMSIS-RTOS2](https://arm-software.github.io/CMSIS_6/latest/RTOS2/index.html).
 
 CSP4CMSIS lets you build embedded firmware as a network of communicating
