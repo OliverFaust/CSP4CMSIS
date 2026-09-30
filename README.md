@@ -35,7 +35,7 @@ other CMSIS-RTOS2 implementations (e.g. ST's STM32Cube CMSIS-RTOS2 wrapper over 
 LLVM (Clang) toolchains.
 
 CSP4CMSIS deliberately stops at the boundary of a single CMSIS-RTOS2
-instance. It does not manage multicore or inter-processor communication —
+instance. It does not manage multicore or inter-processor communication. For example, 
 coordinating work across cores (e.g. Alif's RTSS-HP/RTSS-HE) is an
 application-level concern, out of this library's scope.
 
