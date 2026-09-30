@@ -22,18 +22,28 @@
 // is deliberately no separate _FromISR() pair here -- call the same two
 // functions from ISR context too.
 
-// RTE_Components.h + CMSIS_device_header: cmsis_os2.h alone does NOT pull
-// in CMSIS-Core (confirmed by reading it -- it includes only <stdint.h>/
-// <stddef.h>), so __NVIC_PRIO_BITS/__get_BASEPRI/__set_BASEPRI/
-// __set_BASEPRI_MAX aren't visible through the includes the rest of
-// csp4cmsis already uses. This is the same two-include idiom the
-// application layer uses (e.g. main.cpp, BoardInit.cpp) to reach the
-// target's core_cm*.h -- RTE_Components.h is generated per-project by the
-// CMSIS-Toolbox build and defines CMSIS_device_header to the right
-// device header for whatever MCU that project targets, so this stays
-// portable across targets rather than csp4cmsis hardcoding one.
-#include "RTE_Components.h"
-#include CMSIS_device_header
+// The device header: cmsis_os2.h alone does NOT pull in CMSIS-Core
+// (confirmed by reading it -- it includes only <stdint.h>/<stddef.h>), so
+// __NVIC_PRIO_BITS/__get_BASEPRI/__set_BASEPRI/__set_BASEPRI_MAX aren't
+// visible through the includes the rest of csp4cmsis already uses.
+//
+// Pack builds (CMSIS-Toolbox, uVision): RTE_Components.h is generated per
+// project and defines CMSIS_device_header to the device header of the
+// project's MCU. Builds without packs (STM32CubeIDE, vendor SDK makefiles)
+// have no RTE_Components.h; they name the device header themselves with
+// CSP4CMSIS_DEVICE_HEADER, e.g. -DCSP4CMSIS_DEVICE_HEADER='"stm32g4xx.h"'.
+#if defined(__has_include)
+  #if __has_include("RTE_Components.h")
+    #include "RTE_Components.h"
+  #endif
+#endif
+#if defined(CMSIS_device_header)
+  #include CMSIS_device_header
+#elif defined(CSP4CMSIS_DEVICE_HEADER)
+  #include CSP4CMSIS_DEVICE_HEADER
+#else
+  #error "CSP4CMSIS: no device header. Pack builds get it from RTE_Components.h (CMSIS_device_header); without packs, define CSP4CMSIS_DEVICE_HEADER to the device header, e.g. \"stm32g4xx.h\" (Documentation/CSP4CMSIS_Configuration.md)"
+#endif
 
 // csp4cmsis's own threshold, independent of any specific RTOS's macro name
 // -- keeps the library RTOS-agnostic. Projects define this to match
