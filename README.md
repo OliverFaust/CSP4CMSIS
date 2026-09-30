@@ -31,7 +31,8 @@ RTX5 with Arm Compiler 6 only). Details:
 **Not verified:** other cores (Cortex-M3, M7, M33, M85, …); Armv7E-M on real hardware. Armv6-M and
 Armv8-M Baseline cores (Cortex-M0/M0+/M23) have no `BASEPRI`, which the critical section
 (`csp_critical.h`) uses, so they are not supported (not attempted);
-other CMSIS-RTOS2 implementations (e.g. ST's STM32Cube CMSIS-RTOS2 wrapper over FreeRTOS); IAR and Arm
+other CMSIS-RTOS2 implementations (ST's STM32Cube CMSIS-RTOS2 wrapper over FreeRTOS: FVP only so far,
+with one difference, see [`docs/st_cmsis_rtos2_wrapper.md`](docs/st_cmsis_rtos2_wrapper.md)); IAR and Arm
 LLVM (Clang) toolchains.
 
 CSP4CMSIS deliberately stops at the boundary of a single CMSIS-RTOS2
@@ -79,6 +80,10 @@ script or CI job (no terminal input) it declines and installs nothing.
 > `.pack` is the installable unit that actually fetches over HTTPS.
 > Update to a newer release deliberately by changing the version in the
 > URL.
+
+Without packs (STM32CubeIDE, vendor SDK makefiles), copy the source into your project instead:
+[`Documentation/CSP4CMSIS_STM32CubeIDE.md`](Documentation/CSP4CMSIS_STM32CubeIDE.md) (needs 2.0.1's
+`csp_critical.h`, see [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)).
 
 Then reference the component in your `.cproject.yml`:
 

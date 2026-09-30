@@ -194,6 +194,11 @@ Corstone-300 FVP, Arm Compiler 6 and GCC):
 **Not guaranteed by CSP4CMSIS** (your system's responsibility): the RTOS's own configuration, objects
 that your application creates, and the C library (below).
 
+**Exception: ST's STM32Cube CMSIS-RTOS2 wrapper.** Its `osTimerNew()` allocates the timer's 8-byte
+callback record with `pvPortMalloc()` even when the control block is static, so every live
+`RelTimeoutGuard` holds 16 bytes of FreeRTOS heap there (test T6 fails on that wrapper). A heap must stay
+linked. Everything else is static as described. Details: `docs/st_cmsis_rtos2_wrapper.md`.
+
 ### What a fully heap-free system additionally needs
 
 **Common to both backends:**
@@ -259,3 +264,46 @@ The C library has its own heap (`malloc`), independent of the RTOS:
   decision. If you provide a global `operator new`/`delete`, make sure your C library's `malloc` locking
   is thread-safe with your RTOS (some newlib-nano/toolchain/port combinations do not wire it up by
   default).
+
+## 7. Builds without CMSIS packs: `CSP4CMSIS_DEVICE_HEADER`
+
+`csp_critical.h` needs the device's CMSIS device header (`__NVIC_PRIO_BITS`, the `BASEPRI` intrinsics).
+Pack builds (CMSIS-Toolbox, µVision) get it from the generated `RTE_Components.h`
+(`CMSIS_device_header`); nothing to set. Builds without packs (STM32CubeIDE, vendor SDK makefiles) have
+no `RTE_Components.h` and must name the header:
+
+```
+-DCSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"        (STM32CubeIDE: typed exactly like this)
+-DCSP4CMSIS_DEVICE_HEADER=\"WE2_device.h\"     (makefile, Himax WE2)
+```
+
+With neither, the build stops with an `#error` that names the define. (2.0.1; CSP4CMSIS 2.0.0 includes
+`RTE_Components.h` unconditionally.)
+
+Also for builds without packs:
+- **C++17** (`-std=gnu++17` or `-std=c++17`); STM32CubeIDE's default is GNU++14.
+- **Include path: `csp4cmsis/inc` only.** Applications include `"csp/csp4cmsis.h"`. Do not add
+  `csp4cmsis/inc/csp`: with it on the search path, `#include <time.h>` finds CSP4CMSIS's `time.h`.
+- Sources: `csp4cmsis/src/*.cpp`.
+
+Step-by-step for STM32CubeMX/STM32CubeIDE: `Documentation/CSP4CMSIS_STM32CubeIDE.md`.
+
+## 8. FreeRTOS: timer service task priority
+
+FreeRTOS executes `osTimerStart()`, `osTimerStop()` and `osTimerDelete()` in its timer service task,
+after the calling thread has continued. `RelTimeoutGuard` (a CMSIS-RTOS2 timer) relies on these commands
+being processed before the guard's storage goes out of scope. The timer service task must therefore
+**not have a lower priority than any thread that uses a `RelTimeoutGuard`**. Recommended (and what the
+test harnesses use): the highest priority.
+
+```c
+#define configTIMER_TASK_PRIORITY  ( configMAX_PRIORITIES - 1 )   /* 55 with CMSIS-RTOS2 */
+```
+
+Arm's CMSIS-FreeRTOS configuration template uses 40 (`osPriorityHigh`): enough for threads up to
+`osPriorityHigh` (the regression suite, whose runner runs at `osPriorityHigh`, passes with it), not for
+threads above. STM32CubeMX's default is 2
+(FREERTOS > Config parameters > Software timer definitions > TIMER_TASK_PRIORITY): with it, the
+regression suite ends in a HardFault with ST's and with Arm's CMSIS-RTOS2 adapter, and the ALT-with-timeout
+example of the STM32CubeIDE guide hangs (ST's adapter; `docs/results_nucleo_g474.md`). RTX5 executes
+timer calls synchronously and has no such requirement.
