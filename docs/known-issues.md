@@ -1,5 +1,41 @@
 # Known Issues
 
+## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang or heap use with FreeRTOS (fix: 2.0.1)
+
+Only applications that put a `RelTimeoutGuard` into an `Alternative` are affected; channels, ALT without
+timeouts, `Barrier` and `SleepFor()` are not. In 2.0.0 a timeout guard is a CMSIS-RTOS2 timer
+(`osTimerNew()` per guard, started and stopped by every `select()` round, deleted with the guard). The
+RTOS runs the timer's callback, and with FreeRTOS also the stop and delete, later, in its timer service
+thread. Affected:
+
+1. **FreeRTOS (Arm's CMSIS-FreeRTOS adapter and ST's STM32Cube wrapper): crash or hang** when
+   `configTIMER_TASK_PRIORITY` is below the priority of a thread that uses a `RelTimeoutGuard`. The
+   delete is then processed after the guard's storage has gone out of scope and been reused.
+   Reproduced on the MPS2 Cortex-M4 FVP: the regression suite ends in a HardFault with either adapter,
+   and a two-sender ALT-with-timeout network hangs. This includes:
+   - **STM32CubeMX projects with the default priority 2**: every thread at `osPriorityNormal` or above;
+   - Arm's CMSIS-FreeRTOS configuration template (40): threads above `osPriorityHigh`.
+2. **FreeRTOS and RTX5: a late timer callback** when a thread that uses timeouts has a priority equal to
+   or above the timer service thread (FreeRTOS `configTIMER_TASK_PRIORITY`; RTX5 `OS_TIMER_THREAD_PRIO`,
+   default 40). If the timeout expires in the same tick as another guard of the same ALT fires, the
+   callback can run after the guard was destroyed and write one byte into reused stack memory (on ST's
+   wrapper it also reads its freed callback record). Found by source analysis; not reproduced.
+3. **ST's STM32Cube CMSIS-RTOS2 wrapper: RTOS heap.** Its `osTimerNew()` allocates the callback record
+   with `pvPortMalloc()` even for a static control block: each live `RelTimeoutGuard` holds 16 bytes of
+   FreeRTOS heap, also with `CSP4CMSIS_STATIC_ALLOCATION` (no crash; the build is not heap-free).
+
+Not affected: RTX5 when every thread that uses timeouts runs below `OS_TIMER_THREAD_PRIO`.
+
+**Workaround on 2.0.0:** give the timer service thread a priority **strictly above** every thread that
+uses a `RelTimeoutGuard`, e.g. FreeRTOS `configTIMER_TASK_PRIORITY (configMAX_PRIORITIES - 1)` (55 with
+CMSIS-RTOS2; STM32CubeMX: FREERTOS > Config parameters > Software timer definitions >
+TIMER_TASK_PRIORITY), RTX5 `OS_TIMER_THREAD_PRIO 55`, and run no thread that uses timeouts at that
+priority. This removes items 1 and 2; the 16 bytes of heap per guard on ST's wrapper (item 3) remain.
+
+**Fixed in 2.0.1:** timeout guards no longer use an RTOS timer. `select()` waits for its thread flags
+with the remaining time to a deadline fixed when the `select()` starts, so there is no timer object,
+callback or timer priority requirement, and no heap use on any adapter.
+
 ## `cpackget` never offers 2.0.0 to users of 1.0.0 (1.0.0 pdsc)
 
 The 1.0.0 pdsc's `<url>` is a placeholder, `https://github.com/YourOrg/CSP4CMSIS/releases/latest/download/`.
