@@ -44,6 +44,7 @@ the suite passes completely on ST's wrapper, including a heap-free build (`docs/
 
 | Library | `configTIMER_TASK_PRIORITY` | `-O0` | `-O2` |
 |---|---|---|---|
+| **2.0.1** (timeouts without RTOS timers) | 55 and 2 | **PASS=29 FAIL=0**; heap-free build PASS=30 | PASS=29 FAIL=0 |
 | 2.0 (`76194a5`, library as 2.0.0 + 2.0.1 header) | 55 | PASS=23 **FAIL=1 (T6)** SKIP=0 REPLACED=4; sweeps BUG=0 ANOMALY=0; T13/T13b 0 spins; heap used 152 B | same |
 | 2.0 | 2 (CubeMX default) | **HardFault** after T17 (also with Arm's adapter) | not run |
 | v1.0.0 (`a789d2a`) | 55 | PASS=8 FAIL=18 SKIP=2: the same 18 failures as with Arm's adapter | not run |

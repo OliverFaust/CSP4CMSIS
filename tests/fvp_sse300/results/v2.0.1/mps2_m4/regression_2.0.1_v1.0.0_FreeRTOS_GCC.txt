@@ -1,0 +1,118 @@
+# target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
+# config: lib=v1 build type=FreeRTOS toolchain=GCC image=out/MPS2-Cortex-M4/FreeRTOS/GCC/m4.elf
+# library: /home/of6/src/CSP4CMSIS-v1.0.0 @ a789d2aad4ab3469304d9c1beedff7d85466005b dirty=0
+# library sources compiled from: /home/of6/src/CSP4CMSIS-v1.0.0/csp4cmsis/src
+# test source: /home/of6/src/CSP4CMSIS/tests/fvp_sse300/bc_tests.cpp
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal0: Listening for serial connection on port 5000
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal2: Listening for serial connection on port 5002
+
+MPS2 Cortex-M4 FVP, SystemCoreClock=25000000 Hz
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter); library: v1 API (osMessageQueue); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 5 (last: osThreadFlagsSet); workload sum=6021
+RESULT T2: FAIL -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=0 (-); A done=0, B done=1
+RESULT T4a: FAIL -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: FAIL -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 20
+RESULT T4c: FAIL -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=0 fatal=0 heap delta=0
+RESULT T5: FAIL -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 72 B heap while alive; Alternative: 0 B; 200 loop constructions -> 200 allocations, 201 RTOS timers
+RESULT T6: FAIL -- RelTimeoutGuard and Alternative create no RTOS timer and use no RTOS heap
+RESULT T17: SKIP -- rendezvous and signal channels use no RTOS heap (2.0 only)
+   [T18] 3 threads x 20 phases: finished=0, early departures=4
+RESULT T18: FAIL -- reusable Barrier: nobody leaves a phase before all arrived
+   [T7a] writer woken: reader uses input()=1, reader uses ALT=0
+RESULT T7a: FAIL -- a read via ALT wakes a writer blocked in ALT
+   [T8] 3 writers x 20 values: sum=lu (expect lu), writers done=536928708
+RESULT T8: PASS -- three blocking writers on one Block channel, no loss
+RESULT T9: SKIP -- stale ALT wakeup re-verification (needs v2 altFlag())
+   [T10] second ALT reader rejected=0 (-); reader1 done=0 reader2 done=1
+RESULT T10: FAIL -- a second ALTing reader is rejected by assert; the first is served
+   [T11] reader selected 0 (value 77); writer selected 0, done=1 (0 = channel, 1 = timeout)
+RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
+   [T12] received a=500 b=500, per-channel order ok=1
+RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
+   [T14] before main(): kernel state=Inactive; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
+   [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
+RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
+   [T15i] putFromISR returned 1; reader selected 0 (0 = channel, 1 = timeout), value UNCHANGED (0xdeadbeef)
+   [T15i] rendezvous reported without data transfer; the ISR's value is lost
+RESULT T15i: FAIL -- rendezvous putFromISR() to an ALT reader delivers the value (or reports failure)
+   [T15s] select 1 -> 0 (0 = X); select 2 -> 2 (1 = signal, 2 = timeout); sender completed=0
+   [T15s] signal lost: the sender is blocked for good
+RESULT T15s: FAIL -- a signal that arrives while the ALT receiver takes another guard is not lost
+   [T16s] putFromISR returned 1; blocked receiver released=0
+RESULT T16s: FAIL -- signal putFromISR() releases a blocked receiver (or returns false)
+   [T16n] reader selected 0 (0 = channel, 1 = timeout), value UNCHANGED 0xdeadbeef
+   [T16n] rendezvous reported without data transfer; the value was dropped
+RESULT T16n: FAIL -- KeepNewest rendezvous output() to a waiting ALT reader delivers the value
+   [T1a] kb=20678 k=19178..21678 EARLY=1485 LATE=1006 BUG=10 ANOMALY=0 (BUG k=20329..20640)
+   [T1a] kb=20665 k=19165..21665 EARLY=1487 LATE=999 BUG=15 ANOMALY=0 (BUG k=20325..20641)
+RESULT T1a: FAIL -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
+   [T1b] kb=20667 k=19167..21667 EARLY=1520 LATE=970 BUG=11 ANOMALY=0 (BUG k=20326..20635)
+   [T1b] kb=20651 k=19151..21651 EARLY=1531 LATE=958 BUG=12 ANOMALY=0 (BUG k=20324..20640)
+RESULT T1b: FAIL -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
+   [T3] kb=20739 k=19239..21739 EARLY=1434 LATE=1042 BUG=25 ANOMALY=0 (BUG k=20322..20646)
+   [T3] kb=20600 k=19100..21600 EARLY=1570 LATE=906 BUG=25 ANOMALY=0 (BUG k=20322..20646)
+RESULT T3: FAIL -- KeepNewest keeps the newest value of every writer (task vs task)
+   [T3i] kb=20500 k=19000..21500 EARLY=1604 LATE=872 BUG=25 ANOMALY=0 (BUG k=20326..20647)
+   [T3i] kb=20685 k=19185..21685 EARLY=1426 LATE=1050 BUG=25 ANOMALY=0 (BUG k=20320..20647)
+RESULT T3i: FAIL -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
+   [T13] kb=20856 k=19356..21856 EARLY=1358 LATE=1143 BUG=0 ANOMALY=0
+   [T13] kb=20651 k=19151..21651 EARLY=1568 LATE=933 BUG=0 ANOMALY=0
+RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
+   [T13] spins detected: 0
+   [T13b] kb=20728 k=19228..21728 EARLY=1462 LATE=1039 BUG=0 ANOMALY=0
+   [T13b] kb=20500 k=19000..21500 EARLY=1696 LATE=805 BUG=0 ANOMALY=0
+RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
+   [T13b] spins detected: 0
+   [T15] kb=20665 k=19165..21665 EARLY=1425 LATE=1002 BUG=74 ANOMALY=0 (BUG k=19905..20541)
+   [T15] kb=20600 k=19100..21600 EARLY=1512 LATE=912 BUG=77 ANOMALY=0 (BUG k=19902..20541)
+RESULT T15: FAIL -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
+   [T15] bad trials=153: PHANTOM (C selected, no data)=117, SILENT (X selected, C data written)=117
+   [T16a] kb=20600 k=19100..21600 EARLY=1610 LATE=891 BUG=0 ANOMALY=0
+   [T16a] kb=20851 k=19351..21851 EARLY=1356 LATE=1145 BUG=0 ANOMALY=0
+RESULT T16a: PASS -- rendezvous putFromISR() vs a reader entering input(): value delivered or false returned
+   [T16a] trials with putFromISR()==true but the value not received: 0
+   [T20] timeout 1 ticks: returned after 1..1 ticks, wrong guard 0/5
+   [T20] timeout 3 ticks: returned after 3..3 ticks, wrong guard 0/5
+   [T20] timeout 10 ticks: returned after 10..10 ticks, wrong guard 0/5
+RESULT T20: PASS -- a timeout of d ticks is selected after d or d+1 ticks
+   [T21] channel ready after 8 ticks, timeout 10: channel 3/3, timeout 0/3
+   [T21] channel ready after 9 ticks, timeout 10: channel 3/3, timeout 0/3
+   [T21] channel ready after 10 ticks, timeout 10: channel 0/3, timeout 3/3
+   [T21] channel ready after 11 ticks, timeout 10: channel 0/3, timeout 3/3
+   [T21] channel ready after 12 ticks, timeout 10: channel 0/3, timeout 3/3
+RESULT T21: PASS -- timeout vs late channel: one guard selected, the item neither lost nor doubled
+   [T22] timeouts (30, 5, 15): selected guard 2 after 5 ticks (expect 2 after 5..6)
+RESULT T22: PASS -- several timeout guards: the earliest deadline wins
+   [T23] no channel: guard 1 after 0 ticks; channel ready: guard 0, value 4242, transfers 1
+RESULT T23: PASS -- zero timeout: selected at once; a ready channel listed before it wins
+RESULT T24: SKIP -- stale wakeups do not postpone a timeout (needs 2.0's ALT flag layout)
+SUMMARY: PASS=12 FAIL=18 SKIP=3 REPLACED=0; heap used=4056 B; runner stack min free=7420 B
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS2_Cortex_M4 statistics: --------------------------------------------
+Simulated time                          : 932.178204s
+User time at initialisation             : 0.189382s
+User time                               : 63.475829s
+System time at initialisation           : 0.146295s
+System time                             : 0.031716s
+Wall time at initialisation             : 0.616425s
+Wall time                               : 63.469967s
+Performance index                       : 14.69
+armcortexm4ct                           : 367.17 MIPS ( 23304043136 Inst)
+Memory highwater mark at initialisation : 0xe2a1000 bytes ( 0.221 GB )
+Memory highwater mark                   : 0xe9ce000 bytes ( 0.228 GB )
+-------------------------------------------------------------------------------

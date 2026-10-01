@@ -23,6 +23,7 @@ configurations:
 | Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | all pass (PASS=24, heap-free 25; REPLACED=4) |
 | Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | all pass |
 | Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` (2.0.1) | all pass |
 
 Each target also has a v1.0.0 positive control (its known defects are detected; on the board for
 RTX5 with Arm Compiler 6 only). Details:
@@ -31,9 +32,8 @@ RTX5 with Arm Compiler 6 only). Details:
 **Not verified:** other cores (Cortex-M3, M7, M33, M85, …); Armv7E-M on real hardware. Armv6-M and
 Armv8-M Baseline cores (Cortex-M0/M0+/M23) have no `BASEPRI`, which the critical section
 (`csp_critical.h`) uses, so they are not supported (not attempted);
-other CMSIS-RTOS2 implementations (ST's STM32Cube CMSIS-RTOS2 wrapper over FreeRTOS: FVP only so far,
-with one difference, see [`docs/st_cmsis_rtos2_wrapper.md`](docs/st_cmsis_rtos2_wrapper.md)); IAR and Arm
-LLVM (Clang) toolchains.
+other CMSIS-RTOS2 implementations (ST's wrapper: FVP only so far, see
+[`docs/st_cmsis_rtos2_wrapper.md`](docs/st_cmsis_rtos2_wrapper.md)); IAR and Arm LLVM (Clang) toolchains.
 
 CSP4CMSIS deliberately stops at the boundary of a single CMSIS-RTOS2
 instance. It does not manage multicore or inter-processor communication. For example, 
