@@ -166,6 +166,19 @@ WRAP(uint32_t,   osMessageQueueGetSpace, (osMessageQueueId_t q), (q))
 WRAP(osStatus_t, osMutexAcquire,         (osMutexId_t m, uint32_t t), (m, t))
 WRAP(osStatus_t, osMutexRelease,         (osMutexId_t m), (m))
 #undef WRAP
+// T6: RTOS timers created during the test (2.0.1: a timeout guard is none).
+static volatile uint32_t g_timer_news = 0;
+#if defined(__ARMCC_VERSION)
+osTimerId_t $Super$$osTimerNew(osTimerFunc_t f, osTimerType_t t, void* a, const osTimerAttr_t* at);
+osTimerId_t $Sub$$osTimerNew(osTimerFunc_t f, osTimerType_t t, void* a, const osTimerAttr_t* at) {
+    g_timer_news = g_timer_news + 1; return $Super$$osTimerNew(f, t, a, at);
+}
+#else
+osTimerId_t __real_osTimerNew(osTimerFunc_t f, osTimerType_t t, void* a, const osTimerAttr_t* at);
+osTimerId_t __wrap_osTimerNew(osTimerFunc_t f, osTimerType_t t, void* a, const osTimerAttr_t* at) {
+    g_timer_news = g_timer_news + 1; return __real_osTimerNew(f, t, a, at);
+}
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -610,17 +623,20 @@ void test_T5() {
 }
 
 // ---------------------------------------------------------------------------
-// T6 -- no RTOS heap for timeout guards / Alternatives (STATIC_ALLOCATION)
+// T6 -- timeout guards and Alternatives create no RTOS object and use no
+//       RTOS heap (2.0.1: no timer; 2.0.0: a static timer, but a timer)
 // ---------------------------------------------------------------------------
 void test_T6() {
-    uint32_t u0 = heap_used(), u_in = 0, u_alt = 0, allocs = 0;
+    uint32_t u0 = heap_used(), u_in = 0, u_alt = 0, allocs = 0, tn0 = g_timer_news;
     { csp::RelTimeoutGuard g(csp::Time(5)); u_in = heap_used(); }
     { static BlockChan<1> ch; static In in(&ch); uint32_t v; uint32_t b = heap_used();
       csp::Alternative alt({in.getGuard(v)}); u_alt = heap_used() - b; }
     for (int i = 0; i < 200; ++i) { uint32_t b = heap_used(); csp::RelTimeoutGuard g(csp::Time(5)); if (heap_used() > b) allocs++; }
-    printf("   [T6] RelTimeoutGuard: %lu B heap while alive; Alternative: %lu B; 200 loop constructions -> %lu allocations\r\n",
-           (unsigned long)(u_in - u0), (unsigned long)u_alt, (unsigned long)allocs);
-    result("T6", (u_in == u0 && u_alt == 0 && allocs == 0) ? 1 : 0, "RelTimeoutGuard and Alternative use no RTOS heap");
+    uint32_t timers = g_timer_news - tn0;
+    printf("   [T6] RelTimeoutGuard: %lu B heap while alive; Alternative: %lu B; 200 loop constructions -> %lu allocations, %lu RTOS timers\r\n",
+           (unsigned long)(u_in - u0), (unsigned long)u_alt, (unsigned long)allocs, (unsigned long)timers);
+    result("T6", (u_in == u0 && u_alt == 0 && allocs == 0 && timers == 0) ? 1 : 0,
+           "RelTimeoutGuard and Alternative create no RTOS timer and use no RTOS heap");
 }
 
 // ---------------------------------------------------------------------------
@@ -1155,6 +1171,138 @@ void test_T14() {
 }
 
 // ---------------------------------------------------------------------------
+// T20..T24 -- timeout guards. 2.0.1: the deadline is fixed when select()
+// starts and select() waits with the remaining ticks (no RTOS timer).
+// A "never" channel has no writer; tick counts from osKernelGetTickCount().
+// ---------------------------------------------------------------------------
+uint32_t ticks_now() { return osKernelGetTickCount(); }
+
+// T20 -- accuracy: a timeout of d ticks returns after d or d + 1 ticks
+void test_T20() {
+    g_current_test = "T20";
+    static csp::Channel<uint32_t> never; In in = never.reader(); uint32_t v = 0;
+    const uint32_t ds[] = {1, 3, 10}; bool ok = true;
+    for (uint32_t d : ds) {
+        uint32_t lo = 0xFFFFFFFFu, hi = 0; int bad_sel = 0;
+        for (int rep = 0; rep < 5; ++rep) {
+            osDelay(1); spin((uint32_t)rep * 997u);           // vary the phase within the tick
+            csp::RelTimeoutGuard to{csp::Time(d)};
+            csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+            uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
+            if (sel != 1) bad_sel++;
+            if (dt < lo) lo = dt;
+            if (dt > hi) hi = dt;
+        }
+        printf("   [T20] timeout %lu ticks: returned after %lu..%lu ticks, wrong guard %d/5\r\n",
+               (unsigned long)d, (unsigned long)lo, (unsigned long)hi, bad_sel);
+        if (bad_sel || lo < d || hi > d + 1) ok = false;
+    }
+    result("T20", ok ? 1 : 0, "a timeout of d ticks is selected after d or d+1 ticks");
+}
+
+// T21/T23 writer: on F_START waits t21_delay ticks, then writes t21_val (plain rendezvous)
+csp::Channel<uint32_t>* t21_ch; ThreadSlot t21_s; osThreadId_t t21_tid = nullptr;
+volatile uint32_t t21_delay = 0, t21_val = 0, t21_sent = 0;
+void t21_writer(void*) {
+    Out out = t21_ch->writer();
+    for (;;) {
+        osThreadFlagsWait(F_START, osFlagsWaitAny, osWaitForever);
+        if (t21_delay) osDelay(t21_delay);
+        uint32_t x = t21_val; out << x; t21_sent = t21_sent + 1;
+    }
+}
+void t21_start() {
+    static csp::Channel<uint32_t> ch;
+    if (t21_tid == nullptr) { t21_ch = &ch; t21_tid = spawn(t21_writer, nullptr, osPriorityAboveNormal, t21_s, "T21w"); osDelay(1); }
+}
+
+// T21 -- a timeout racing a channel that becomes ready around the deadline:
+//        exactly one guard is selected; a channel item is never lost or doubled
+void test_T21() {
+    g_current_test = "T21";
+    t21_start(); In in = t21_ch->reader();
+    constexpr uint32_t D = 10; bool ok = true;
+    for (uint32_t k = D - 2; k <= D + 2; ++k) {
+        uint32_t c = 0, t = 0;
+        for (int rep = 0; rep < 3; ++rep) {
+            uint32_t val = 1000u * k + (uint32_t)rep, v = 0, sent0 = t21_sent;
+            t21_delay = k; t21_val = val; osThreadFlagsSet(t21_tid, F_START);
+            csp::RelTimeoutGuard to{csp::Time(D)};
+            csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+            uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
+            if (sel == 0) { c++; if (v != val) ok = false; }
+            else {                                            // timed out: the item must still be there
+                t++; if (dt < D || dt > D + 1) ok = false;
+                uint32_t w = 0; in >> w; if (w != val) ok = false;
+            }
+            osDelay(2);
+            if (t21_sent != sent0 + 1) ok = false;            // exactly one transfer
+        }
+        printf("   [T21] channel ready after %lu ticks, timeout %lu: channel %lu/3, timeout %lu/3\r\n",
+               (unsigned long)k, (unsigned long)D, (unsigned long)c, (unsigned long)t);
+        if (k + 2 <= D && c != 3) ok = false;                 // clearly before the deadline: channel
+        if (k >= D + 2 && t != 3) ok = false;                 // clearly after: timeout
+    }
+    result("T21", ok ? 1 : 0, "timeout vs late channel: one guard selected, the item neither lost nor doubled");
+}
+
+// T22 -- several timeout guards: the earliest deadline is selected
+void test_T22() {
+    g_current_test = "T22";
+    static csp::Channel<uint32_t> never; In in = never.reader(); uint32_t v = 0;
+    csp::RelTimeoutGuard a{csp::Time(30)}, b{csp::Time(5)}, c{csp::Time(15)};
+    csp::Alternative alt({in.getGuard(v), a.internal_guard_ptr, b.internal_guard_ptr, c.internal_guard_ptr});
+    uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
+    printf("   [T22] timeouts (30, 5, 15): selected guard %d after %lu ticks (expect 2 after 5..6)\r\n", sel, (unsigned long)dt);
+    result("T22", (sel == 2 && dt >= 5 && dt <= 6) ? 1 : 0, "several timeout guards: the earliest deadline wins");
+}
+
+// T23 -- zero timeout: ready at once, never waits; a ready channel listed first wins
+void test_T23() {
+    g_current_test = "T23";
+    static csp::Channel<uint32_t> never; In nin = never.reader(); uint32_t v = 0;
+    csp::RelTimeoutGuard z{csp::Time(0)};
+    csp::Alternative alt({nin.getGuard(v), z.internal_guard_ptr});
+    uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
+    t21_start(); In in = t21_ch->reader(); uint32_t w = 0, sent0 = t21_sent;
+    t21_delay = 0; t21_val = 4242; osThreadFlagsSet(t21_tid, F_START); osDelay(2);   // writer now waits
+    csp::RelTimeoutGuard z2{csp::Time(0)};
+    csp::Alternative alt2({in.getGuard(w), z2.internal_guard_ptr});
+    int sel2 = alt2.priSelect(); osDelay(2);
+    printf("   [T23] no channel: guard %d after %lu ticks; channel ready: guard %d, value %lu, transfers %lu\r\n",
+           sel, (unsigned long)dt, sel2, (unsigned long)w, (unsigned long)(t21_sent - sent0));
+    result("T23", (sel == 1 && dt == 0 && sel2 == 0 && w == 4242 && t21_sent == sent0 + 1) ? 1 : 0,
+           "zero timeout: selected at once; a ready channel listed before it wins");
+}
+
+// T24 -- stale wakeups do not postpone a timeout (2.0.0 restarted its timer
+//        in every select() round: a wakeup per tick keeps it from expiring,
+//        here until the waker stops after 50 ticks)
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+ThreadSlot t24_s; osThreadId_t t24_target = nullptr; volatile int t24_stop = 0;
+void t24_waker(void*) {                                    // a stale ALT wakeup every tick, at most 50
+    for (int i = 0; i < 50 && !t24_stop; ++i) { osDelay(1); if (!t24_stop) (void)osThreadFlagsSet(t24_target, csp::internal::altFlag(0)); }
+    park();
+}
+#endif
+void test_T24() {
+    g_current_test = "T24";
+#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+    static csp::Channel<uint32_t> never; In in = never.reader(); uint32_t v = 0;
+    t24_target = osThreadGetId(); t24_stop = 0;
+    spawn(t24_waker, nullptr, osPriorityAboveNormal, t24_s, "T24w");
+    csp::RelTimeoutGuard to{csp::Time(10)};
+    csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+    uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
+    t24_stop = 1; osDelay(3); (void)osThreadFlagsClear(csp::internal::ALT_FLAG_MASK);
+    printf("   [T24] stale wakeup every tick, timeout 10: guard %d after %lu ticks\r\n", sel, (unsigned long)dt);
+    result("T24", (sel == 1 && dt >= 10 && dt <= 11) ? 1 : 0, "stale wakeups do not postpone a timeout");
+#else
+    result("T24", -1, "stale wakeups do not postpone a timeout (needs 2.0's ALT flag layout)");
+#endif
+}
+
+// ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
     printf("\r\n=== CSP4CMSIS BufferedChannel regression suite ===\r\n");
@@ -1163,7 +1311,8 @@ void runner(void*) {
     test_T0();  test_T2();  test_T4a(); test_T4b(); test_T4c();
     test_T5();  test_T6();  test_T17(); test_T18(); test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
-    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a(); test_T19();
+    test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
+    test_T20(); test_T21(); test_T22(); test_T23(); test_T24(); test_T19();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)g_replaced, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));
