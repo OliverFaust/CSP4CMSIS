@@ -11,6 +11,10 @@ Release/GetCount/Delete`, `osTimerNew/Start/Stop/Delete`, `osDelay`, `osKernelGe
 FreeRTOS 10.3.1 built from the firmware package, `FreeRTOSConfig.h` from the CubeMX project of the guide
 (`docs/results_nucleo_g474.md`).
 
+**CSP4CMSIS 2.0.1 uses no CMSIS-RTOS2 timers** (`docs/CHANGES_2.0.1.md`). Rows 1, 2, 3 (timer path)
+and 5 below therefore concern 2.0.0 only; row 4 (interrupt-context detection) still applies. With 2.0.1
+the suite passes completely on ST's wrapper, including a heap-free build (`docs/results_nucleo_g474.md`).
+
 ## Differences that matter to CSP4CMSIS
 
 | # | Area | ST wrapper (FW_G4 1.6.3) | Arm adapter (11.3.0) | Effect on CSP4CMSIS | Evidence |

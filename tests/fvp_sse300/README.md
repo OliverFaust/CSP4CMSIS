@@ -175,7 +175,7 @@ done; wait
 | T4b | an ALT that never enabled a guard does not cancel another writer's registration |
 | T4c | guard state per writer: a second writer's `getGuard()` does not re-target a blocked writer |
 | T5 | a large channel (8200 × 4 B, more than the 32 KB heap) is valid after construction, or construction fails loudly |
-| T6 | `RelTimeoutGuard` and `Alternative` use no RTOS heap (200 constructions in a loop) |
+| T6 | `RelTimeoutGuard` and `Alternative` create no RTOS timer (`osTimerNew()` calls counted, see "T2 method") and use no RTOS heap (200 constructions in a loop). FAIL on 2.0.0 (one timer per guard) |
 | T7a | a read via ALT wakes a writer blocked in ALT (control: plain `input()`) |
 | T8 | three blocking writers on one Block channel: no loss |
 | T9 | a stale ALT wakeup (flag without data) is re-verified, not selected (v2 only; SKIP on v1) |
@@ -189,6 +189,11 @@ done; wait
 | T15s | `SignalChannel` ALT receiver {X, signal}: a signal that arrives while the receiver takes X (the lower index) is received by the next `select()`, and the sender completes. (Today `unregisterAltIn()` resets the channel, so the signal is lost and the sender blocks for good.) |
 | T17 | rendezvous and signal channels and `Barrier` use no RTOS heap: 50 constructions and destructions of `Channel<uint32_t>` + `SignalChannel<>` + `Barrier(3)` allocate nothing (2.0; SKIP on 1.x) |
 | T18 | `Barrier(3)` reused for 20 phases by threads of three priorities: nobody leaves a phase before all three arrived (FAIL on 1.0.0: 4 early departures) |
+| T20 | timeout accuracy: a timeout of 1, 3, 10 ticks over a never-ready channel is selected after `d` or `d + 1` ticks (5 times each, varied phase) |
+| T21 | a timeout (10 ticks) racing a channel whose writer becomes ready 8..12 ticks after `select()` starts: one guard selected; after a timeout the item is still there (plain read); exactly one transfer per trial; 8 ticks: channel, 12 ticks: timeout |
+| T22 | several timeout guards (30, 5, 15 ticks): the earliest deadline wins, after 5..6 ticks |
+| T23 | zero timeout: selected at once (0 ticks, no wait); a channel that is ready and listed before it wins |
+| T24 | a stale ALT wakeup every tick (up to 50) does not postpone a 10-tick timeout. FAIL on 2.0.0 (60 ticks: the timer restarted every round); SKIP on 1.x |
 | T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
@@ -203,6 +208,9 @@ Compiler), or with GNU ld's `-Wl,--wrap=` (GCC; the flags are in the harness cpr
 and `osMutexAcquire/Release`. Every call from the library therefore passes a check that counts calls made
 with `BASEPRI != 0`. The map file lists the wrappers, and the disassembly shows the library's call sites
 resolved to them.
+
+The same mechanism counts `osTimerNew()` calls for T6 (GCC: `-Wl,--wrap=osTimerNew` in the harness
+cproject too).
 
 The workload drives every notification path:
 - an ALT reader woken by `output()` and by `putFromISR()`;

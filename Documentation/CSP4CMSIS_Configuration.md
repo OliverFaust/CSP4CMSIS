@@ -25,8 +25,9 @@ Define `CSP4CMSIS_STATIC_ALLOCATION` to give **every** RTOS2 object that
 CSP4CMSIS creates a statically allocated control block. That covers:
 - process threads (`CSProcessStatic<N>`, `Run()`);
 - `Run()`'s completion semaphore;
-- the semaphores of buffered, rendezvous and signal channels and of `Barrier`;
-- the timers of `RelTimeoutGuard`.
+- the semaphores of buffered, rendezvous and signal channels and of `Barrier`.
+
+Timeout guards (`RelTimeoutGuard`) create no RTOS object at all (2.0.1, section 8).
 
 Stacks are always static (`CSProcessStatic<N>`). The macro requires (1) above, so that the correct
 backend-specific control-block types are used.
@@ -194,10 +195,13 @@ Corstone-300 FVP, Arm Compiler 6 and GCC):
 **Not guaranteed by CSP4CMSIS** (your system's responsibility): the RTOS's own configuration, objects
 that your application creates, and the C library (below).
 
-**Exception: ST's STM32Cube CMSIS-RTOS2 wrapper.** Its `osTimerNew()` allocates the timer's 8-byte
-callback record with `pvPortMalloc()` even when the control block is static, so every live
-`RelTimeoutGuard` holds 16 bytes of FreeRTOS heap there (test T6 fails on that wrapper). A heap must stay
-linked. Everything else is static as described. Details: `docs/st_cmsis_rtos2_wrapper.md`.
+**ST's STM32Cube CMSIS-RTOS2 wrapper** (FreeRTOS 10.3.1 in STM32Cube FW_G4 1.6.3) gives the same
+guarantees from 2.0.1 on: the suite passes on it with RTOS dynamic allocation disabled (MPS2 Cortex-M4
+FVP, `FreeRTOS-ST-NoHeap`). Its `cmsis_os2.c` references `pvPortMalloc()`/`vPortFree()` unconditionally
+(timers, thread enumeration, memory pools), so a build without a heap implementation needs the traps of
+workaround B below. (In 2.0.0 every live `RelTimeoutGuard` held 16 bytes of FreeRTOS heap on this
+wrapper, because its `osTimerNew()` always allocates; 2.0.1 creates no timer.) Details:
+`docs/st_cmsis_rtos2_wrapper.md`.
 
 ### What a fully heap-free system additionally needs
 
@@ -288,22 +292,18 @@ Also for builds without packs:
 
 Step-by-step for STM32CubeMX/STM32CubeIDE: `Documentation/CSP4CMSIS_STM32CubeIDE.md`.
 
-## 8. FreeRTOS: timer service task priority
+## 8. ALT timeouts: no RTOS timer, no timer-service requirement (2.0.1)
 
-FreeRTOS executes `osTimerStart()`, `osTimerStop()` and `osTimerDelete()` in its timer service task,
-after the calling thread has continued. `RelTimeoutGuard` (a CMSIS-RTOS2 timer) relies on these commands
-being processed before the guard's storage goes out of scope. The timer service task must therefore
-**not have a lower priority than any thread that uses a `RelTimeoutGuard`**. Recommended (and what the
-test harnesses use): the highest priority.
+A `RelTimeoutGuard` is plain data. `select()` fixes a deadline when it starts (the CMSIS-RTOS2 tick count,
+`osKernelGetTickCount()`) and waits for its thread flags at most until the earliest deadline of its
+timeout guards; a new round (e.g. after a stale wakeup) never postpones it. So:
+- no `osTimer`, no RTOS timer service involvement: `configUSE_TIMERS`, the timer service task and its
+  priority (FreeRTOS `configTIMER_TASK_PRIORITY`, RTX5 `OS_TIMER_THREAD_PRIO`) do not matter to
+  CSP4CMSIS;
+- no RTOS memory, static or dynamic, on any backend;
+- a timeout of `d` ticks is selected `d` (at most `d + 1`) ticks after `select()` started, unless a guard
+  listed before it is ready; a zero timeout is selected at once, without waiting;
+- durations are 32-bit tick counts (up to 2^32 - 2 ticks); the tick count may wrap during a `select()`.
 
-```c
-#define configTIMER_TASK_PRIORITY  ( configMAX_PRIORITIES - 1 )   /* 55 with CMSIS-RTOS2 */
-```
-
-Arm's CMSIS-FreeRTOS configuration template uses 40 (`osPriorityHigh`): enough for threads up to
-`osPriorityHigh` (the regression suite, whose runner runs at `osPriorityHigh`, passes with it), not for
-threads above. STM32CubeMX's default is 2
-(FREERTOS > Config parameters > Software timer definitions > TIMER_TASK_PRIORITY): with it, the
-regression suite ends in a HardFault with ST's and with Arm's CMSIS-RTOS2 adapter, and the ALT-with-timeout
-example of the STM32CubeIDE guide hangs (ST's adapter; `docs/results_nucleo_g474.md`). RTX5 executes
-timer calls synchronously and has no such requirement.
+**CSP4CMSIS 2.0.0** used one CMSIS-RTOS2 timer per guard; with FreeRTOS that requires the timer service
+task to run above every thread that uses timeouts (`docs/known-issues.md`).
