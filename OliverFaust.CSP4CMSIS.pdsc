@@ -65,40 +65,31 @@
     <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="2.0.0" condition="CSP4CMSIS Core">
       <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
-        <!-- csp4cmsis/inc/ itself (not just inc/csp/) must be on the
-             include path: consumers reach the public API via
-             #include "csp/csp4cmsis.h" (e.g. application.cpp), a path
-             that only resolves if inc/ is a search root. The per-header
-             <file category="header"> entries below only cause
-             csolution/cbuild to auto-add inc/csp/ (the directory each
-             header actually lives in) — confirmed by a real pack-
-             consumption build failing on this exact include with only
-             inc/csp/ auto-added. category="include" declares an extra
-             search path without treating it as a real project file
-             (Open-CMSIS-Pack spec: name must be a directory, ending in
-             "/"). inc/csp/ itself doesn't need its own such entry: the
-             library's own internal cross-includes use bare names (e.g.
-             process.h's #include "time.h"), which the auto-added
-             per-header paths already satisfy. -->
+        <!-- Include path: csp4cmsis/inc/ only. Applications include
+             "csp/csp4cmsis.h"; the library's headers include each other
+             from their own directory. The headers are listed as
+             category="other": category="header" would make the build add
+             each header's directory (csp4cmsis/inc/csp/) to the include
+             path, where csp/time.h would hide the C library's <time.h>. -->
         <file category="include" name="csp4cmsis/inc/"/>
 
-        <!-- Headers -->
-        <file category="header" name="csp4cmsis/inc/csp/alt.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_semaphore.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/barrier.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/buffered_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_critical.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_fatal.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/process.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/public_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/public_task.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/run.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/time.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
+        <!-- Headers (not include paths, see above) -->
+        <file category="other" name="csp4cmsis/inc/csp/alt.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_semaphore.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/barrier.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/buffered_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/channel_base.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_critical.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_fatal.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/process.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/public_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/public_task.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/run.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/time.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
 
         <!-- exceptions.h/test_types.h deliberately excluded, same
              rationale as kernel.cpp below: confirmed genuinely unused —
@@ -134,6 +125,7 @@
         <!-- Documentation -->
         <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>
         <file category="doc" name="docs/CHANGES_2.0.md"/>
+        <file category="doc" name="Documentation/CSP4CMSIS_STM32CubeIDE.md"/>
       </files>
     </component>
   </components>
