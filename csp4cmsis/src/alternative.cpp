@@ -19,6 +19,7 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
     if (amount > ALT_MAX_GUARDS) fatal("CSP4CMSIS: Alternative: more than 16 guards");
 
     owner = osThreadGetId();
+    start_tick_ = osKernelGetTickCount();     // timeout guards count from here
 
     uint32_t wait_mask = 0;
     for (size_t i = 0; i < amount; ++i) wait_mask |= altFlag(i);
@@ -31,6 +32,7 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         // word says "enabling" (partners may claim this ALT from now on).
         (void)osThreadFlagsClear(wait_mask);
         { uint32_t s = csp_enter_critical(); state_ = ENABLING; claimed_flag_ = 0; csp_exit_critical(s); }
+        wait_limit_ = NO_LIMIT;                   // set by the timeout guards enabled below
 
         // Phase 1: Enable, starting at 'offset' (fair ALT). Stops at the
         // first guard that is ready now (or that claimed its partner).
@@ -43,13 +45,21 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         }
 
         // Phase 2: Wait, unless something was ready or a partner claimed
-        // this ALT while it was enabling.
+        // this ALT while it was enabling. With timeout guards, wait at most
+        // until the earliest deadline (fixed at the start of select(), so a
+        // new round never postpones it); none left: no wait.
         if (!any_ready) {
+            uint32_t timeout = osWaitForever;
+            bool expired = false;
+            if (wait_limit_ != NO_LIMIT) {
+                uint32_t e = elapsed();
+                if (e >= wait_limit_) expired = true; else timeout = wait_limit_ - e;
+            }
             bool wait;
             { uint32_t s = csp_enter_critical(); wait = (state_ == ENABLING); if (wait) state_ = WAITING; csp_exit_critical(s); }
-            if (wait) {
-                uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, osWaitForever);
-                if ((r & osFlagsError) != 0U) {
+            if (wait && !expired) {
+                uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, timeout);
+                if ((r & osFlagsError) != 0U && r != (uint32_t)osFlagsErrorTimeout) {
                     for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
                     fatal("CSP4CMSIS: Alternative: osThreadFlagsWait() failed");
                 }
@@ -87,52 +97,6 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
 void AltScheduler::wakeUp(uint32_t flag) {
     osThreadId_t t = owner;
     if (t != nullptr) (void)osThreadFlagsSet(t, flag);
-}
-
-// =============================================================
-// TimerGuard Implementation
-// =============================================================
-TimerGuard::TimerGuard(csp::Time delay)
-    : delay_ticks(delay.to_ticks()), timer_handle(nullptr),
-      wake_thread(nullptr), wake_flag(0), fired(false)
-{
-    osTimerAttr_t attr = {};
-    attr.name = "CspTimeout";
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-    attr.cb_mem  = &timer_storage;
-    attr.cb_size = sizeof(timer_storage);
-#endif
-    timer_handle = osTimerNew(TimerCallback, osTimerOnce, this, &attr);
-    if (timer_handle == nullptr) fatal("CSP4CMSIS: TimerGuard: osTimerNew() failed");
-}
-
-TimerGuard::~TimerGuard() {
-    if (timer_handle) osTimerDelete(timer_handle);
-}
-
-void TimerGuard::TimerCallback(void* argument) {
-    // Runs in the RTOS timer thread. Works from the snapshot taken in
-    // enable(); a callback that races with disable() only leaves a stale
-    // flag, which select() clears/re-verifies.
-    auto* s = static_cast<TimerGuard*>(argument);
-    s->fired = true;
-    osThreadId_t t = s->wake_thread;
-    if (t != nullptr) (void)osThreadFlagsSet(t, s->wake_flag);
-}
-
-bool TimerGuard::enable(AltScheduler* a, uint32_t flag) {
-    fired = false;
-    wake_flag = flag;
-    wake_thread = a->ownerThread();
-    if (delay_ticks == 0) { fired = true; return true; }   // instant timeout
-    (void)osTimerStart(timer_handle, delay_ticks);
-    return false;
-}
-
-bool TimerGuard::disable() {
-    (void)osTimerStop(timer_handle);
-    wake_thread = nullptr;
-    return fired;
 }
 
 } // namespace csp::internal

@@ -91,6 +91,12 @@ namespace csp {
             osThreadId_t owner = nullptr;
             volatile State   state_        = IDLE;
             volatile uint32_t claimed_flag_ = 0;   // guard flag a partner claimed (state_ == CLAIMED)
+            // Timeouts (no RTOS timer): the tick count when select() started,
+            // and the shortest delay of the timeout guards enabled in the
+            // current round (NO_LIMIT: none). Owner thread only.
+            static constexpr uint32_t NO_LIMIT = 0xFFFFFFFFUL;
+            uint32_t start_tick_ = 0;
+            uint32_t wait_limit_ = NO_LIMIT;
         public:
             // --- state word, inside a CSP critical section only ---
             bool claimableLocked() const { return state_ == ENABLING || state_ == WAITING; }
@@ -114,47 +120,38 @@ namespace csp {
             /// Callers must not hold a CSP critical section.
             void wakeUp(uint32_t flag);
             osThreadId_t ownerThread() const { return owner; }
-        };
 
-        class TimerGuard : public Guard {
-        private:
-            uint32_t delay_ticks;
-            osTimerId_t timer_handle;
-            // Snapshot of whom to wake, taken in enable(): the callback never
-            // dereferences the (possibly already finished) Alternative.
-            osThreadId_t volatile wake_thread;
-            uint32_t     volatile wake_flag;
-            bool         volatile fired;
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-            // Static osTimer control block (no RTOS heap); see csp_rtos_static.h
-            // for the backend-specific size rules.
-            csp_static_timer_storage_t timer_storage;
-#endif
-            // CMSIS-RTOS2 passes the argument given to osTimerNew() straight
-            // to the callback -- no TimerHandle_t-to-owner lookup needed,
-            // unlike FreeRTOS's pvTimerGetTimerID(). Genuine simplification,
-            // not just a rename.
-            static void TimerCallback(void* argument);
-        public:
-            TimerGuard(csp::Time delay);
-            ~TimerGuard() override;
-            // The osTimer is bound to `this` (callback argument, static
-            // control block): copies would share or dangle.
-            TimerGuard(const TimerGuard&) = delete;
-            TimerGuard& operator=(const TimerGuard&) = delete;
-            bool enable(AltScheduler* alt, uint32_t flag) override;
-            bool disable() override;                       // returns: expired
-            bool activate() override { return true; }
+            /// Ticks since this select() started. Unsigned difference: correct
+            /// across the wrap of the 32-bit tick count. Owner thread only.
+            uint32_t elapsed() const { return osKernelGetTickCount() - start_tick_; }
+            /// A timeout guard that is not ready yet: wait at most until
+            /// `delay` ticks after the start of select(). Owner thread only.
+            void limitWait(uint32_t delay) { if (delay < wait_limit_) wait_limit_ = delay; }
         };
 
         /**
-         * @brief A Skip Guard (Always ready).
-         * Used internally when a Channel Policy is non-blocking.
+         * @brief Timeout guard: ready once `delay` ticks have passed since
+         * the start of the select() it takes part in. No RTOS timer: the
+         * deadline is fixed when select() starts, and select() waits for its
+         * thread flags at most until the earliest deadline of its enabled
+         * timeout guards (docs/formal/alt_timeout_deadline.csp). A delay of
+         * 0 is ready at once and never waits.
          */
-        class SkipGuard : public Guard {
+        class TimeoutGuard : public Guard {
+        private:
+            uint32_t      delay_ticks;
+            AltScheduler* alt = nullptr;
         public:
-            bool enable(AltScheduler*, uint32_t) override { return true; }
-            bool disable() override { return true; }
+            explicit TimeoutGuard(csp::Time delay)
+                // osWaitForever (0xFFFFFFFF) is not a duration
+                : delay_ticks(delay.to_ticks() < 0xFFFFFFFFUL ? delay.to_ticks() : 0xFFFFFFFEUL) {}
+            bool enable(AltScheduler* a, uint32_t) override {
+                alt = a;
+                if (a->elapsed() >= delay_ticks) return true;
+                a->limitWait(delay_ticks);
+                return false;
+            }
+            bool disable() override { return alt->elapsed() >= delay_ticks; }   // expired?
             bool activate() override { return true; }
         };
 
@@ -186,9 +183,14 @@ namespace csp {
         Guard(internal::Guard* internal_ptr) : internal_guard_ptr(internal_ptr) {}
     };
 
+    /**
+     * @brief Relative timeout for an Alternative: selected when `delay`
+     * ticks have passed since select() started and no guard listed before
+     * it is ready. Plain data, no RTOS object.
+     */
     class RelTimeoutGuard : public Guard {
     private:
-        internal::TimerGuard timer_storage;
+        internal::TimeoutGuard timer_storage;
     public:
         RelTimeoutGuard(csp::Time delay)
             : Guard(&timer_storage), timer_storage(delay) {}
@@ -213,9 +215,10 @@ namespace csp {
     public:
         Alternative() : num_guards(0) {}
 
-        // Bindings are taken by reference (never copied): copying a
-        // RelTimeoutGuard would duplicate its osTimer. The constraint keeps
-        // this template from hijacking copy construction.
+        // Bindings are taken by reference (never copied): a copied
+        // RelTimeoutGuard would leave the Alternative pointing into the
+        // copy. The constraint keeps this template from hijacking copy
+        // construction.
         template <typename... Bindings,
                   typename = std::enable_if_t<(sizeof...(Bindings) > 0) &&
                       !(std::is_same_v<std::decay_t<Bindings>, Alternative> || ...)>>
