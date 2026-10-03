@@ -5,12 +5,13 @@ project made exactly as in `Documentation/CSP4CMSIS_STM32CubeIDE.md`. Results: `
 
 ## Projects (STM32CubeIDE workspace, not in this repository)
 
-| Project | Made from | Library in `lib/csp4cmsis/` | Application |
-|---|---|---|---|
-| `csp4cmsis_g474` | the guide, steps 1–4 (`csp4cmsis_g474.ioc` here) | v2.0.0 release source + 2.0.1 `csp_critical.h` | guide example `csp_app.cpp` |
-| `csp4cmsis_g474_tests` | copy of `csp4cmsis_g474` | same | `Core/Src/bc_tests.cpp` (this repository's) |
-| `csp4cmsis_g474_v1` | copy of `csp4cmsis_g474_tests` | v1.0.0 (`a789d2a`) + `Core/Inc/RTE_Components.h` shim (below) | same |
-| `csp4cmsis_g474_tests_tp2` | copy of `csp4cmsis_g474_tests` | same as tests | same; `configTIMER_TASK_PRIORITY 2` (CubeMX default) |
+| Project | Made from | Library in `lib/csp4cmsis/` | Application | Timer task priority |
+|---|---|---|---|---|
+| `csp4cmsis_g474` | the guide, steps 1–4 (`csp4cmsis_g474.ioc` here) | `release-2.0.1` | guide example `csp_app.cpp` | 2 (CubeMX default) |
+| `csp4cmsis_g474_tests` | copy of `csp4cmsis_g474` | `release-2.0.1` | `Core/Src/bc_tests.cpp` (this repository's) | 2 |
+| `csp4cmsis_g474_tests_tp55` | copy of `csp4cmsis_g474_tests` | `release-2.0.1` | same | 55 (comparison) |
+| `csp4cmsis_g474_tests_200` | copy of `csp4cmsis_g474_tests` | `v2.0.0` + `Core/Inc/RTE_Components.h` shim (below) | same | 2: positive control, expected HardFault |
+| `csp4cmsis_g474_v1` | copy of an earlier `csp4cmsis_g474_tests` | v1.0.0 (`a789d2a`) + shim | same | 55 |
 
 Changes from the guide project for the suite:
 - `Core/Src/csp_app.cpp` removed, `bc_tests.cpp` added. `main.c`: `USER CODE 0` declares
@@ -24,13 +25,14 @@ Changes from the guide project for the suite:
   (numerically ≥ 5), `BC_HARDFAULT_HANDLER=bc_hardfault_report`,
   `BC_BACKEND_NAME="FreeRTOS 10.3.1 (ST CMSIS_RTOS_V2 wrapper, STM32CubeG4 1.6.3)"`.
 - **MCU/MPU G++ Linker > Miscellaneous > Other flags** (test T2):
-  `-Wl,--wrap=osEventFlagsSet,--wrap=osThreadFlagsSet,--wrap=osSemaphoreRelease,--wrap=osSemaphoreAcquire,--wrap=osMessageQueuePut,--wrap=osMessageQueueGet,--wrap=osMessageQueueGetCount,--wrap=osMessageQueueGetSpace,--wrap=osMutexAcquire,--wrap=osMutexRelease`
-- v1.0.0 only, `Core/Inc/RTE_Components.h` (1.0.0 includes it unconditionally; 2.0.1 does not):
+  `-Wl,--wrap=osEventFlagsSet,--wrap=osThreadFlagsSet,--wrap=osSemaphoreRelease,--wrap=osSemaphoreAcquire,--wrap=osMessageQueuePut,--wrap=osMessageQueueGet,--wrap=osMessageQueueGetCount,--wrap=osMessageQueueGetSpace,--wrap=osMutexAcquire,--wrap=osMutexRelease,--wrap=osTimerNew`
+- 2.0.0 and v1.0.0 controls only, `Core/Inc/RTE_Components.h` (both include it unconditionally; 2.0.1
+  does not):
   ```c
   #define CMSIS_device_header "stm32g4xx.h"
   ```
 
-RAM (Debug): the suite uses 117 724 B of 131 072 B (`.data` + `.bss`, including T5's 32 KB channel and the 16 KB
+RAM (Debug, 2.0.1): the suite uses 121 300 B of 131 072 B (`.data` + `.bss`, including T5's 32 KB channel and the 16 KB
 FreeRTOS heap); no trimming was needed. Configurations: Debug (`-O0`) and Release (`-Os`, CubeIDE
 default).
 
