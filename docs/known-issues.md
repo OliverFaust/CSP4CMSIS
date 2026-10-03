@@ -1,6 +1,6 @@
 # Known Issues
 
-## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fix: 2.0.1)
+## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fixed in 2.0.1)
 
 Only applications that put a `RelTimeoutGuard` into an `Alternative` are affected; channels, ALT without
 timeouts, `Barrier` and `SleepFor()` are not. In 2.0.0 a timeout guard is a CMSIS-RTOS2 timer
@@ -41,7 +41,9 @@ TIMER_TASK_PRIORITY), RTX5 `OS_TIMER_THREAD_PRIO 55`, and run no thread that use
 priority. This removes items 1 and 2; the 16 bytes of heap per guard on ST's wrapper (item 3) remain.
 There is no workaround for item 4.
 
-**Fixed in 2.0.1:** timeout guards no longer use an RTOS timer. `select()` waits for its thread flags
+**Fixed in [2.0.1](https://github.com/OliverFaust/CSP4CMSIS/releases/tag/v2.0.1)** (released 2026-10-03;
+upgrade: `cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.1/OliverFaust.CSP4CMSIS.2.0.1.pack`,
+then pin `OliverFaust::CSP4CMSIS@2.0.1`; no source change needed): timeout guards no longer use an RTOS timer. `select()` waits for its thread flags
 with the remaining time to a deadline fixed when the `select()` starts, so there is no timer object,
 callback or timer priority requirement, no heap use on any adapter, and no wakeup can postpone a
 timeout (items 1 to 4).
