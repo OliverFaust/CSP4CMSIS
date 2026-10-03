@@ -10,3 +10,17 @@
 // library code should be dictating heap behavior for. A project with a
 // genuine allocation need should supply its own local operator
 // new/delete (or equivalent) rather than relying on this file.
+//
+// Also home of the weak default for csp4cmsis_fatal_error() (csp_fatal.h).
+
+#include "csp/csp_fatal.h"
+
+extern "C" {
+    // Last fatal message, for inspection with a debugger.
+    const char* volatile csp4cmsis_last_fatal_error = nullptr;
+
+    __attribute__((weak)) void csp4cmsis_fatal_error(const char* message) {
+        csp4cmsis_last_fatal_error = message;
+        for (;;) { }
+    }
+}

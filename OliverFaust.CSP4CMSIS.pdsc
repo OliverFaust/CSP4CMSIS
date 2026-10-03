@@ -3,25 +3,33 @@
   <vendor>OliverFaust</vendor>
 
   <name>CSP4CMSIS</name>
-  <description>
-    A CSP (Communicating Sequential Processes)-style concurrency library --
-    channels, ALT/select, and process composition -- for CMSIS-RTOS2. Runs
-    unmodified on any conforming CMSIS-RTOS2 implementation; verified on
-    both the CMSIS-RTOS2-over-FreeRTOS adapter and native RTX5. csp4cmsis
-    does not manage multicore/inter-processor communication -- it stops at
-    the boundary of a single CMSIS-RTOS2 instance; coordinating across
-    cores is application-level and out of this library's scope.
-  </description>
+  <description>CSP (Communicating Sequential Processes) channels, ALT/select and processes for CMSIS-RTOS2 (FreeRTOS, RTX5)</description>
 
-  <url>https://github.com/YourOrg/CSP4CMSIS/releases/latest/download/</url>
-  <!-- TODO: replace YourOrg — see the earlier discussion on GitHub
-       Releases as the update mechanism (releases/latest/download/ resolves
-       to whatever tag is newest, so this URL never needs to change). -->
-
-  <supportContact>https://github.com/YourOrg/CSP4CMSIS/issues</supportContact>
+  <url>https://github.com/OliverFaust/CSP4CMSIS/releases/latest/download/</url>
+  <supportContact>https://github.com/OliverFaust/CSP4CMSIS/issues</supportContact>
   <license>LICENSE</license>
 
   <releases>
+    <release version="2.0.1" date="2026-10-03">
+      ALT timeouts (RelTimeoutGuard) without an RTOS timer: the deadline is
+      fixed when select() starts, so no timer service priority requirement,
+      no RTOS memory, and no wakeup can postpone a timeout (fixes the 2.0.0
+      crash/hang with FreeRTOS, see docs/known-issues.md). Builds without
+      CMSIS packs (CSP4CMSIS_DEVICE_HEADER); only csp4cmsis/inc/ on the
+      include path. Verified with ST's STM32Cube CMSIS-RTOS2 wrapper.
+      API unchanged. docs/CHANGES_2.0.1.md.
+    </release>
+    <release version="2.0.0" date="2026-09-27">
+      Rendezvous and signal channels use a one-winner ALT protocol with
+      re-verified wakeups (no lost, phantom or silent communications;
+      model-checked with ProB). BufferedChannel: static ring buffer with
+      atomic KeepNewest, lost-wakeup and livelock fixes. ISR writes only via
+      buffered channels (isrWriter(), IsrChanout, element-size limit);
+      KeepNewest/KeepOldest only on buffered channels. Reusable Barrier.
+      No dynamic allocation in the library; with CSP4CMSIS_STATIC_ALLOCATION
+      no dynamic RTOS allocation. Breaking changes and migration guide:
+      docs/CHANGES_2.0.md.
+    </release>
     <release version="1.0.0" date="2026-09-24">
       Initial pack release. csp4cmsis migrated from FreeRTOS-native to
       CMSIS-RTOS2; verified on the CMSIS-RTOS2-over-FreeRTOS adapter and
@@ -36,9 +44,6 @@
       pack and building a project against it as a component, not by
       schema validation alone.
     </release>
-    <!-- TODO: confirm 1.0.0 is the version you want to launch on — this
-         is a placeholder reflecting "first pack release," not a claim
-         about how mature the underlying code is. -->
   </releases>
 
   <keywords>
@@ -66,49 +71,34 @@
   </conditions>
 
   <components>
-    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="1.0.0" condition="CSP4CMSIS Core">
-      <description>
-        CSP4CMSIS core library -- channels (rendezvous, buffered, overwriting),
-        ALT/select, process/thread wrapping, and critical sections. Requires
-        three project-level preprocessor defines -- see
-        Documentation/CSP4CMSIS_Configuration.md, included below, before
-        first use.
-      </description>
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="2.0.1" condition="CSP4CMSIS Core">
+      <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
-        <!-- csp4cmsis/inc/ itself (not just inc/csp/) must be on the
-             include path: consumers reach the public API via
-             #include "csp/csp4cmsis.h" (e.g. application.cpp), a path
-             that only resolves if inc/ is a search root. The per-header
-             <file category="header"> entries below only cause
-             csolution/cbuild to auto-add inc/csp/ (the directory each
-             header actually lives in) — confirmed by a real pack-
-             consumption build failing on this exact include with only
-             inc/csp/ auto-added. category="include" declares an extra
-             search path without treating it as a real project file
-             (Open-CMSIS-Pack spec: name must be a directory, ending in
-             "/"). inc/csp/ itself doesn't need its own such entry: the
-             library's own internal cross-includes use bare names (e.g.
-             process.h's #include "time.h"), which the auto-added
-             per-header paths already satisfy. -->
+        <!-- Include path: csp4cmsis/inc/ only. Applications include
+             "csp/csp4cmsis.h"; the library's headers include each other
+             from their own directory. The headers are listed as
+             category="other": category="header" would make the build add
+             each header's directory (csp4cmsis/inc/csp/) to the include
+             path, where csp/time.h would hide the C library's <time.h>. -->
         <file category="include" name="csp4cmsis/inc/"/>
 
-        <!-- Headers -->
-        <file category="header" name="csp4cmsis/inc/csp/alt.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/barrier.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/buffered_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/channel_base.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_critical.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/overwriting_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/process.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/public_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/public_task.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/run.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/sync_channel.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/time.h"/>
-        <file category="header" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
+        <!-- Headers (not include paths, see above) -->
+        <file category="other" name="csp4cmsis/inc/csp/alt.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/alt_channel_sync.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_semaphore.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/barrier.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/buffered_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/channel_base.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_critical.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_fatal.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_rtos_static.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/process.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/public_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/public_task.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/run.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/time.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
 
         <!-- exceptions.h/test_types.h deliberately excluded, same
              rationale as kernel.cpp below: confirmed genuinely unused —
@@ -133,7 +123,6 @@
         <file category="source" name="csp4cmsis/src/channel_sync.cpp"/>
         <file category="source" name="csp4cmsis/src/csp_wrapper.cpp"/>
         <file category="source" name="csp4cmsis/src/glue.cpp"/>
-        <file category="source" name="csp4cmsis/src/sync_channel.cpp"/>
 
         <!-- kernel.cpp deliberately excluded: confirmed dead code all
              session (its ThreadFuncWrapper is entirely commented out; the
@@ -144,6 +133,9 @@
 
         <!-- Documentation -->
         <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>
+        <file category="doc" name="docs/CHANGES_2.0.md"/>
+        <file category="doc" name="docs/CHANGES_2.0.1.md"/>
+        <file category="doc" name="Documentation/CSP4CMSIS_STM32CubeIDE.md"/>
       </files>
     </component>
   </components>

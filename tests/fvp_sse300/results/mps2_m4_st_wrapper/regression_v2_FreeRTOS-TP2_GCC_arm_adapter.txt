@@ -1,0 +1,52 @@
+# target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
+# config: lib=v2 build type=FreeRTOS-TP2 toolchain=GCC image=out/MPS2-Cortex-M4/FreeRTOS-TP2/GCC/m4.elf
+# library: /home/of6/src/CSP4CMSIS @ 76194a5946c65c990093ad70977fb2df79603a13 dirty=0
+# library sources compiled from: /home/of6/src/CSP4CMSIS/csp4cmsis/src
+# test source: /home/of6/src/CSP4CMSIS/tests/fvp_sse300/bc_tests.cpp
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal0: Listening for serial connection on port 5000
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal2: Listening for serial connection on port 5002
+
+MPS2 Cortex-M4 FVP, SystemCoreClock=25000000 Hz
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter); library: v2 API (ring buffer); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
+RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=1 (CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)); A done=1, B done=0
+RESULT T4a: PASS -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: PASS -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 10
+RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=1 fatal=0 heap delta=0
+RESULT T5: PASS -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 0 B heap while alive; Alternative: 0 B; 200 loop constructions -> 0 allocations
+RESULT T6: PASS -- RelTimeoutGuard and Alternative use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 0 allocations, heap delta 0 B, fatal=0
+RESULT T17: PASS -- rendezvous and signal channels and Barrier use no RTOS heap
+!! HardFault during -: CFSR=0x00000400 HFSR=0x40000000 BFAR=0x00000000 MMFAR=0x00000000
+SUMMARY: aborted by HardFault
+
+Info: Simulation is stopping. Reason: Simulated time has been exceeded.
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS2_Cortex_M4 statistics: --------------------------------------------
+Simulated time                          : 1500.000000s
+User time at initialisation             : 0.199513s
+User time                               : 62.006773s
+System time at initialisation           : 0.135668s
+System time                             : 0.029338s
+Wall time at initialisation             : 0.319428s
+Wall time                               : 62.002967s
+Performance index                       : 24.19
+armcortexm4ct                           : 604.81 MIPS ( 37500002321 Inst)
+Memory highwater mark at initialisation : 0xe1ea000 bytes ( 0.221 GB )
+Memory highwater mark                   : 0xe8ce000 bytes ( 0.227 GB )
+-------------------------------------------------------------------------------

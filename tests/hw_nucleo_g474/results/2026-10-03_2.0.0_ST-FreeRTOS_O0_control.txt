@@ -1,0 +1,48 @@
+# elf: /home/of6/STM32CubeIDE/workspace_csp4cmsis/csp4cmsis_g474_tests_200/Debug/csp4cmsis_g474_tests_200.elf sha256=473d0d3f261317ee3cc7f42e7d772437a5f0a2dec3ff329e6759577984fcee81
+# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# start: 2026-10-03 09:18:51
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 10.3.1 (ST CMSIS_RTOS_V2 wrapper, STM32CubeG4 1.6.3); library: v2 API (ring buffer); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
+RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=1 (CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)); A done=1, B done=0
+RESULT T4a: PASS -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: PASS -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 10
+RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=1 fatal=0 heap delta=0
+RESULT T5: PASS -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 16 B heap while alive; Alternative: 0 B; 200 loop constructions -> 200 allocations, 201 RTOS timers
+RESULT T6: FAIL -- RelTimeoutGuard and Alternative create no RTOS timer and use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 0 allocations, heap delta 0 B, fatal=0
+RESULT T17: PASS -- rendezvous and signal channels and Barrier use no RTOS heap
+
+# stopped (no output after T17); logger stopped at 2026-10-03 09:29:44; core read without reset (STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -coreReg):
+#   R0       = 0x200181D0
+#   R1       = 0x20019118
+#   R2       = 0x2001828C
+#   R3       = 0x00000050
+#   R4       = 0xA5A5A5A5
+#   R5       = 0xA5A5A5A5
+#   R6       = 0xA5A5A5A5
+#   R7       = 0x20018B10
+#   R8       = 0xA5A5A5A5
+#   R9       = 0xA5A5A5A5
+#   R10      = 0xA5A5A5A5
+#   R11      = 0xA5A5A5A5
+#   R12      = 0xA5A5A5A5
+#   SP       = 0x20018B10
+#   LR       = 0x0800FAA3
+#   PC       = 0x0801034A
+#   MSP      = 0x2001FFE0
+#   PSP      = 0x20018B10
+#   PRIMASK  = 0x00
+#   FAULTMASK= 0x50
+#   BASEPRI  = 0x00
+#   CONTROL  = 0x02
+#   PC: vPortFree Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c:281
+#   LR: prvProcessReceivedCommands Middlewares/Third_Party/FreeRTOS/Source/timers.c:871
+#   = configASSERT(pxLink->pxNextFreeBlock == NULL) in vPortFree(), called by the timer task processing a
+#     queued delete of a timer whose storage was reused: CubeMX's configASSERT disables interrupts and spins.

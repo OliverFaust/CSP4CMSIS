@@ -1,7 +1,7 @@
 # CSP4CMSIS
 
-A CSP (Communicating Sequential Processes)-style concurrency library —
-channels, ALT/select, and process composition — for
+A CSP (Communicating Sequential Processes)-style concurrency library, which offers 
+channels, ALT/select, and process composition, for
 [CMSIS-RTOS2](https://arm-software.github.io/CMSIS_6/latest/RTOS2/index.html).
 
 CSP4CMSIS lets you build embedded firmware as a network of communicating
@@ -13,30 +13,50 @@ Cortex-M.
 ## Portability
 
 CSP4CMSIS calls only the standard `cmsis_os2.h` API — it does not assume a
-specific RTOS underneath. This is verified, not just claimed: the library
-has been built and hardware-tested, with matching runtime behavior, on
-both:
+specific RTOS underneath. It is verified with the regression suite on Arm's
+CMSIS-RTOS2-over-FreeRTOS adapter, ST's STM32Cube CMSIS-RTOS2 wrapper over FreeRTOS and native
+[RTX5](https://github.com/ARM-software/CMSIS-RTX), in exactly these configurations:
 
-- the CMSIS-RTOS2-over-FreeRTOS adapter, and
-- native [RTX5](https://github.com/ARM-software/CMSIS-RTX)
+| Core (architecture) | Target | CMSIS-RTOS2 backends | Toolchains | Builds | Version: result |
+|---|---|---|---|---|---|
+| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 2.0.1: all pass (PASS=29, heap-free 30; REPLACED=4) |
+| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 2.0.1: all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 2.0.1: all pass |
+| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 2.0.1: all pass (PASS=29, heap-free 30) |
 
-on an Alif Ensemble E8 (Cortex-M55).
+2.0.1 changed only timeout guards and build integration against 2.0.0
+([`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)); the DK-E8 runs used 2.0.0. Each target also has a
+v1.0.0 positive control (its known defects are detected; on the DK-E8 for RTX5 with Arm Compiler 6
+only), and the 2.0.0 timeout defect is detected on the MPS2 FVP and the NUCLEO-G474RE. Details:
+`tests/fvp_sse300/README.md` (FVPs), `docs/hardware_results_dk_e8.md` and
+`docs/hardware_results_nucleo_g474.md` (boards).
+
+**Not verified:** other cores (Cortex-M3, M7, M33, M85, …). Armv6-M and
+Armv8-M Baseline cores (Cortex-M0/M0+/M23) have no `BASEPRI`, which the critical section
+(`csp_critical.h`) uses, so they are not supported (not attempted);
+other CMSIS-RTOS2 implementations; IAR and Arm LLVM (Clang) toolchains. ST's wrapper differs from Arm's
+adapter in ways an application can notice: [`docs/st_cmsis_rtos2_wrapper.md`](docs/st_cmsis_rtos2_wrapper.md).
 
 CSP4CMSIS deliberately stops at the boundary of a single CMSIS-RTOS2
-instance. It does not manage multicore or inter-processor communication —
+instance. It does not manage multicore or inter-processor communication. For example, 
 coordinating work across cores (e.g. Alif's RTSS-HP/RTSS-HE) is an
 application-level concern, out of this library's scope.
 
 ## Design principles
 
-- **No dynamic allocation of its own.** CSP4CMSIS never calls `operator
-  new`/`operator delete` and performs no heap allocation internally — it's
-  usable in a zero-heap system. Whether *your* application code allocates
-  is entirely your own decision; see
-  [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-  for what that means in practice.
+- **No dynamic allocation of its own.** The library never calls an
+  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). With
+  `CSP4CMSIS_STATIC_ALLOCATION` every RTOS object it creates also has a
+  static control block, so it makes no dynamic RTOS allocation either.
+  Verified by the full test suite passing on FreeRTOS and RTX5 with RTOS
+  dynamic allocation disabled. A *completely* heap-free system additionally
+  needs RTOS configuration (and, for CMSIS-FreeRTOS, two workarounds) and
+  care with the C library's own heap; see
+  [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md),
+  sections 2 and 6.
 - **Portable critical sections.** Where the library needs to protect
-  internal state (`BufferedChannel`, `putFromISR()`), it uses a
+  internal state (every channel kind, ALT state, ISR writes), it uses a
   CMSIS-Core-based (`BASEPRI`) critical section rather than an RTOS-
   specific API — CMSIS-RTOS2 has no standardized critical-section
   primitive, so this is CSP4CMSIS's own portable mechanism.
@@ -52,8 +72,21 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add https://github.com/OliverFaust/CSP4CMSIS/releases/latest/download/OliverFaust.CSP4CMSIS.pdsc
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.1/OliverFaust.CSP4CMSIS.2.0.1.pack
 ```
+`-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
+script or CI job (no terminal input) it declines and installs nothing.
+
+> Confirmed working: the `.pack` archive from the concrete, versioned
+> release URL — not the bare `.pdsc`, and not `releases/latest/download/`.
+> `cpackget add` treats a `.pdsc`-only URL as a local-file reference; the
+> `.pack` is the installable unit that actually fetches over HTTPS.
+> Update to a newer release deliberately by changing the version in the
+> URL.
+
+Without packs (STM32CubeIDE, vendor SDK makefiles), copy the source into your project instead:
+[`Documentation/CSP4CMSIS_STM32CubeIDE.md`](Documentation/CSP4CMSIS_STM32CubeIDE.md) (needs 2.0.1's
+`csp_critical.h`, see [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)).
 
 Then reference the component in your `.cproject.yml`:
 
@@ -62,27 +95,33 @@ components:
   - component: OliverFaust::CSP4CMSIS:Core
 ```
 
-**Three project-level defines are required** — see
+**Two project-level defines are required and one is optional** — see
 [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-for what each one means and how to derive the right value for your board,
-in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
+for what each one means (required: the backend, `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or
+`CSP4CMSIS_RTOS2_BACKEND_RTX5`, and `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
+`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system) and how to derive the right
+value for your board, in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
 value depends on your board's peripheral interrupt priorities, not (as
 you might expect) on which RTOS backend you're using.
 
 ## Testing / examples
 
-This repo is the library alone — no board-specific test projects are
-kept here, since exercising CSP4CMSIS means bringing up a real
-CMSIS-RTOS2 target (device selection, BSP, Secure Enclave init, etc.),
-which is board/vendor-specific content, not part of a portable library.
+Board examples live in
+[Alif-DK-E8-CSP4CMSIS](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS) (Alif DevKit-E8,
+Cortex-M55). All use the published pack, pinned `OliverFaust::CSP4CMSIS@2.0.0`:
 
-CSP4CMSIS's own RTOS2 migration, RTX5 validation, and pack-installability
-testing (raw-source and packaged-component builds, both hardware-verified)
-were all done on an Alif Ensemble E8 (Cortex-M55) DevKit, in a separate
-repo that holds that board's bring-up projects.
-<!-- TODO(OliverFaust): link the DK-E8 repo here once you've decided
-     whether/how to make it public — not linked here since its
-     name/location isn't confirmed from this pass. -->
+- [`csp4cmsis_alt_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_alt_test)
+  — ALT/select smoke test (two senders, one fair-select receiver) on RTX5.
+- [`csp4cmsis_pack_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_pack_test)
+  — the same application on the FreeRTOS adapter.
+- [`neuropathway`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/neuropathway)
+  — Sensor → Inference → Console network: IMU windows classified on the Ethos-U55 NPU (ExecuTorch),
+  FreeRTOS.
+
+Their move from 1.0.0 to 2.0.0 (no source change needed; board runs before and after) is recorded in
+[`docs/migration-2.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-2.0).
+
+The 2.0 regression suite and its results are in [`tests/fvp_sse300/`](tests/fvp_sse300/).
 
 ## Known limitations
 
@@ -93,5 +132,3 @@ validated without it.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
-# CSP4CMSIS
-# CSP4CMSIS

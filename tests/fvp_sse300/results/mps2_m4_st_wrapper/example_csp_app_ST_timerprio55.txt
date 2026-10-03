@@ -1,0 +1,37 @@
+# target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
+# config: lib=v2 build type=Example-ST toolchain=GCC image=out/MPS2-Cortex-M4/Example-ST/GCC/m4.elf
+# library: /home/of6/src/CSP4CMSIS @ 76194a5946c65c990093ad70977fb2df79603a13 dirty=0
+# library sources compiled from: /home/of6/src/CSP4CMSIS/csp4cmsis/src
+# test source: 
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal0: Listening for serial connection on port 5000
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS2_Cortex_M4: telnetterminal2: Listening for serial connection on port 5002
+
+MPS2 Cortex-M4 FVP, SystemCoreClock=25000000 Hz
+
+csp_app: CSP4CMSIS on STM32CubeMX FreeRTOS (CMSIS_V2)
+csp_app: 2000 messages, 0 errors, 0 timeouts: PASS
+csp_app: network finished
+
+Info: Simulation is stopping. Reason: Simulated time has been exceeded.
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS2_Cortex_M4 statistics: --------------------------------------------
+Simulated time                          : 120.000000s
+User time at initialisation             : 0.186164s
+User time                               : 12.499259s
+System time at initialisation           : 0.162013s
+System time                             : 0.006111s
+Wall time at initialisation             : 0.629152s
+Wall time                               : 12.493244s
+Performance index                       : 9.61
+armcortexm4ct                           : 240.13 MIPS (  2999981968 Inst)
+Memory highwater mark at initialisation : 0xe2a9000 bytes ( 0.221 GB )
+Memory highwater mark                   : 0xe85a000 bytes ( 0.227 GB )
+-------------------------------------------------------------------------------
