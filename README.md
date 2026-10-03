@@ -82,7 +82,8 @@ script or CI job (no terminal input) it declines and installs nothing.
 > `cpackget add` treats a `.pdsc`-only URL as a local-file reference; the
 > `.pack` is the installable unit that actually fetches over HTTPS.
 > Update to a newer release deliberately by changing the version in the
-> URL.
+> URL. To check for one: with cpackget 2.2.1, `cpackget update-index` reports a newer
+> CSP4CMSIS release ("can be upgraded from … to …"); `cpackget list --updates` does not show it.
 
 Without packs (STM32CubeIDE, vendor SDK makefiles), copy the source into your project instead:
 [`Documentation/CSP4CMSIS_STM32CubeIDE.md`](Documentation/CSP4CMSIS_STM32CubeIDE.md) (needs 2.0.1's
