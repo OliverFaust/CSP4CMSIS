@@ -178,6 +178,31 @@ in your own `.cpp` files and call it from those sections.
      /* Infinite loop */
    ```
    (leave the generated `for(;;) { osDelay(1); }` after it).
+3. **Make failed FreeRTOS assertions visible** (recommended). CubeMX's `configASSERT` disables interrupts
+   and halts silently: the application just stops, with no output. In `Core/Inc/FreeRTOSConfig.h`, replace
+   the line between the markers:
+   ```c
+   /* USER CODE BEGIN 1 */
+   /* Report a failed assertion (file and line) before halting; CubeMX's default halts silently. */
+   void vAssertCalled(const char *file, int line);
+   #define configASSERT( x ) if ((x) == 0) { vAssertCalled(__FILE__, __LINE__); }
+   /* USER CODE END 1 */
+   ```
+   and in `Core/Src/main.c` add `#include <stdio.h>` under `/* USER CODE BEGIN Includes */` and:
+   ```c
+   /* USER CODE BEGIN 4 */
+   void vAssertCalled(const char *file, int line)
+   {
+     taskDISABLE_INTERRUPTS();
+     printf("\r\nconfigASSERT failed: %s:%d\r\n", file, line);
+     for (;;) { }
+   }
+   /* USER CODE END 4 */
+   ```
+   The BSP's `printf` writes to the virtual COM port by polling, so it works with interrupts masked.
+   Example output (a CSP4CMSIS 2.0.0 timeout defect, `docs/known-issues.md`):
+   `configASSERT failed: ../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c:281`.
+   Both edits are inside `USER CODE` sections and survive regeneration.
 
 ## 5. Build, flash, run
 

@@ -11,7 +11,7 @@ project made exactly as in `Documentation/CSP4CMSIS_STM32CubeIDE.md`. Results: `
 | `csp4cmsis_g474_tests` | copy of `csp4cmsis_g474` | `release-2.0.1` | `Core/Src/bc_tests.cpp` (this repository's) | 2 |
 | `csp4cmsis_g474_tests_tp55` | copy of `csp4cmsis_g474_tests` | `release-2.0.1` | same | 55 (comparison) |
 | `csp4cmsis_g474_tests_noheap` | copy of `csp4cmsis_g474_tests` | `release-2.0.1` | same; heap-free: `defaultTask` static (CubeMX), `configSUPPORT_DYNAMIC_ALLOCATION 0` in `FreeRTOSConfig.h` USER CODE Defines, `heap_4.c` excluded, `Core/Src/noheap_stubs.c` traps | 2 |
-| `csp4cmsis_g474_tests_200` | copy of `csp4cmsis_g474_tests` | `v2.0.0` + `Core/Inc/RTE_Components.h` shim (below) | same | 2: positive control, expected HardFault |
+| `csp4cmsis_g474_tests_200` | copy of `csp4cmsis_g474_tests` | `v2.0.0` + `Core/Inc/RTE_Components.h` shim (below) | same | 2: positive control, must fail (HardFault or `configASSERT` trap) |
 | `csp4cmsis_g474_v1` | copy of an earlier `csp4cmsis_g474_tests` | v1.0.0 (`a789d2a`) + shim | same | 55 |
 
 Changes from the guide project for the suite:

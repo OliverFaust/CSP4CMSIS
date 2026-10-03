@@ -1,7 +1,7 @@
 # CSP4CMSIS 2.0.1: changes
 
 Bug-fix release. The public API is unchanged; code that builds with 2.0.0 builds with 2.0.1. Evidence:
-`docs/results_nucleo_g474.md` (FVP runs; NUCLEO-G474RE board runs pending at the time of writing) and the
+`docs/results_nucleo_g474.md` (FVP runs), `docs/hardware_results_nucleo_g474.md` (NUCLEO-G474RE) and the
 model `docs/formal/alt_timeout_deadline.csp`.
 
 ## Fixed: ALT timeouts (`RelTimeoutGuard`)
@@ -59,6 +59,7 @@ deadline fail as they must), and by the regression suite (tests T6, T20-T24 belo
   **T23** zero timeout, **T24** a stale wakeup every tick does not postpone a timeout (2.0.0: 60 ticks
   instead of 10).
 - **Positive control, permanent:** FreeRTOS with `configTIMER_TASK_PRIORITY 2`, with Arm's and with ST's
-  adapter (MPS2 Cortex-M4 FVP): 2.0.0 ends in a HardFault, 2.0.1 passes.
+  adapter (MPS2 Cortex-M4 FVP) and on the NUCLEO-G474RE: 2.0.0 fails (FVP: HardFault; board: CubeMX's
+  `configASSERT` trap in the timer task), 2.0.1 passes.
 - **ST's wrapper** (FreeRTOS 10.3.1, STM32CubeG4 1.6.3) is now a regular FVP configuration, including a
-  heap-free build.
+  heap-free build, and passes on the NUCLEO-G474RE (STM32CubeMX/CubeIDE projects made as in the guide).

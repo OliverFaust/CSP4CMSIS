@@ -17,7 +17,7 @@ each with the ELF's SHA-256 (flashed with STM32CubeProgrammer, VCP logged by `nu
 | 2.0.1, priority 55, `-O0` / `-Os` | PASS=29 FAIL=0 both |
 | 2.0.1, **heap-free** (no RTOS dynamic allocation), `-O0` / `-Os` | **PASS=30 FAIL=0** both; T19: 0 allocator calls; heap used 0 B |
 | Guide example (`csp_app.cpp`), priority 2 | `2000 messages, 0 errors, 0 timeouts: PASS` (before and after a CubeMX regeneration) |
-| **Positive control 2.0.0**, priority 2, `-O0` | stops after T17 (as on the FVP; T6 FAIL: 201 RTOS timers) — see below |
+| **Positive control 2.0.0**, priority 2, `-O0` (criterion: **fails**, HardFault or `configASSERT`) | **fails**: `configASSERT` trap after T17, where the FVP control HardFaults (T6 FAIL: 201 RTOS timers) — see below |
 | **Positive control v1.0.0**, priority 55, `-O0` | PASS=12 FAIL=18 SKIP=3: **the same 18 failures as on the FVP** (MPS2, ST's wrapper) |
 
 - **Sweeps (2.0.1):** 84 sweep lines, all BUG=0 ANOMALY=0; T13/T13b 0 spins; T15 0 bad trials.
@@ -38,7 +38,8 @@ each with the ELF's SHA-256 (flashed with STM32CubeProgrammer, VCP logged by `nu
 
 ### Positive control 2.0.0 (priority 2)
 
-The run stops after T17 (no further output), where the FVP control ends in a HardFault. Read from the
+Criterion: the control must **fail**, by a HardFault or a `configASSERT` trap (`docs/hardware_test_plan.md`,
+stage 2). The run stops after T17 (no further output), where the FVP control ends in a HardFault. Read from the
 running core without reset (`STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -coreReg`): thread mode,
 PC in `vPortFree()` at `heap_4.c:281`, `configASSERT(pxLink->pxNextFreeBlock == NULL)`, called from
 `prvProcessReceivedCommands()` (`timers.c:871`): the timer task processing a queued delete of a
@@ -46,7 +47,11 @@ PC in `vPortFree()` at `heap_4.c:281`, `configASSERT(pxLink->pxNextFreeBlock == 
 status byte reads "dynamically allocated" and FreeRTOS frees a stack address. CubeMX's `configASSERT`
 disables interrupts and spins, hence no fault report. Same defect as on the FVP (2.0.0 known issue,
 item 1); the symptom differs only because CubeMX's configuration asserts before the list corruption
-faults. Register dump appended to the log.
+faults. Register dump appended to the log. With the guide's reporting `configASSERT`
+(`Documentation/CSP4CMSIS_STM32CubeIDE.md`, step 4.3) the same image prints
+`configASSERT failed: ../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c:281` after T17
+(`results/2026-10-03_2.0.0_ST-FreeRTOS_O0_control_printing_assert.txt`); the guide example with it still
+passes.
 
 ### Positive control v1.0.0: the race sweeps detect the defects on this board
 
@@ -92,7 +97,8 @@ folder `lib/csp4cmsis/src`, the G++ include path, the four defines, GNU++17 and 
 
 ## Differences from the FVP
 
-- **2.0.0 control:** configASSERT trap in the timer task instead of a HardFault (same defect, see above).
+- **2.0.0 control:** fails by a `configASSERT` trap in the timer task, on the FVP by a HardFault (same
+  defect, see above); both meet the criterion "fails".
 - **kb:** ~11 700 iterations per tick (170 MHz, 1 kHz) against ~20 800 on the MPS2 FVP (25 MHz,
   100 Hz); the sweeps calibrate themselves.
 - **Heap and stack:** CubeMX's dynamic `defaultTask` (2.3 KB heap); runner stack 104 B lower.

@@ -101,9 +101,7 @@ screen, e.g. a renamed button).
 | GENERATE CODE with USE_NEWLIB_REENTRANT disabled | modal "Warning: Code Generation" asking to enable it (read from the running CubeMX); enabled in the guide |
 | Regeneration (with a changed FreeRTOS setting, and without changes) | `lib/csp4cmsis/`, `Core/Src/csp_app.cpp`, `USER CODE` in `main.c`, the source folder `lib/csp4cmsis/src`, the G++ include path, the four defines and GNU++17 all kept; only `FreeRTOSConfig.h` changed (and `.cproject` line endings) |
 
-## 4. Board runs (pending)
+## 4. Board runs
 
-`tests/hw_nucleo_g474/run_stage2.sh` runs, in this order: the guide example (`-O0`), the suite on 2.0
-(`-O0`, `-Os`), the v1.0.0 control (`-O0`), and the suite with timer task priority 2. Expected from the
-FVP: 23/1 with T6 failing (2.0), 8/18/2 (v1.0.0), a HardFault (priority 2). Not yet covered on hardware:
-the hardware-only checks and the soak of stage 1.
+Done on 2026-10-03 with 2.0.1 and the controls: `docs/hardware_results_nucleo_g474.md`. (The 2.0.0
+control fails there by a `configASSERT` trap rather than a HardFault; the criterion is "fails".)

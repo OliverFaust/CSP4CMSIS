@@ -54,12 +54,17 @@ The 1.0.0 pdsc's `<url>` is a placeholder, `https://github.com/YourOrg/CSP4CMSIS
 2.0.0. The published 1.0.0 pack cannot be changed.
 
 **Upgrade by URL** instead: `cpackget add -a
-https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.0/OliverFaust.CSP4CMSIS.2.0.0.pack`, then
-pin `OliverFaust::CSP4CMSIS@2.0.0` (see "Upgrading the pack" in `docs/CHANGES_2.0.md`). From 2.0.0 on, the
+https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.1/OliverFaust.CSP4CMSIS.2.0.1.pack`, then
+pin `OliverFaust::CSP4CMSIS@2.0.1` (see "Upgrading the pack" in `docs/CHANGES_2.0.md`; 2.0.1 needs no source
+change beyond 2.0.0's). From 2.0.0 on, the
 pdsc's `<url>` is the real `…/releases/latest/download/`, where the release also carries the pdsc, so the
 update check works for later versions.
 
-## `scripts/build_pack.py` does not build byte-identical packs (planned fix: 2.0.1)
+## `scripts/build_pack.py` does not build byte-identical packs (fixed in 2.0.1)
+
+**Fixed in 2.0.1:** every entry has the commit time as its timestamp (or `SOURCE_DATE_EPOCH`), fixed
+permissions, and the entries are sorted; two builds of the same commit, from a clone or a `git archive`
+export, are byte-identical. The text below describes 2.0.0.
 
 **What varies.** Two builds of the same commit have identical contents (same files, same bytes, same
 order) but different SHA-256 values:

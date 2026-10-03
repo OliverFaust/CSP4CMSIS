@@ -1,0 +1,26 @@
+# elf: /home/of6/STM32CubeIDE/workspace_csp4cmsis/csp4cmsis_g474_tests_200/Debug/csp4cmsis_g474_tests_200.elf sha256=7ed7e208ac9437d19aa693b1dc429478e9376a142a6dc7ec1af390378ee7a671
+# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# start: 2026-10-03 10:05:04
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 10.3.1 (ST CMSIS_RTOS_V2 wrapper, STM32CubeG4 1.6.3); library: v2 API (ring buffer); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
+RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=1 (CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)); A done=1, B done=0
+RESULT T4a: PASS -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: PASS -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 10
+RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=1 fatal=0 heap delta=0
+RESULT T5: PASS -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 16 B heap while alive; Alternative: 0 B; 200 loop constructions -> 200 allocations, 201 RTOS timers
+RESULT T6: FAIL -- RelTimeoutGuard and Alternative create no RTOS timer and use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 0 allocations, heap delta 0 B, fatal=0
+RESULT T17: PASS -- rendezvous and signal channels and Barrier use no RTOS heap
+
+configASSERT failed: ../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c:281
+
+# TIMEOUT after 120 s
+
+# end: 2026-10-03 10:07:06 (120 s)

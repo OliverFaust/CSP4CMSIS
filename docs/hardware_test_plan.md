@@ -43,6 +43,11 @@ STM32Cube's CMSIS-RTOS2 wrapper, and STM32CubeIDE/GCC.
   - thread flags implemented with task notification index 0.
 
   T6/T17 (heap use) are the run-time check.
+- **Positive controls** (added for 2.0.1): v1.0.0 must show the FVP's failures; 2.0.0 with FreeRTOS's timer
+  task at priority 2 (CubeMX's default) must **fail: a HardFault or a `configASSERT` trap** (CubeMX's
+  `configASSERT` disables interrupts and halts, so the run stops without a `SUMMARY` line; check the core
+  with `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -coreReg`). A `SUMMARY` line from the 2.0.0 control
+  invalidates the run.
 - **Alternative** if Stage 2 should stay on ARM's adapter: HimaxWE2 (Cortex-M55, CMSIS-FreeRTOS). It
   would not cover Armv7E-M.
 
