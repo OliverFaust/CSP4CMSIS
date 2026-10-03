@@ -1,6 +1,6 @@
 # Known Issues
 
-## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang or heap use with FreeRTOS (fix: 2.0.1)
+## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fix: 2.0.1)
 
 Only applications that put a `RelTimeoutGuard` into an `Alternative` are affected; channels, ALT without
 timeouts, `Barrier` and `SleepFor()` are not. In 2.0.0 a timeout guard is a CMSIS-RTOS2 timer
@@ -23,18 +23,28 @@ thread. Affected:
 3. **ST's STM32Cube CMSIS-RTOS2 wrapper: RTOS heap.** Its `osTimerNew()` allocates the callback record
    with `pvPortMalloc()` even for a static control block: each live `RelTimeoutGuard` holds 16 bytes of
    FreeRTOS heap, also with `CSP4CMSIS_STATIC_ALLOCATION` (no crash; the build is not heap-free).
+4. **All backends, independently of any priority: a timeout can be postponed indefinitely.** Every
+   `select()` round restarts the guard's timer with the full duration. A wakeup that does not complete the
+   `select()` (a stale ALT flag, a partner that withdrew, a lost race) starts a new round, so wakeups
+   arriving more often than the timeout keep it from ever expiring. Reproduced on the MPS2 Cortex-M4
+   FVP with FreeRTOS and with RTX5 (one such wakeup per tick: a 10-tick timeout expired only after 60
+   ticks, when the wakeups stopped; with unbounded wakeups, FreeRTOS run, the `select()` never returned)
+   and with ProB.
 
-Not affected: RTX5 when every thread that uses timeouts runs below `OS_TIMER_THREAD_PRIO`.
+Items 1 and 2 do not affect RTX5 when every thread that uses timeouts runs below `OS_TIMER_THREAD_PRIO`;
+item 4 affects every configuration.
 
 **Workaround on 2.0.0:** give the timer service thread a priority **strictly above** every thread that
 uses a `RelTimeoutGuard`, e.g. FreeRTOS `configTIMER_TASK_PRIORITY (configMAX_PRIORITIES - 1)` (55 with
 CMSIS-RTOS2; STM32CubeMX: FREERTOS > Config parameters > Software timer definitions >
 TIMER_TASK_PRIORITY), RTX5 `OS_TIMER_THREAD_PRIO 55`, and run no thread that uses timeouts at that
 priority. This removes items 1 and 2; the 16 bytes of heap per guard on ST's wrapper (item 3) remain.
+There is no workaround for item 4.
 
 **Fixed in 2.0.1:** timeout guards no longer use an RTOS timer. `select()` waits for its thread flags
 with the remaining time to a deadline fixed when the `select()` starts, so there is no timer object,
-callback or timer priority requirement, and no heap use on any adapter.
+callback or timer priority requirement, no heap use on any adapter, and no wakeup can postpone a
+timeout (items 1 to 4).
 
 ## `cpackget` never offers 2.0.0 to users of 1.0.0 (1.0.0 pdsc)
 
