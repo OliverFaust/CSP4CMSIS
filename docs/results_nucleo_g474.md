@@ -4,8 +4,9 @@
 STM32Cube FW_G4 V1.6.3 (FreeRTOS 10.3.1, ST `CMSIS_RTOS_V2`), STM32CubeIDE 2.1.0 (GNU Tools for STM32
 14.3.rel1), Fast Models 11.28.32.
 
-**Status: the NUCLEO-G474RE board runs are not done yet** (the board was not connected). Everything
-below that says "FVP" ran on the MPS2 Cortex-M4 FVP (Armv7E-M, the G474's architecture) with ST's
+**Board runs: done 2026-10-03, `docs/hardware_results_nucleo_g474.md`** (2.0.1 passes on the
+NUCLEO-G474RE, including a heap-free build; both controls fail as expected). Everything below that says
+"FVP" ran on the MPS2 Cortex-M4 FVP (Armv7E-M, the G474's architecture) with ST's
 wrapper and FreeRTOS 10.3.1 compiled from the firmware package. The board projects are built and the
 run is one command (`tests/hw_nucleo_g474/run_stage2.sh`).
 

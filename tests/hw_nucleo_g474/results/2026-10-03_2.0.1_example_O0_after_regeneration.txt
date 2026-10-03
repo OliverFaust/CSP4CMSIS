@@ -1,0 +1,11 @@
+# elf: /home/of6/STM32CubeIDE/workspace_csp4cmsis/csp4cmsis_g474/Debug/csp4cmsis_g474.elf sha256=a1c9d35e415f5dc371ef17ad41bd53e8fb536c820ab70efc789d718923c2a249
+# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# start: 2026-10-03 09:43:48
+
+csp_app: CSP4CMSIS on STM32CubeMX FreeRTOS (CMSIS_V2)
+csp_app: 2000 messages, 0 errors, 0 timeouts: PASS
+csp_app: network finished
+
+# TIMEOUT after 60 s
+
+# end: 2026-10-03 09:44:50 (60 s)
