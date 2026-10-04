@@ -130,6 +130,8 @@ See [`docs/known-issues.md`](docs/known-issues.md) — currently covers the
 pack-tooling environment's broken `packchk` binary and how the pack was
 validated without it.
 
-## License
+## License and Declaration
 
 MIT — see [`LICENSE`](LICENSE).
+
+Development of this project utilizes AI coding assistants for boilerplate generation, unit test creation, and architectural drafting. All core logic is manually reviewed and verified.
