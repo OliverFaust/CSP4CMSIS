@@ -33,7 +33,8 @@ python3 check.py run --page <website>/CSP4CMSIS/api.md \
 `pack/doc_examples.csolution.yml` takes the CSP4CMSIS pack from this repository's
 `OliverFaust.CSP4CMSIS.pdsc` (`path: ../../..`), with ARM::CMSIS 6.3.0, ARM::CMSIS-FreeRTOS 11.3.0
 and ARM::Cortex_DFP 1.2.0 installed in `CMSIS_PACK_ROOT`. Output is a static library: the check
-compiles the examples, it does not run them.
+compiles the examples, it does not run them. The solution pins `compiler: GCC@13.2.1`: cbuild otherwise
+takes the newest registered GCC (`GCC_TOOLCHAIN_<version>`).
 
 ```bash
 cd pack
@@ -50,4 +51,5 @@ To check against the released pack instead, unpack
   examples compile with ST's wrapper (STM32Cube FW_G4 V1.6.3, FreeRTOS 10.3.1) and GNU Tools for
   STM32 13.3.rel1.
 - `pack/`: all 11 examples compile with Arm GNU 13.2.rel1, both with this repository's pdsc and with
-  the released `OliverFaust.CSP4CMSIS.2.0.1.pack`.
+  the released `OliverFaust.CSP4CMSIS.2.0.1.pack`. (The first version of the page also compiled with
+  GCC 14.2.1, before the toolchain was pinned.)

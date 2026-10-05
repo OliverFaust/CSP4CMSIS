@@ -9,8 +9,8 @@ extern "C" void start_transfer(void);   // application: starts one interrupt-dri
 // Called from the transfer-complete interrupt (STM32 HAL: e.g. HAL_UART_TxCpltCallback).
 extern "C" void transfer_complete_from_isr(void) {
     if (!transfer_done.isrWriter().putFromISR(true)) {
-        __disable_irq();                // second completion before the first was read
-        for (;;) { }
+        // A second completion before the first was read: stop (section 6, fatal-error hook).
+        csp4cmsis_fatal_error("transfer completion lost");
     }
 }
 

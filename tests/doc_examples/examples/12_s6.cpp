@@ -1,7 +1,10 @@
 #include "csp/csp4cmsis.h"
-#include <cstdio>
+
+// For the debugger.
+const char* volatile app_fatal_message = nullptr;
 
 extern "C" void csp4cmsis_fatal_error(const char* message) {
-    printf("\r\n%s\r\n", message);    // e.g. "CSP4CMSIS: rendezvous channel: second ALTing reader ..."
+    __disable_irq();
+    app_fatal_message = message;      // e.g. "CSP4CMSIS: rendezvous channel: second ALTing reader ..."
     for (;;) { }
 }
