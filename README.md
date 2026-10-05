@@ -96,11 +96,11 @@ components:
   - component: OliverFaust::CSP4CMSIS:Core
 ```
 
-**Two project-level defines are required and one is optional** — see
+**Project-level defines** — see
 [`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-for what each one means (required: the backend, `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or
-`CSP4CMSIS_RTOS2_BACKEND_RTX5`, and `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
-`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system) and how to derive the right
+for what each one means (always required: `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
+`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system, which then also requires the backend,
+`CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `CSP4CMSIS_RTOS2_BACKEND_RTX5`) and how to derive the right
 value for your board, in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
 value depends on your board's peripheral interrupt priorities, not (as
 you might expect) on which RTOS backend you're using.

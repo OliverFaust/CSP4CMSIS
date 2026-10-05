@@ -110,14 +110,14 @@ namespace csp {
 Alternative::Alternative(std::initializer_list<internal::Guard*> list) {
     num_guards = 0;
     for (auto* g : list) {
-        if (num_guards < MAX_GUARDS) internal_guards[num_guards++] = g;
+        addBinding(g);
     }
 }
 
 Alternative::Alternative(std::initializer_list<Guard*> list) {
     num_guards = 0;
     for (auto* g : list) {
-        if (num_guards < MAX_GUARDS) internal_guards[num_guards++] = g->internal_guard_ptr;
+        addBinding(g->internal_guard_ptr);
     }
 }
 

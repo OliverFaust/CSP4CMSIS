@@ -47,11 +47,6 @@ extern "C" {
 #endif
 
 namespace csp {
-    // Forward declarations of core internal classes
-    namespace internal {
-        class Kernel;
-    }
-
     class CSProcess; // Defined below
 
     /**
@@ -178,9 +173,6 @@ namespace csp {
     protected:
         // C++CSP Standard: The primary process logic.
         virtual void run() = 0;
-
-        // C++CSP4CMSIS Extension: Called by the ThreadFuncWrapper upon completion.
-        virtual void endProcess() {}
 
     private:
         // The RTOS2 wrapper function needs to access the protected run() method.

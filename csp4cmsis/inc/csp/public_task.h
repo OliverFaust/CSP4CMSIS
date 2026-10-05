@@ -4,6 +4,8 @@
 
 #include "csp4cmsis.h" // Includes CSProcess, ThreadFuncWrapper, TaskCtx, etc.
 #include "cmsis_os2.h"
+#include "csp_fatal.h"
+#include "time.h"
 #include <cstdio>
 
 extern "C" void ThreadFuncWrapper(void* pvParameters);
@@ -20,10 +22,21 @@ namespace csp {
 // different role than "the general highest-priority CSP process").
 // osPriorityRealtime7 (55) is the highest tier without that documented
 // special meaning.
-constexpr osPriority_t CSP_DEFAULT_TASK_PRIORITY = osPriorityRealtime7;
+namespace internal {
+    constexpr osPriority_t SINGLE_PROCESS_RUN_PRIORITY = osPriorityRealtime7;
+}
+
+/// Deprecated (2.1.0) together with Run(CSProcess&, osPriority_t); removed in 3.0.
+[[deprecated("CSP4CMSIS 2.1.0: use Run(InParallel(p), ExecutionMode::StaticNetwork, priority)")]]
+constexpr osPriority_t CSP_DEFAULT_TASK_PRIORITY = internal::SINGLE_PROCESS_RUN_PRIORITY;
 
 /**
- * @brief Launches a single CSProcess as an RTOS2 task, enforcing the Static Process Network (SPN) model.
+ * @brief Deprecated (2.1.0; removed in 3.0): use
+ * Run(InParallel(process), ExecutionMode::StaticNetwork, priority), which also
+ * names the thread after process.name(). Note the default priority here,
+ * osPriorityRealtime7.
+ *
+ * Launches a single CSProcess as an RTOS2 task, enforcing the Static Process Network (SPN) model.
  * * CRITICAL SPN REQUIREMENT: The CSProcess object MUST be allocated STATICALLY
  * by the application (e.g., as a global or static local variable). Its stack
  * buffer, TCB, and TaskCtx (all owned by CSProcess/CSProcessStatic<N>, see
@@ -32,7 +45,8 @@ constexpr osPriority_t CSP_DEFAULT_TASK_PRIORITY = osPriorityRealtime7;
  * * @param process Reference to the STATICALLY allocated CSProcess object.
  * @param priority The RTOS2 priority for this task.
  */
-inline void Run(CSProcess& process, osPriority_t priority = CSP_DEFAULT_TASK_PRIORITY) {
+[[deprecated("CSP4CMSIS 2.1.0: use Run(InParallel(p), ExecutionMode::StaticNetwork, priority)")]]
+inline void Run(CSProcess& process, osPriority_t priority = internal::SINGLE_PROCESS_RUN_PRIORITY) {
 
     osPriority_t effective_priority = resolveTaskPriority(process, priority);
 
@@ -60,11 +74,10 @@ inline void Run(CSProcess& process, osPriority_t priority = CSP_DEFAULT_TASK_PRI
 
     osThreadId_t handle = osThreadNew(ThreadFuncWrapper, ctx, &attr);
 
-    process.setTaskHandle(handle); // NULL on failure -- fine, stackHighWaterMarkWords() treats that as "unavailable"
+    process.setTaskHandle(handle);
 
     if (handle == NULL) {
-        printf("FATAL ERROR: Failed to create RTOS2 task for CSProcess "
-               "(osThreadNew returned NULL -- check stack/TCB buffers).\r\n");
+        internal::fatal("CSP4CMSIS: Run(): osThreadNew() failed");
     }
 }
 
@@ -75,6 +88,17 @@ inline void Run(CSProcess& process, osPriority_t priority = CSP_DEFAULT_TASK_PRI
  */
 inline void SleepFor(uint32_t ticks_to_sleep) {
     osDelay(ticks_to_sleep);
+}
+
+// Feature test: SleepFor(Time) exists (2.1.0).
+#define CSP4CMSIS_SLEEPFOR_TIME_API 1
+
+/**
+ * @brief Pauses the current process for a duration, e.g.
+ * SleepFor(Milliseconds(250)). Same as SleepFor(duration.to_ticks()).
+ */
+inline void SleepFor(Time duration) {
+    osDelay(duration.to_ticks());
 }
 
 // NOTE: For full C++CSP compatibility, you would also define helper time functions here,

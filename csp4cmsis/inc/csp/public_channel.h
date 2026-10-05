@@ -179,13 +179,14 @@ template <typename T, size_t S, BufferPolicy P = BufferPolicy::Block>
 using BufferedAny2OneChannel = SamplingBufferedChannel<T, S, P>;
 
 /**
- * @brief Legacy API 1.0 Compatibility Aliases.
+ * @brief Legacy API 1.0 aliases, deprecated in 2.1.0 (removed in 3.0).
  */
 template <typename T, BufferPolicy P = BufferPolicy::Block>
-using One2OneChannel = SamplingChannel<T, P>;
+using One2OneChannel [[deprecated("CSP4CMSIS 2.1.0: use Channel<T>")]] = SamplingChannel<T, P>;
 
 template <typename T, size_t S, BufferPolicy P = BufferPolicy::Block>
-using BufferedOne2OneChannel = SamplingBufferedChannel<T, S, P>;
+using BufferedOne2OneChannel [[deprecated("CSP4CMSIS 2.1.0: use BufferedChannel<T, SIZE> or SamplingBufferedChannel<T, SIZE, P>")]]
+    = SamplingBufferedChannel<T, S, P>;
 
 } // namespace csp
 

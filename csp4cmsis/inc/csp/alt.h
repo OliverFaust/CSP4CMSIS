@@ -240,31 +240,26 @@ namespace csp {
         int fairSelect();
 
         // --- Binding Helpers ---
+        // At most MAX_GUARDS (16) guards; a 17th is a fatal error (2.1.0;
+        // 2.0.x ignored it silently).
 
         template <typename T>
         void addBinding(const ChannelBinding<T, Chanin<T>>& b) {
-            if (num_guards < MAX_GUARDS) {
-                internal_guards[num_guards++] = b.getInternalGuard();
-            }
+            addBinding(b.getInternalGuard());
         }
 
         template <typename T>
         void addBinding(const ChannelBinding<const T, Chanout<T>>& b) {
-            if (num_guards < MAX_GUARDS) {
-                internal_guards[num_guards++] = b.getInternalGuard();
-            }
+            addBinding(b.getInternalGuard());
         }
 
         void addBinding(RelTimeoutGuard& tg) {
-            if (num_guards < MAX_GUARDS) {
-                internal_guards[num_guards++] = tg.internal_guard_ptr;
-            }
+            addBinding(tg.internal_guard_ptr);
         }
 
         void addBinding(internal::Guard* g) {
-            if (num_guards < MAX_GUARDS) {
-                internal_guards[num_guards++] = g;
-            }
+            if (num_guards >= MAX_GUARDS) internal::fatal("CSP4CMSIS: Alternative: more than 16 guards");
+            internal_guards[num_guards++] = g;
         }
     };
 }

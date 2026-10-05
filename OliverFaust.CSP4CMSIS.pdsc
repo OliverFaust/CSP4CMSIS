@@ -100,15 +100,6 @@
         <file category="other" name="csp4cmsis/inc/csp/time.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
 
-        <!-- exceptions.h/test_types.h deliberately excluded, same
-             rationale as kernel.cpp below: confirmed genuinely unused —
-             neither is #included by any other file in the library
-             (verified by grep), so neither is part of what actually
-             builds. exceptions.h's PoisonException is dead code (the
-             -fno-exceptions build never throws/catches it); test_types.h
-             is unused test scaffolding. -->
-
-
         <!-- Sources -->
         <file category="source" name="csp4cmsis/src/alt_channel_sync.cpp"/>
         <file category="source" name="csp4cmsis/src/alternative.cpp"/>
@@ -116,20 +107,12 @@
         <!-- buffered_channel.cpp is intentionally empty (its own comment:
              "left empty to resolve linker conflicts" — BufferedChannel<T,P>
              is a template, all its logic lives in buffered_channel.h).
-             Still listed: it's a real, actively-referenced translation
-             unit every consuming project compiles as part of its own
-             build, unlike kernel.cpp below. -->
+             Still listed: it is a translation unit every consuming
+             project compiles. -->
         <file category="source" name="csp4cmsis/src/buffered_channel.cpp"/>
         <file category="source" name="csp4cmsis/src/channel_sync.cpp"/>
         <file category="source" name="csp4cmsis/src/csp_wrapper.cpp"/>
         <file category="source" name="csp4cmsis/src/glue.cpp"/>
-
-        <!-- kernel.cpp deliberately excluded: confirmed dead code all
-             session (its ThreadFuncWrapper is entirely commented out; the
-             real one lives in csp_wrapper.cpp). Don't ship known-dead code
-             in a public pack release — if it turns out to serve a purpose
-             (a placeholder for something, forward-compat), add it back
-             deliberately with a note explaining why, not by default. -->
 
         <!-- Documentation -->
         <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>
