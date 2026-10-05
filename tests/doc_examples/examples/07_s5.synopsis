@@ -1,0 +1,1 @@
+bool putFromISR(const T& data);   // never blocks
