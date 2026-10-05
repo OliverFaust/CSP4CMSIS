@@ -1,0 +1,26 @@
+# CSP4CMSIS API reference examples, built with the CSP4CMSIS pack (this repository's
+# OliverFaust.CSP4CMSIS.pdsc, path below) on the Arm Cortex-M4 device of the MPS2 FVP,
+# with Arm's CMSIS-FreeRTOS. Output: a static library (compile check, nothing to run).
+solution:
+  created-for: CMSIS-Toolbox@2.6.0
+  cdefault:
+  compiler: GCC
+
+  packs:
+    - pack: ARM::CMSIS@6.3.0
+    - pack: ARM::CMSIS-FreeRTOS@11.3.0
+    - pack: ARM::Cortex_DFP@1.2.0
+    - pack: OliverFaust::CSP4CMSIS
+      path: ../../..
+
+  target-types:
+    - type: ARMCM4
+      device: ARM::ARMCM4
+
+  build-types:
+    - type: Debug
+      optimize: none
+      debug: on
+
+  projects:
+    - project: doc_examples.cproject.yml

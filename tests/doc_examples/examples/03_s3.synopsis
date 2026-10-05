@@ -1,0 +1,9 @@
+template <typename... Processes>
+void Run(ParallelHelper<Processes...> helper,
+         osPriority_t priority = CSP_LEGACY_PARALLEL_PRIORITY);          // TerminatingNetwork
+
+template <typename... Processes>
+void Run(ParallelHelper<Processes...> helper, ExecutionMode mode,
+         osPriority_t priority = CSP_LEGACY_PARALLEL_PRIORITY);
+
+void Run(CSProcess& process, osPriority_t priority = CSP_DEFAULT_TASK_PRIORITY);
