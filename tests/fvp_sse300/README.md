@@ -21,6 +21,8 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
+| **2.1.0**, `release-2.1.0` @ `c66a8b8` (`results/v2.1.0/`) | **30**: Corstone-300 AC6 6.24 and GCC 14.2.1 × FreeRTOS/RTX5 × `-O0`/`-O2`/`-Os`, plus NoHeap × AC6/GCC (16); MPS2 M4 AC6/GCC × FreeRTOS/RTX5 × `-O0`/`-O2` (8), ST wrapper GCC (`FreeRTOS-ST`, `-O2`, `-NoHeap`, `-TP2`) and `FreeRTOS-TP2`/`-TP40` (6) | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30** (PASS=37 with T19 in the 4 NoHeap builds); compile checks (`compile_checks.txt`): all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper |
+| 2.0.1 with the 2.1.0 suite (positive control, `results/v2.1.0/controls_2.0.1/`) | Corstone-300 FreeRTOS GCC; MPS2 M4 FreeRTOS-ST GCC | PASS=32 FAIL=3 SKIP=1: T28, T29, T30 fail as they must; T31 SKIP (no `SleepFor(Time)`) |
 | 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
 | 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
 | v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `11858f6`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
@@ -145,6 +147,13 @@ the FVPs. Its settings, as far as they affect the results:
 | T22 | several timeout guards (30, 5, 15 ticks): the earliest deadline wins, after 5..6 ticks |
 | T23 | zero timeout: selected at once (0 ticks, no wait); a channel that is ready and listed before it wins |
 | T24 | a stale ALT wakeup every tick (up to 50) does not postpone a 10-tick timeout. FAIL on 2.0.0 (60 ticks: the timer restarted every round); SKIP on 1.x |
+| T25 | `Run(InParallel(…), TerminatingNetwork, prio)` returns after all three processes returned; a process's `taskPriority()` override wins, the others run at `prio`; without `prio`, `osPriorityLow` (2.1.0: `CSP_DEFAULT_NETWORK_PRIORITY`) |
+| T26 | `Run(…, StaticNetwork, prio)` returns before any (lower-priority) process ran; threads named after `name()`; all three run afterwards |
+| T27 | `forEachProcess` visits the three processes in order; `stackHighWaterMarkWords()` is `CSP_STACK_HWM_UNAVAILABLE` before `Run()`, afterwards between 1 and (stack − 16) words (each process touches 16 words) |
+| T28 | a failed `osThreadNew()` (forced through the interposition, see "T2 method") in `Run()` is a fatal error and `Run()` does not return, in both modes. FAIL on 2.0.1 (prints and continues) |
+| T29 | a 17th guard in an `Alternative` is a fatal error. FAIL on 2.0.1 (ignored) |
+| T30 | `Seconds()`/`Milliseconds()`: 0 stays 0; otherwise never shorter than requested and at most one tick longer, computed in 64 bits (`ms * freq` above 2³²); saturated at `0xFFFFFFFE`. FAIL on 2.0.1 (rounds down, overflows) |
+| T31 | `SleepFor(Time(5))` sleeps 5..6 ticks, `SleepFor(Time(0))` 0 (2.1.0 API; SKIP before) |
 | T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
@@ -160,8 +169,8 @@ and `osMutexAcquire/Release`. Every call from the library therefore passes a che
 with `BASEPRI != 0`. The map file lists the wrappers, and the disassembly shows the library's call sites
 resolved to them.
 
-The same mechanism counts `osTimerNew()` calls for T6 (GCC: `-Wl,--wrap=osTimerNew` in the harness
-cproject too).
+The same mechanism counts `osTimerNew()` calls for T6, and makes one `osThreadNew()` call fail for T28
+(GCC: `-Wl,--wrap=osTimerNew,--wrap=osThreadNew` in the harness cproject too).
 
 The workload drives every notification path:
 - an ALT reader woken by `output()` and by `putFromISR()`;

@@ -11,6 +11,8 @@ project made exactly as in `Documentation/CSP4CMSIS_STM32CubeIDE.md`. Results: `
 | `csp4cmsis_g474_tests` | copy of `csp4cmsis_g474` | `release-2.0.1` | `Core/Src/bc_tests.cpp` (this repository's) | 2 |
 | `csp4cmsis_g474_tests_tp55` | copy of `csp4cmsis_g474_tests` | `release-2.0.1` | same | 55 (comparison) |
 | `csp4cmsis_g474_tests_noheap` | copy of `csp4cmsis_g474_tests` | `release-2.0.1` | same; heap-free: `defaultTask` static (CubeMX), `configSUPPORT_DYNAMIC_ALLOCATION 0` in `FreeRTOSConfig.h` USER CODE Defines, `heap_4.c` excluded, `Core/Src/noheap_stubs.c` traps | 2 |
+| `csp4cmsis_g474_tests_210` | copy of `csp4cmsis_g474_tests` | `release-2.1.0` (exported from the commit under test) | same, with `--wrap=osThreadNew` (below) | 2 |
+| `csp4cmsis_g474_tests_noheap_210` | copy of `csp4cmsis_g474_tests_noheap` | `release-2.1.0` | same | 2 |
 | `csp4cmsis_g474_tests_200` | copy of `csp4cmsis_g474_tests` | `v2.0.0` + `Core/Inc/RTE_Components.h` shim (below) | same | 2: positive control, must fail (HardFault or `configASSERT` trap) |
 | `csp4cmsis_g474_v1` | copy of an earlier `csp4cmsis_g474_tests` | v1.0.0 (`a789d2a`) + shim | same | 55 |
 
@@ -27,6 +29,7 @@ Changes from the guide project for the suite:
   `BC_BACKEND_NAME="FreeRTOS 10.3.1 (ST CMSIS_RTOS_V2 wrapper, STM32CubeG4 1.6.3)"`.
 - **MCU/MPU G++ Linker > Miscellaneous > Other flags** (test T2):
   `-Wl,--wrap=osEventFlagsSet,--wrap=osThreadFlagsSet,--wrap=osSemaphoreRelease,--wrap=osSemaphoreAcquire,--wrap=osMessageQueuePut,--wrap=osMessageQueueGet,--wrap=osMessageQueueGetCount,--wrap=osMessageQueueGetSpace,--wrap=osMutexAcquire,--wrap=osMutexRelease,--wrap=osTimerNew`
+  (2.1.0 suite, test T28: also `,--wrap=osThreadNew`)
 - 2.0.0 and v1.0.0 controls only, `Core/Inc/RTE_Components.h` (both include it unconditionally; 2.0.1
   does not):
   ```c
@@ -34,8 +37,13 @@ Changes from the guide project for the suite:
   ```
 
 RAM (Debug, 2.0.1): the suite uses 121 300 B of 131 072 B (`.data` + `.bss`, including T5's 32 KB channel and the 16 KB
-FreeRTOS heap); no trimming was needed. Configurations: Debug (`-O0`) and Release (`-Os`, CubeIDE
-default).
+FreeRTOS heap); no trimming was needed. 2.1.0 suite (T25–T31): 129 448 B (Debug, `csp4cmsis_g474_tests_210`),
+still without trimming; the new tests keep their probe stacks at 128 words for this. Configurations: Debug
+(`-O0`) and Release (`-Os`, CubeIDE default).
+
+2.1.0 (`release-2.1.0` @ `c66a8b8`, 2026-10-05): `results/2026-10-05_2.1.0_*`. `csp4cmsis_g474_tests_210`
+Debug and Release: PASS=36 FAIL=0 SKIP=0 REPLACED=4; `csp4cmsis_g474_tests_noheap_210` Debug and
+Release: PASS=37 (T19 included). T25–T31 pass in all four; tick frequency 1000 Hz.
 
 ## Running
 
