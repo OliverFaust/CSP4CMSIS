@@ -5,8 +5,6 @@ project:
   language-CPP: gnu++17
 
   define:
-    - CSP4CMSIS_RTOS2_BACKEND_FREERTOS
-    - CSP4CMSIS_STATIC_ALLOCATION
     - CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY: 5
 
   components:

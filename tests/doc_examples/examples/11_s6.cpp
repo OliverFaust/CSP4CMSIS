@@ -3,7 +3,7 @@
 using namespace csp;
 
 static Channel<int>    numbers;
-static SignalChannel<> stop;
+static SignalChannel stop;
 
 class Counter : public CSProcessStatic<256> {
     Chanout<int>   out  = numbers.writer();

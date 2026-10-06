@@ -48,9 +48,9 @@ application-level concern, out of this library's scope.
 ## Design principles
 
 - **No dynamic allocation of its own.** The library never calls an
-  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). With
-  `CSP4CMSIS_STATIC_ALLOCATION` every RTOS object it creates also has a
-  static control block, so it makes no dynamic RTOS allocation either.
+  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). By default
+  (static allocation) every RTOS object it creates also has a static
+  control block, so it makes no dynamic RTOS allocation either.
   Verified by the full test suite passing on FreeRTOS and RTX5 with RTOS
   dynamic allocation disabled. A *completely* heap-free system additionally
   needs RTOS configuration (and, for CMSIS-FreeRTOS, two workarounds) and
@@ -63,12 +63,13 @@ application-level concern, out of this library's scope.
   specific API — CMSIS-RTOS2 has no standardized critical-section
   primitive, so this is CSP4CMSIS's own portable mechanism.
 - **No silent defaults where a wrong guess would be costly.** The
-  interrupt-priority threshold your critical sections need to respect (and,
-  with static allocation, the RTOS2 backend you're building against) is
-  required, explicit configuration — CSP4CMSIS refuses to compile until
-  you've set it deliberately. Errors it cannot recover from (a process
-  that cannot be started, a 17th ALT guard) stop in `csp4cmsis_fatal_error()`
-  instead of failing silently.
+  interrupt-priority threshold your critical sections need to respect is
+  required, explicit configuration, and a value that cannot be right (0, or
+  a shifted value) does not compile. Where a default is safe it is chosen
+  (static allocation, the detected backend); where it is not (both RTOS
+  headers reachable), the build stops and says what to define. Errors it
+  cannot recover from at run time (a process that cannot be started, a 17th
+  ALT guard) stop in `csp4cmsis_fatal_error()` instead of failing silently.
 
 ## Getting started
 
@@ -100,14 +101,20 @@ components:
   - component: OliverFaust::CSP4CMSIS:Core
 ```
 
-**Project-level defines** — see
-[`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-for what each one means (always required: `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
-`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system, which then also requires the backend,
-`CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `CSP4CMSIS_RTOS2_BACKEND_RTX5`) and how to derive the right
-value for your board, in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
-value depends on your board's peripheral interrupt priorities, not (as
-you might expect) on which RTOS backend you're using.
+**One project-level define is required:** `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, the unshifted
+NVIC priority your critical sections mask up to. Its correct value depends on your board's peripheral
+interrupt priorities, not (as you might expect) on which RTOS backend you're using. Builds without packs
+also define `CSP4CMSIS_DEVICE_HEADER`. Everything else has a default: static allocation of every RTOS
+object (opt out with `CSP4CMSIS_DYNAMIC_ALLOCATION`), with the CMSIS-RTOS2 backend detected
+automatically. Details:
+[`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md).
+
+## API stability
+
+**3.x will not break source compatibility:** code that compiles with 3.0 compiles with every 3.x release
+(3.x may add API and fix bugs). The API is everything in namespace `csp` outside `csp::internal`, the
+fatal-error hook, the configuration defines and the version macros (`CSP4CMSIS_VERSION_MAJOR`, `_MINOR`,
+`_PATCH`). Migrating from 2.x: [`docs/CHANGES_3.0.md`](docs/CHANGES_3.0.md).
 
 ## Testing / examples
 

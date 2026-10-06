@@ -5,8 +5,10 @@ work (`docs/CHANGES_2.0.md`). It is **test code**: it deliberately uses `csp::in
 heap queries and armlink symbol patching, and is not part of the pack.
 
 The same source builds against:
-- **either library generation:** v1.0.0 (`BufferedChannel<T, P>(capacity)`) or v2
-  (`BufferedChannel<T, SIZE, P>`, detected via `CSP4CMSIS_BUFFERED_CHANNEL_API`);
+- **any library generation:** 3.x (detected by `__has_include("csp/csp_version.h")`; the suite uses the
+  3.0 API), 2.x (detected by its feature macros, e.g. `CSP4CMSIS_BUFFERED_CHANNEL_API`) or v1.0.0
+  (`BufferedChannel<T, P>(capacity)`). The macros `BC_ALTV`/`BC_G`/`BC_T` build each ALT in the form the
+  library offers (`Alternative(in | v, timeout)` in 3.x, guard pointers before);
 - **either CMSIS-RTOS2 backend:** FreeRTOS 11.3.0 through `ARM::CMSIS-FreeRTOS`, or Keil RTX5 5.9.1
   through `ARM::CMSIS-RTX`;
 - **three targets:** the Corstone-300 FVP (Cortex-M55, this README), the MPS2 Cortex-M4 FVP (Armv7E-M,
@@ -42,8 +44,8 @@ The 2.1.0 results were produced at c66a8b8, before the branch was rebuilt; libra
   | T16n | `neg_rendezvous_policy.cpp` (also `neg_signal_policy.cpp`) |
 
 - **T15, T15s** (the late wakeup and the lost signal) run and pass on the OWRV protocol.
-- The source still builds against v1.0.0: 1.x code paths are selected by the absence of
-  `CSP4CMSIS_ALT_PROTOCOL_OWRV` / `CSP4CMSIS_ISR_WRITER_API`.
+- The source still builds against v1.0.0 and 2.x: older code paths are selected by `BC_LIB3`,
+  `BC_OWRV`, `BC_ISR_WRITER` (from the version header or the 2.x feature macros).
 - **Harness RTOS heap:** 16 KB (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5 `OS_DYNAMIC_MEM_SIZE`; FVP test
   harness). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
 

@@ -1,7 +1,3 @@
 template <typename... Processes>
-void Run(ParallelHelper<Processes...> helper,
-         osPriority_t priority = CSP_DEFAULT_NETWORK_PRIORITY);          // TerminatingNetwork
-
-template <typename... Processes>
 void Run(ParallelHelper<Processes...> helper, ExecutionMode mode,
          osPriority_t priority = CSP_DEFAULT_NETWORK_PRIORITY);

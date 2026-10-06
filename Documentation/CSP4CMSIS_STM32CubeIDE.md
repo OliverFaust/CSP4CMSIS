@@ -5,17 +5,19 @@ as a C++ project, and runs a small CSP network. No CMSIS packs are involved: the
 the project as source.
 
 **Tested with:** STM32CubeMX 6.17.0, STM32Cube FW_G4 V1.6.3 (FreeRTOS 10.3.1 with ST's CMSIS-RTOS2
-wrapper), STM32CubeIDE 2.1.0 (GNU Tools for STM32 14.3.rel1), CSP4CMSIS 2.0.1 (the regression suite
-also with 2.1.0, `tests/hw_nucleo_g474/README.md`). How each step was
+wrapper), STM32CubeIDE 2.1.0 (GNU Tools for STM32 14.3.rel1), CSP4CMSIS 2.0.1; the two-define setup
+and the regression suite with CSP4CMSIS 3.0.0 (`tests/hw_nucleo_g474/README.md`). How each step was
 checked is in `docs/results_nucleo_g474.md`.
 
-**Requires CSP4CMSIS 2.0.1 or later.** CSP4CMSIS 2.0.0 includes `RTE_Components.h`, which only pack builds have,
-and its timeout guards need FreeRTOS's timer task above every thread that uses them (CubeMX's default,
-2, is not; `docs/known-issues.md`).
+**Written for CSP4CMSIS 3.0.** With 2.0.1 or 2.1.0, add `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` and
+`CSP4CMSIS_STATIC_ALLOCATION` to the defines in step 3.4; the example compiles unchanged. 2.0.0 does
+not work: it includes
+`RTE_Components.h`, which only pack builds have, and its timeout guards need FreeRTOS's timer task above
+every thread that uses them (CubeMX's default, 2, is not; `docs/known-issues.md`).
 
 **Settings that matter**:
 - **G++ language standard: GNU++17** (CubeIDE default: GNU++14, which does not compile CSP4CMSIS).
-- **Four G++ defines** (step 3.4).
+- **Two G++ defines** (step 3.4).
 
 ## 1. Create the project in STM32CubeMX
 
@@ -31,9 +33,9 @@ and then imported.
 3. **Pinout & Configuration > Middleware and Software Packs > FREERTOS > Interface: CMSIS_V2.**
 4. In the FREERTOS **Configuration** panel:
    - **Config parameters > Memory management settings**: leave **Memory Allocation** at
-     **Dynamic / Static** (the only choice with CMSIS_V2; static allocation is enabled). Set
-     **TOTAL_HEAP_SIZE** as your application needs (the example and the tests use 16384; CSP4CMSIS
-     itself uses none of it with `CSP4CMSIS_STATIC_ALLOCATION`).
+     **Dynamic / Static** (the only choice with CMSIS_V2; it sets `configSUPPORT_STATIC_ALLOCATION 1`, which
+     CSP4CMSIS's default static allocation needs). Set **TOTAL_HEAP_SIZE** as your application needs (the
+     example and the tests use 16384; CSP4CMSIS itself uses none of it).
    - **Advanced settings > Newlib settings > USE_NEWLIB_REENTRANT: Enabled.** CSP processes are threads,
      and several of them may call `printf`. If this stays disabled, CubeMX asks at every code generation
      "The USE_NEWLIB_REENTRANT must be set in order to make sure that newlib is fully reentrant …
@@ -86,20 +88,19 @@ task priority, stay at CubeMX's defaults.
      (-std=gnu++17).**
    - **MCU/MPU G++ Compiler > Include paths > Include paths (-I) > Add… > Workspace…**, select
      **`lib/csp4cmsis/inc`**. The entry reads `"${workspace_loc:/${ProjName}/lib/csp4cmsis/inc}"`.
-     Do **not** add `lib/csp4cmsis/inc/csp`: with it on the search path, `#include <time.h>` finds
-     CSP4CMSIS's `time.h`.
+     Only `inc`, not `lib/csp4cmsis/inc/csp`.
    - **MCU/MPU G++ Compiler > Preprocessor > Define symbols (-D) > Add…**, one entry each:
 
      | Entry (typed as shown) | Why |
      |---|---|
-     | `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` | ST's CMSIS_V2 interface runs on FreeRTOS |
      | `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` | = `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` in `FreeRTOSConfig.h`, **unshifted** (the library shifts it by the device's 4 priority bits: BASEPRI 0x50) |
-     | `CSP4CMSIS_STATIC_ALLOCATION` | static control blocks for CSP4CMSIS's threads and semaphores |
      | `CSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"` | the device header (CMSIS-Core, `__NVIC_PRIO_BITS`); with quotes, as shown |
 
      CubeIDE passes each define in single quotes (`'-DCSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"'`), so the
      double quotes need no escaping. The defines are needed for the G++ compiler only; the library has no
-     C sources.
+     C sources. Nothing else is needed (3.0): CSP4CMSIS allocates its RTOS objects statically by default
+     and finds FreeRTOS from `FreeRTOS.h` on the include path. (2.x projects also defined
+     `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` and `CSP4CMSIS_STATIC_ALLOCATION`; both are still accepted.)
    - **Apply and Close.**
 
 What each define does, and how to choose `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` for other boards:
@@ -162,7 +163,7 @@ in your own `.cpp` files and call it from those sections.
        static Channel<Message> chanA, chanB;
        static Sender   s1(chanA.writer(), 1), s2(chanB.writer(), 2);
        static Receiver r(chanA.reader(), chanB.reader());
-       Run(InParallel(s1, s2, r));              // returns when all three have finished
+       Run(InParallel(s1, s2, r), ExecutionMode::TerminatingNetwork);   // returns when all three have finished
        printf("csp_app: network finished\r\n");
    }
    ```
@@ -222,7 +223,7 @@ in your own `.cpp` files and call it from those sections.
 
 Changing the configuration in CubeMX and pressing **GENERATE CODE** again keeps:
 - `lib/csp4cmsis/` and your own files in `Core/Src` (CubeMX deletes only files it generated itself);
-- the `lib/csp4cmsis/src` source folder, the G++ include path, the four defines and GNU++17 in
+- the `lib/csp4cmsis/src` source folder, the G++ include path, the two defines and GNU++17 in
   `.cproject` (CubeMX rewrites its own include paths and defines and leaves other entries alone);
 - the `USER CODE` sections of `main.c`.
 
@@ -236,20 +237,20 @@ Details: `docs/st_cmsis_rtos2_wrapper.md`. In short:
   (BASEPRI/PRIMASK raised) as a thread, not as interrupt context. Do not call CMSIS-RTOS2 functions
   (including CSP4CMSIS channel operations) from a thread while it has interrupts masked.
 - Everything else CSP4CMSIS uses (thread flags, semaphores, static threads and semaphores) behaves the
-  same as with Arm's adapter for CSP4CMSIS's use. CSP4CMSIS 2.0.1 uses no RTOS timers, so the wrapper's
+  same as with Arm's adapter for CSP4CMSIS's use. CSP4CMSIS (2.0.1 on) uses no RTOS timers, so the wrapper's
   timer differences (heap per timer, asynchronous stop and delete) do not apply.
 
 ## Other IDEs and vendor SDKs (no packs)
 
-The same four defines, the C++17 standard and the include path `…/csp4cmsis/inc` apply to any build
+The same two defines, the C++17 standard and the include path `…/csp4cmsis/inc` apply to any build
 without packs. Name your device's CMSIS device header in `CSP4CMSIS_DEVICE_HEADER`: the header that
 defines `__NVIC_PRIO_BITS` and includes the `core_cm*.h` file (e.g. `"stm32g4xx.h"`, Himax WE2:
 `"WE2_device.h"`). In a makefile:
 ```make
 CXXFLAGS += -std=gnu++17 -I$(CSP4CMSIS)/inc \
-            -DCSP4CMSIS_RTOS2_BACKEND_FREERTOS -DCSP4CMSIS_STATIC_ALLOCATION \
             -DCSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5 \
             -DCSP4CMSIS_DEVICE_HEADER=\"WE2_device.h\"
 ```
 The Himax SDK fragment `csp4cmsis/csp4cmsis.mk` adds the sources and the include path; put the defines in
-the application's `.mk` (`APPL_DEFINES += …`).
+the application's `.mk` (`APPL_DEFINES += …`). If both `FreeRTOS.h` and `rtx_os.h` are on the include path,
+also define the backend (`-DCSP4CMSIS_RTOS2_BACKEND_FREERTOS`); the build says so if it is needed.

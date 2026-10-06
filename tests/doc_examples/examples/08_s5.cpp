@@ -3,7 +3,7 @@
 
 using namespace csp;
 
-static SamplingBufferedChannel<uint32_t, 1, BufferPolicy::KeepNewest> presses;
+static BufferedChannel<uint32_t, 1, BufferPolicy::KeepNewest> presses;
 
 // Called from the button's interrupt handler (STM32: from the EXTI callback).
 extern "C" void button_pressed_from_isr(void) {

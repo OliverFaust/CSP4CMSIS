@@ -16,7 +16,7 @@ public:
     void run() override {
         for (uint32_t i = 0; ; ++i) {
             out << Reading{i, static_cast<int32_t>(i) * 10};
-            SleepFor(100);                     // 100 ticks
+            SleepFor(Milliseconds(100));
         }
     }
 };
