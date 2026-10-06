@@ -2,7 +2,7 @@
 
 Every code example of the CSP4CMSIS API reference
 (<https://oliverfaust.github.io/CSP4CMSIS/api>, source `CSP4CMSIS/api.md` in the website repository)
-is compiled here against this repository's library (v2.0.1), in two configurations.
+is compiled here against this repository's library (v2.1.0), in two configurations.
 
 | Path | Content |
 |---|---|
@@ -42,14 +42,14 @@ export GCC_TOOLCHAIN_13_2_1=<Arm GNU Toolchain 13.2.rel1>/bin
 cbuild doc_examples.csolution.yml --update-rte --rebuild
 ```
 
-To check against the released pack instead, unpack
-`OliverFaust.CSP4CMSIS.2.0.1.pack` and point `path:` at it.
+To check against a released pack instead, install it (`cpackget add`) and replace the `path:` line by the
+version, e.g. `- pack: OliverFaust::CSP4CMSIS@2.1.0`.
 
-## Result (2026-10-05, CSP4CMSIS v2.0.1)
+## Result (2026-10-06, CSP4CMSIS v2.1.0)
 
-- `check.py run`: `examples/` matches the page (13 blocks); both synopses found in the headers; all 11
+- `check.py run`: `examples/` matches the page (13 blocks); both synopses found in the 2.1.0 headers; all 11
   examples compile with ST's wrapper (STM32Cube FW_G4 V1.6.3, FreeRTOS 10.3.1) and GNU Tools for
   STM32 13.3.rel1.
 - `pack/`: all 11 examples compile with Arm GNU 13.2.rel1, both with this repository's pdsc and with
-  the released `OliverFaust.CSP4CMSIS.2.0.1.pack`. (The first version of the page also compiled with
-  GCC 14.2.1, before the toolchain was pinned.)
+  the released `OliverFaust.CSP4CMSIS.2.1.0.pack` installed by `cpackget`.
+- Earlier: the v2.0.1 page passed the same checks on 2026-10-05.
