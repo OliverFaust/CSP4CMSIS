@@ -55,6 +55,12 @@ reader and one writer of a channel may be ALTing; a second one is a fatal error,
 - **The backend is detected:** from `RTE_Components.h` in pack builds, otherwise from `FreeRTOS.h` or
   `rtx_os.h` on the include path. If neither or both headers are reachable and nothing else decides, an
   `#error` asks for `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `_RTX5`.
+- **Headers:** with static allocation (now the default) and the FreeRTOS backend, `csp/csp4cmsis.h`
+  includes `FreeRTOS.h` (and `task.h`, `event_groups.h`, `semphr.h`), as 2.x did with
+  `CSP4CMSIS_STATIC_ALLOCATION`: the control blocks are embedded in library objects, and their sizes come
+  from FreeRTOS's configuration (a thread control block is 92 bytes with Arm's adapter's configuration,
+  416 bytes with STM32CubeMX's). With RTX5 it includes `rtx_os.h`. With `CSP4CMSIS_DYNAMIC_ALLOCATION` it
+  includes no RTOS header besides `cmsis_os2.h`.
 - **FreeRTOS without static allocation support** (`configSUPPORT_STATIC_ALLOCATION 0`) stops the build
   in the library source `glue.cpp`, with the CubeMX setting to change.
 - **`CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`:** a `static_assert` rejects 0 and shifted values (0x50,

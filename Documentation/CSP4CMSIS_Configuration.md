@@ -23,8 +23,12 @@ the explicit define. With FreeRTOS, static allocation also needs `configSUPPORT_
 `FreeRTOSConfig.h`; the library source `glue.cpp` stops the build if it is 0. (STM32CubeMX's FREERTOS
 middleware with the CMSIS_V2 interface sets it.)
 
-With static allocation, `csp/csp4cmsis.h` includes the backend's header (`FreeRTOS.h` and `task.h`,
-`event_groups.h`, `semphr.h`, or `rtx_os.h`) for those types, as 2.x did. With
+**With static allocation (the default) and the FreeRTOS backend, `csp/csp4cmsis.h` includes `FreeRTOS.h`**
+(with `task.h`, `event_groups.h` and `semphr.h`): the RTOS control blocks are embedded in library objects
+(`CSProcessStatic<N>`, channels, `Barrier`), and their sizes come from FreeRTOS's configuration, so the
+library's headers need FreeRTOS's own types (`StaticTask_t` etc.). For example, a thread control block is
+92 bytes with Arm's adapter's `FreeRTOSConfig.h` and 416 bytes with STM32CubeMX's (newlib's reentrancy
+structure is part of it). With RTX5 it includes `rtx_os.h` for the same reason. With
 `CSP4CMSIS_DYNAMIC_ALLOCATION` it includes no RTOS header besides `cmsis_os2.h`.
 
 ## 2. Static allocation (the default) and `CSP4CMSIS_DYNAMIC_ALLOCATION`
