@@ -76,7 +76,8 @@ On 2.0.1, T28–T30 fail (the positive control below). Compile checks (`tests/co
 `EXPECT-WARNING` probes for the five deprecations (`dep_*.cpp`), `neg_end_process.cpp`, and
 `pos_replacements.cpp` (the replacements compile without a warning).
 
-Results (2026-10-05, `release-2.1.0` @ `c66a8b8`):
+Results (2026-10-05 and 2026-10-06; produced at `c66a8b8`, before the branch was rebuilt; library sources
+and suite identical to `64f8f3e`):
 - FVP, 30 configurations (Corstone-300 Cortex-M55 and MPS2 Cortex-M4; Arm Compiler 6.24 and GCC 14.2.1;
   FreeRTOS 11.3.0 through Arm's adapter, Keil RTX5, FreeRTOS 10.3.1 through ST's STM32Cube wrapper;
   `-O0`/`-O2`/`-Os`; heap-free builds): PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30 (PASS=37 with T19 in the

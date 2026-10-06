@@ -21,13 +21,16 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
-| **2.1.0**, `release-2.1.0` @ `c66a8b8` (`results/v2.1.0/`) | **30**: Corstone-300 AC6 6.24 and GCC 14.2.1 × FreeRTOS/RTX5 × `-O0`/`-O2`/`-Os`, plus NoHeap × AC6/GCC (16); MPS2 M4 AC6/GCC × FreeRTOS/RTX5 × `-O0`/`-O2` (8), ST wrapper GCC (`FreeRTOS-ST`, `-O2`, `-NoHeap`, `-TP2`) and `FreeRTOS-TP2`/`-TP40` (6) | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30** (PASS=37 with T19 in the 4 NoHeap builds); compile checks (`compile_checks.txt`): all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper |
+| **2.1.0**, `release-2.1.0` @ `64f8f3e` (`results/v2.1.0/`) | **30**: Corstone-300 AC6 6.24 and GCC 14.2.1 × FreeRTOS/RTX5 × `-O0`/`-O2`/`-Os`, plus NoHeap × AC6/GCC (16); MPS2 M4 AC6/GCC × FreeRTOS/RTX5 × `-O0`/`-O2` (8), ST wrapper GCC (`FreeRTOS-ST`, `-O2`, `-NoHeap`, `-TP2`) and `FreeRTOS-TP2`/`-TP40` (6) | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30** (PASS=37 with T19 in the 4 NoHeap builds); compile checks (`compile_checks.txt`): all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper |
 | 2.0.1 with the 2.1.0 suite (positive control, `results/v2.1.0/controls_2.0.1/`) | Corstone-300 FreeRTOS GCC; MPS2 M4 FreeRTOS-ST GCC | PASS=32 FAIL=3 SKIP=1: T28, T29, T30 fail as they must; T31 SKIP (no `SleepFor(Time)`) |
 | 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
 | 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
 | v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `11858f6`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 | **MPS2 Cortex-M4 FVP** (Armv7E-M), 2.0 @ `73f46b7` (library sources as `c60665d`) | **8**: AC6 and GCC × `-O0`/`-O2` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 8**; every sweep BUG=0/ANOMALY=0, both regimes; T13/T13b 0 spins; T15 0 bad trials |
 | MPS2 Cortex-M4 FVP, v1.0.0 @ `a789d2a` (current suite) | AC6 `-O0` and GCC `-O2`, FreeRTOS and RTX5 | PASS=8 FAIL=18 SKIP=2 in all 4 (the same 18 failures) |
+
+The 2.1.0 results were produced at c66a8b8, before the branch was rebuilt; library sources identical to 64f8f3e
+(the log headers and the control logs name c66a8b8).
 
 - **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
   check in `tests/compile_checks/` proves the removal. Not counted as PASS.
@@ -42,7 +45,7 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 - The source still builds against v1.0.0: 1.x code paths are selected by the absence of
   `CSP4CMSIS_ALT_PROTOCOL_OWRV` / `CSP4CMSIS_ISR_WRITER_API`.
 - **Harness RTOS heap:** 16 KB (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5 `OS_DYNAMIC_MEM_SIZE`; FVP test
-  branch `f364bf2`). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
+  harness). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
 
 Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
 AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's

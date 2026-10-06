@@ -1260,8 +1260,8 @@ and signal); the task partner on c0 is a plain writer or an ALT writer; stale fl
 | `7c176c7` | `Barrier`: static objects, phase-alternating release (fixes two 1.x reuse bugs); T18 | PASS=24 FAIL=0 REPLACED=4 |
 | `dff8277` | heap-free proof: T19, README, CMSIS-FreeRTOS issue draft | 12 standard: PASS=24; **4 heap-free: PASS=25**; FAIL=0 everywhere |
 
-Harness project (local, unpublished): `f364bf2` (RTOS heap 16 KB; the static rendezvous objects pushed `.bss` past `RW_RAM0`)
-and `3b5e443` (heap-free build types).
+Harness changes (private FVP harness): RTOS heap 16 KB (the static rendezvous objects pushed `.bss` past
+`RW_RAM0`), and the heap-free build types.
 
 **The formerly failing tests:**
 

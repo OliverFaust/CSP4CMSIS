@@ -41,7 +41,8 @@ FreeRTOS heap); no trimming was needed. 2.1.0 suite (T25–T31): 129 468 B (Debu
 still without trimming; the new tests keep their probe stacks at 128 words for this. Configurations: Debug
 (`-O0`) and Release (`-Os`, CubeIDE default).
 
-2.1.0 (library and suite as `release-2.1.0` @ `c66a8b8`): `csp4cmsis_g474_tests_210` Debug and Release:
+2.1.0 (library and suite as `release-2.1.0` @ `64f8f3e`; produced from `c66a8b8`, before the branch was
+rebuilt, whose library sources and suite are identical): `csp4cmsis_g474_tests_210` Debug and Release:
 PASS=36 FAIL=0 SKIP=0 REPLACED=4; `csp4cmsis_g474_tests_noheap_210` Debug and Release: PASS=37 (T19
 included). T25–T31 pass in all four; tick frequency 1000 Hz. Built twice, same results:
 - `results/2026-10-06_2.1.0_*`: STM32CubeIDE 2.1.0, GNU Tools for STM32 14.3.rel1 (the toolchain of the
