@@ -96,4 +96,28 @@ backends, an undetectable backend, FreeRTOS without static allocation); positive
 replacements, backend detection (from `RTE_Components.h` and from `FreeRTOS.h`), the absence of FreeRTOS
 declarations with `CSP4CMSIS_DYNAMIC_ALLOCATION`, and the version macros.
 
-RESULTS
+Results (2026-10-06, `release-3.0.0` @ `d85b9a4`):
+- **FVP, 30 configurations** as for 2.1.0 (Corstone-300 Cortex-M55 and MPS2 Cortex-M4; Arm Compiler 6.24
+  and GCC 14.2.1; FreeRTOS 11.3.0 through Arm's adapter, Keil RTX5, FreeRTOS 10.3.1 through ST's
+  STM32Cube wrapper; `-O0`/`-O2`/`-Os`; heap-free builds), the harness defining the backend and
+  `CSP4CMSIS_STATIC_ALLOCATION` as before: PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30 (PASS=37 with T19
+  in the 4 heap-free builds). The FVP harness is not public. `tests/fvp_sse300/results/v3.0.0/`.
+- **3.0 defaults** (no backend or allocation define; backend detected from `RTE_Components.h`, and from
+  `FreeRTOS.h` with ST's wrapper), 8 configurations on both FVPs and all three RTOS layers, including
+  heap-free builds: all pass (`results/v3.0.0/defaults/`).
+- **`CSP4CMSIS_DYNAMIC_ALLOCATION`**, FreeRTOS (GCC) and RTX5 (AC6) on the Corstone-300: PASS=35 FAIL=1;
+  the failing test is T17, which checks that channels and `Barrier` use no RTOS heap, as expected with
+  dynamic allocation (`results/v3.0.0/dynamic/`).
+- **NUCLEO-G474RE**, ST's wrapper, STM32CubeIDE 2.1.0 (GNU Tools for STM32 14.3.rel1), with only the two
+  defines of the 3.0 STM32CubeIDE guide: PASS=36 (`-O0`, `-Os`) and PASS=37 heap-free (`-O0`, `-Os`),
+  FAIL=0 (`tests/hw_nucleo_g474/results/2026-10-06_3.0.0_*`).
+- **Alif DK-E8** (RTSS-HP, Cortex-M55 at 400 MHz, 1 kHz tick): FreeRTOS with GCC and RTX5 with Arm
+  Compiler 6, PASS=36 FAIL=0 each (`docs/dk_e8_results_3.0.0/`).
+- **Positive controls** with the 3.0 suite: v1.0.0 fails the same 18 tests as before (PASS=12 FAIL=18
+  SKIP=10 on the MPS2 M4, Arm's adapter and ST's wrapper); 2.0.1 fails T28, T29, T30 as before (PASS=32
+  FAIL=3 SKIP=1) (`results/v3.0.0/controls/`).
+- **Compile checks**: all probes pass with Arm Compiler 6 and GCC on FreeRTOS, RTX5 and ST's wrapper
+  (`results/v3.0.0/compile_checks.txt`). 25 of the new negative probes compile against 2.1.0, i.e. they
+  detect the 3.0 change and nothing else.
+- **API reference examples** (`tests/doc_examples`, page draft for 3.0): no synopsis drift; 11/11 compile
+  with ST's wrapper and in the pack build.

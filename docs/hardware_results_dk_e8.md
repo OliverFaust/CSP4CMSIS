@@ -1,5 +1,10 @@
 # CSP4CMSIS 2.0: hardware results, Alif DK-E8 (stage 1)
 
+> **3.0.0 (2026-10-06, `release-3.0.0` @ `d85b9a4`):** the 3.0 suite in a local worktree of the harness
+> above (the frozen tag unchanged; added the `--wrap=osTimerNew,--wrap=osThreadNew` flags the suite needs
+> since T6/T28): FreeRTOS with GCC 14.2.1 and RTX5 with Arm Compiler 6.24, `-O0`, **PASS=36 FAIL=0 SKIP=0
+> REPLACED=4** both. Logs: `docs/dk_e8_results_3.0.0/`.
+
 **Date:** 2026-09-29. **Plan:** `docs/hardware_test_plan.md`, stage 1 and the hardware-only checks.
 **Board:** Alif DevKit-E8, AE822FA0E5597LS0 rev A1, RTSS-HP (Cortex-M55) at 400 MHz, I- and D-cache on,
 all code in ITCM. **Libraries:** 2.0 = `buffered-channel-v2` @ `c60665d` (`-O0` runs) and @ `73f46b7`
