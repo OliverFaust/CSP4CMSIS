@@ -34,21 +34,19 @@ All tests: `tests/fvp_sse300/results/2026-09-26_fvp_run.txt`.
 
 ## Test setup (details in `tests/fvp_sse300/README.md`)
 
-- **Harness:** the CSP4CMSIS test harness: a local, unpublished adaptation of the public Arm example project
-  `helloworld_sse300` (github.com/joseph-yiu/arm_fvp_helloworld, Apache-2.0). The harness
-  project is not published.
+- **Harness:** a private Corstone-300 / MPS2 Cortex-M4 FVP harness (not public).
 - **Target:** Corstone-300 FVP (Cortex-M55, Armv8.1-M), AC6 6.24, CMSIS-RTOS2 over FreeRTOS 11.3.0
   (`ARM::CMSIS-FreeRTOS`).
 - **Configuration:** `CSP4CMSIS_STATIC_ALLOCATION`, `CSP4CMSIS_RTOS2_BACKEND_FREERTOS`,
   `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` (BASEPRI 0xA0).
-- **Build against this working tree:** the harness's `hello.cproject.yml` loads the pack by path,
+- **Build against this working tree:** the harness project loads the pack by path,
   `- pack: OliverFaust::CSP4CMSIS` / `path: <relative path to the CSP4CMSIS checkout>`. csolution reads
   `OliverFaust.CSP4CMSIS.pdsc` straight from this clone, so the `OliverFaust::CSP4CMSIS:Core` sources
   come from the working tree. The installed 1.0.0 pack is **not** used, and nothing is registered with
   `cpackget`, so the same pack version never appears twice. I verified this through
   `compile_commands.json`.
-- **Build result:** clean, 0 warnings with `-Wall -Wextra` over all CSP4CMSIS sources, `hello.c` and
-  the test file, after the `b8b1442` fix. Image with Step 1 applied: byte-for-byte the same section
+- **Build result:** clean, 0 warnings with `-Wall -Wextra` over all CSP4CMSIS sources, the harness's
+  start-up file and the test file, after the `b8b1442` fix. Image with Step 1 applied: byte-for-byte the same section
   sizes as v1.0.0 (Code 52,428 / RO 5,540 / RW 52 / ZI 45,736), as expected for an unused header.
 - **Determinism:**
   - Two FVP runs of the same image produce **identical output** and the same instruction count
@@ -489,14 +487,8 @@ forbidding `putFromISR()` on KeepNewest channels.
 
 ## How to rerun
 
-See `tests/fvp_sse300/README.md`. In short:
-
-```sh
-cd <harness>/helloworld_sse300 && source ../env.sh
-cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild
-$FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a out/MPS3-Corstone-300/hello.axf \
-    -C ethosu.num_macs=128 -f model_config_sse300.txt --simlimit 900 --stat
-```
+The FVP harness is not public (`tests/fvp_sse300/README.md`, "Harness"). It builds the suite with the library of this working tree and runs it on
+`FVP_Corstone_SSE-300_Ethos-U55` (`--simlimit 900`).
 
 Compare the output with `tests/fvp_sse300/results/2026-09-26_fvp_run.txt`.
 
@@ -582,7 +574,7 @@ On 2.0, every phase sweep (T1a, T1b, T3, T3i, T13, T13b; two sweeps each, about 
 covering the full v1.0.0 bug windows) recorded **0** bug trials. Compile checks: 14/14 on both backends
 (`tests/compile_checks/`).
 
-**End-to-end:** the FVP demo application (`helloworld_sse300` `application.cpp`) built against 2.0 and ran
+**End-to-end:** the FVP harness's demo application built against 2.0 and ran
 for 24 s of simulated time. It uses rendezvous channels, pipe-syntax ALT, `fairSelect` and
 `Run(InParallel)`.
 - 0 data errors on both backends.
@@ -857,7 +849,7 @@ Channel<Message>`) and ignoring vendored library copies:
 | Repository | Backend(s) | Namespace scope | Function-local `static` |
 |---|---|---|---|
 | This repo (CSP4CMSIS) | — | 0 (no examples) | 0 |
-| FVP `helloworld_sse300` demo | FreeRTOS / RTX5 harness | 0 | 2 |
+| FVP harness demo (private) | FreeRTOS / RTX5 harness | 0 | 2 |
 | Alif-DK-E8-CSP4CMSIS (`neuropathway`, `pack_test`) | FreeRTOS adapter | 0 | 4 |
 | Alif `csp4cmsis_alt_test` (uses `application.cpp` of the local, unpublished DK-E8 tree) | **RTX5** | 0 | 2 (`chan_A`/`chan_B` in `MainApp_Task`) |
 | HimaxWE2-CSP4CMSIS | FreeRTOS | 32 | 22 |
@@ -1328,7 +1320,7 @@ optionally `CSP4CMSIS_STATIC_ALLOCATION`).
 | Alif `DK-E8/critsec_isr_test.cpp` (local, unpublished) | `Chanout<Message>* s_isr_writer` → `IsrChanout<Message>` from `isrWriter()` (the channel is already buffered, KeepNewest) |
 | Alif-DK-E8-CSP4CMSIS clone (`neuropathway`, `csp4cmsis_pack_test`, `csp4cmsis_alt_test`) | library/pack update only |
 | B-L475E-IOT01A, NUCLEO-G474RE, CSP4CMSIS-Nucleo (+ CubeIDE workspaces) | library update only (no ISR writes, no sampling rendezvous, no signal channels) |
-| FVP pack-migration demo (local harness project) | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
+| FVP pack-migration demo (private FVP harness) | still on the 1.0.0 pack; moving it needs a 2.0 pack (not rebuilt) |
 
 ---
 
