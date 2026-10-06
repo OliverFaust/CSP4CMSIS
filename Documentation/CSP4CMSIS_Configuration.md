@@ -1,43 +1,57 @@
-# CSP4CMSIS: required project configuration
+# CSP4CMSIS: project configuration
 
-Every project consuming CSP4CMSIS must set the following in its own
-`.cproject.yml` (or equivalent build configuration) -- CSP4CMSIS does not
-default any of these, by design: a silently-wrong default is worse than a
-build that refuses to compile until you've made a deliberate choice.
+One define is always required: `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (section 3). Builds without
+CMSIS packs also name the device header (section 7). Everything else has a default (3.0 on): static
+allocation of every RTOS object, with the CMSIS-RTOS2 backend detected automatically. Where a default
+cannot be chosen safely, the build stops with an `#error` or a `static_assert` that says what to define.
 
-## 1. Select your CMSIS-RTOS2 backend (required with `CSP4CMSIS_STATIC_ALLOCATION`)
+## 1. CMSIS-RTOS2 backend (detected; define it only if detection fails)
 
-Define exactly one of:
-- `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` -- for any CMSIS-RTOS2 layer over FreeRTOS: Arm's adapter
-  (`CMSIS:RTOS2:FreeRTOS`) or ST's STM32Cube wrapper (CubeMX "CMSIS_V2").
-- `CSP4CMSIS_RTOS2_BACKEND_RTX5` -- for native RTX5 (`CMSIS:RTOS2:Keil RTX5`).
+Static allocation (section 2) needs the backend, because the control-block types differ: FreeRTOS's
+`StaticTask_t`/`StaticEventGroup_t`/`StaticSemaphore_t` or RTX5's `osRtx*_t`. CSP4CMSIS finds it in this
+order:
 
-Its only effect: it selects the backend's static control-block types in `csp_rtos_static.h`
-(`StaticTask_t`/`StaticSemaphore_t` or RTX5's `osRtx*_t`), which `CSP4CMSIS_STATIC_ALLOCATION`
-(section 2) needs. With `CSP4CMSIS_STATIC_ALLOCATION` and neither define, the build stops with an
-`#error` -- CSP4CMSIS will not guess. Without `CSP4CMSIS_STATIC_ALLOCATION` the define is not used;
-defining it anyway does no harm and keeps the configuration ready for static allocation.
+1. `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `CSP4CMSIS_RTOS2_BACKEND_RTX5`, if the project defines one
+   (both is an error);
+2. pack builds: `RTE_Components.h` (`RTE_CMSIS_RTOS2_FreeRTOS` from Arm's adapter,
+   `RTE_CMSIS_RTOS2_RTX5` from Keil RTX5);
+3. otherwise the RTOS header on the include path: `FreeRTOS.h` (Arm's adapter or ST's STM32Cube
+   wrapper, CubeMX "CMSIS_V2") or `rtx_os.h`.
 
-## 2. Static allocation (optional, required for a heap-free system)
+If none of these decides (neither header, or both reachable), the build stops with an `#error` asking for
+the explicit define. With FreeRTOS, static allocation also needs `configSUPPORT_STATIC_ALLOCATION 1` in
+`FreeRTOSConfig.h`; the library source `glue.cpp` stops the build if it is 0. (STM32CubeMX's FREERTOS
+middleware with the CMSIS_V2 interface sets it.)
 
-Define `CSP4CMSIS_STATIC_ALLOCATION` to give **every** RTOS2 object that
-CSP4CMSIS creates a statically allocated control block. That covers:
+**With static allocation (the default) and the FreeRTOS backend, `csp/csp4cmsis.h` includes `FreeRTOS.h`**
+(with `task.h`, `event_groups.h` and `semphr.h`): the RTOS control blocks are embedded in library objects
+(`CSProcessStatic<N>`, channels, `Barrier`), and their sizes come from FreeRTOS's configuration, so the
+library's headers need FreeRTOS's own types (`StaticTask_t` etc.). For example, a thread control block is
+92 bytes with Arm's adapter's `FreeRTOSConfig.h` and 416 bytes with STM32CubeMX's (newlib's reentrancy
+structure is part of it). With RTX5 it includes `rtx_os.h` for the same reason. With
+`CSP4CMSIS_DYNAMIC_ALLOCATION` it includes no RTOS header besides `cmsis_os2.h`.
+
+## 2. Static allocation (the default) and `CSP4CMSIS_DYNAMIC_ALLOCATION`
+
+Every RTOS object CSP4CMSIS creates has a statically allocated control block:
 - process threads (`CSProcessStatic<N>`, `Run()`);
 - `Run()`'s completion semaphore;
 - the semaphores of buffered, rendezvous and signal channels and of `Barrier`.
 
-Timeout guards (`RelTimeoutGuard`) create no RTOS object at all (2.0.1, section 8).
+Timeout guards (`RelTimeoutGuard`) create no RTOS object at all (2.0.1, section 8). Process stacks are
+members of the process objects (`CSProcessStatic<N>`).
 
-Stacks are always static (`CSProcessStatic<N>`). The macro requires (1) above, so that the correct
-backend-specific control-block types are used.
+Define `CSP4CMSIS_DYNAMIC_ALLOCATION` to take those control blocks, and the process stacks, from the RTOS's
+own allocator (FreeRTOS heap, RTX5 dynamic memory) instead; then no backend is needed. The stacks go with
+the control blocks because CMSIS-RTOS2 implementations such as Arm's FreeRTOS adapter accept a
+caller-provided stack only together with a caller-provided control block. Size the RTOS heap for every
+process's stack (`CSProcessStatic<N>`: N words) plus its control block. Defining both
+`CSP4CMSIS_DYNAMIC_ALLOCATION` and `CSP4CMSIS_STATIC_ALLOCATION` is an error.
+`CSP4CMSIS_STATIC_ALLOCATION` alone is still accepted (before 3.0 it opted in to static allocation; now it
+restates the default).
 
-If you leave it undefined, those control blocks come from the RTOS's own
-allocator (FreeRTOS heap, RTX5 dynamic memory). That is portable across any
-CMSIS-RTOS2 backend, and the safe default if you haven't verified your
-backend's static control-block types yourself.
-
-**This only governs CSP4CMSIS's own RTOS2 objects.** What else a system
-needs to be completely heap-free is in section 6.
+**This only governs CSP4CMSIS's own RTOS2 objects.** What else a system needs to be completely heap-free
+is in section 6.
 
 ## 3. `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` (always required)
 
@@ -53,6 +67,11 @@ RTX5, the same numeric value carried over correctly even though **RTX5
 has no equivalent setting at all** -- RTX5's own critical sections use
 `LDREX`/`STREX` exclusive-access atomics, not priority-threshold masking,
 so there's nothing RTOS-side to "match" on that backend.
+
+**The value is unshifted** (e.g. 5 on a device with 3 or 4 priority bits): CSP4CMSIS shifts it by
+`8 - __NVIC_PRIO_BITS` itself. A `static_assert` (3.0) rejects 0 and anything from
+`1 << __NVIC_PRIO_BITS` up, i.e. a shifted value such as FreeRTOS's `configMAX_SYSCALL_INTERRUPT_PRIORITY`
+(0x50, 0xA0), which would mask nothing.
 
 **What it actually depends on: your board's peripheral interrupt
 priorities.** CSP4CMSIS's `BufferedChannel` and `putFromISR()` use a
@@ -183,7 +202,7 @@ Corstone-300 FVP, Arm Compiler 6 and GCC):
   `operator new`, `pvPortMalloc()` or any other allocator. (The compiler references sized
   `operator delete` from the deleting destructors of classes with virtual destructors; CSP4CMSIS never
   `delete`s anything, so it is never called.)
-- **With `CSP4CMSIS_STATIC_ALLOCATION`, it makes no dynamic RTOS allocation either:** every RTOS2
+- **With static allocation (the default), it makes no dynamic RTOS allocation either:** every RTOS2
   object it creates has a static control block (section 2). Channels, guards, `Alternative`s and
   processes are ordinary objects that you place (statically or on a stack).
 - **How this is verified** (`tests/fvp_sse300/`, "Heap-free proof"): the full regression suite passes on
@@ -205,7 +224,7 @@ wrapper, because its `osTimerNew()` always allocates; 2.0.1 creates no timer.) D
 ### What a fully heap-free system additionally needs
 
 **Common to both backends:**
-- Define `CSP4CMSIS_STATIC_ALLOCATION` (and the backend define it requires).
+- Keep the default static allocation (do not define `CSP4CMSIS_DYNAMIC_ALLOCATION`).
 - Create every application thread and RTOS object with static memory (`cb_mem`/`cb_size`, and
   `stack_mem`/`stack_size` for threads).
 - Verify the result in the map file: no allocator symbol (`pvPortMalloc` / RTX5 `os_mem`) where there
@@ -286,7 +305,8 @@ With neither, the build stops with an `#error` that names the define. (2.0.1; CS
 Also for builds without packs:
 - **C++17** (`-std=gnu++17` or `-std=c++17`); STM32CubeIDE's default is GNU++14.
 - **Include path: `csp4cmsis/inc` only.** Applications include `"csp/csp4cmsis.h"`. Do not add
-  `csp4cmsis/inc/csp`: with it on the search path, `#include <time.h>` finds CSP4CMSIS's `time.h`.
+  `csp4cmsis/inc/csp` (not needed; before 3.0 its `time.h` hid the C library's `<time.h>`, so
+  CSP4CMSIS's header is `csp/csp_time.h` from 3.0 on).
 - Sources: `csp4cmsis/src/*.cpp`.
 
 Step-by-step for STM32CubeMX/STM32CubeIDE: `Documentation/CSP4CMSIS_STM32CubeIDE.md`.

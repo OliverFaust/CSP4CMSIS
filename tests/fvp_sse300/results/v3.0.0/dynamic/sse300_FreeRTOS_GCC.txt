@@ -1,0 +1,125 @@
+# target: FVP_Corstone_SSE-300_Ethos-U55 (Fast Models 11.28.32); library: CSP4CMSIS v2.1.0-6-gd85b9a4 (release-3.0.0); config: FreeRTOS_GCC, dynamic; Using compiler: GCC V14.2.1
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal0: Listening for serial connection on port 5000
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal1: Listening for serial connection on port 5001
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal2: Listening for serial connection on port 5002
+
+
+Info: FVP_MPS3_Corstone_SSE_300: telnetterminal5: Listening for serial connection on port 5003
+
+Hello world
+
+=== CSP4CMSIS BufferedChannel regression suite ===
+backend: FreeRTOS 11.3.0 (CMSIS-RTOS2 adapter); library: v2 API (ring buffer); RTOS heap enabled
+RESULT T0: PASS -- control: 10 values through a Block BufferedChannel via ALT
+   [T2] RTOS calls with BASEPRI raised: 0 (last: -); workload sum=14022
+RESULT T2: PASS -- no CMSIS-RTOS2 call inside a CSP critical section (BASEPRI raised)
+   [T4a] second ALT writer rejected by assert=1 (CSP4CMSIS: BufferedChannel: second ALTing writer (at most one per channel)); A done=1, B done=0
+RESULT T4a: PASS -- two ALT writers: both served or the second rejected by assert, never a silent hang
+RESULT T4b: PASS -- an ALT that never enabled a guard does not cancel another writer's registration
+   [T4c] writer A (sends 10) done=1; reader received 10
+RESULT T4c: PASS -- guard state is per writer: A's ALT sends A's value
+   [T5] after construction: pending=0 space_available=1 fatal=0 heap delta=176
+RESULT T5: PASS -- large channel is valid (or construction fails loudly)
+   [T6] RelTimeoutGuard: 0 B heap while alive; Alternative: 0 B; 200 loop constructions -> 0 allocations, 0 RTOS timers
+RESULT T6: PASS -- RelTimeoutGuard and Alternative create no RTOS timer and use no RTOS heap
+   [T17] 50 x (Channel + SignalChannel + Barrier): 50 allocations, heap delta 0 B, fatal=0
+RESULT T17: FAIL -- rendezvous and signal channels and Barrier use no RTOS heap
+   [T18] 3 threads x 20 phases: finished=3, early departures=0
+RESULT T18: PASS -- reusable Barrier: nobody leaves a phase before all arrived
+   [T7a] writer woken: reader uses input()=1, reader uses ALT=1
+RESULT T7a: PASS -- a read via ALT wakes a writer blocked in ALT
+   [T8] 3 writers x 20 values: sum=lu (expect lu), writers done=160
+RESULT T8: PASS -- three blocking writers on one Block channel, no loss
+   [T9] returns after stale flag=0; after real data: returns=1 value=42
+RESULT T9: PASS -- stale ALT wakeup is re-verified, not selected
+   [T10] second ALT reader rejected=1 (CSP4CMSIS: BufferedChannel: second ALTing reader (at most one per channel)); reader1 done=1 reader2 done=0
+RESULT T10: PASS -- a second ALTing reader is rejected by assert; the first is served
+   [T11] reader selected 0 (value 77); writer selected 0, done=1 (0 = channel, 1 = timeout)
+RESULT T11: PASS -- rendezvous ALT-vs-ALT completes on both ends with the value
+   [T12] received a=500 b=500, per-channel order ok=1
+RESULT T12: PASS -- rendezvous fairSelect over two channels: all messages, in order
+   [T14] before main(): kernel state=Inactive; static osSemaphoreNew=ok (usable after start=yes); dynamic osSemaphoreNew=ok
+   [T14] namespace-scope BufferedChannel after start: received sum=6 (expect 6)
+RESULT T14: PASS -- a BufferedChannel constructed at namespace scope (before main) works
+RESULT T15i: REPLACED -- rendezvous putFromISR() no longer exists (ISR writes go to buffered channels via isrWriter()) (compile check neg_rendezvous_isr.cpp)
+   [T15s] select 1 -> 0 (0 = X); select 2 -> 1 (1 = signal, 2 = timeout); sender completed=1
+RESULT T15s: PASS -- a signal that arrives while the ALT receiver takes another guard is not lost
+RESULT T16s: REPLACED -- signal channels have no ISR writer (data-less rendezvous, task-only) (compile check neg_signal_isr.cpp)
+RESULT T16n: REPLACED -- KeepNewest/KeepOldest rendezvous channels are rejected at compile time (use SamplingBufferedChannel<T, 1, P>) (compile check neg_rendezvous_policy.cpp)
+   [T1a] kb=26514 k=25014..27514 EARLY=1502 LATE=999 BUG=0 ANOMALY=0
+   [T1a] kb=26511 k=25011..27511 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+RESULT T1a: PASS -- no lost wakeup when a writer preempts an ALT reader anywhere in select()
+   [T1b] kb=26511 k=25011..27511 EARLY=1495 LATE=1006 BUG=0 ANOMALY=0
+   [T1b] kb=26511 k=25011..27511 EARLY=1505 LATE=996 BUG=0 ANOMALY=0
+RESULT T1b: PASS -- no lost wakeup when a reader preempts an ALT writer anywhere in select()
+   [T3] kb=26509 k=25009..27509 EARLY=1506 LATE=995 BUG=0 ANOMALY=0
+   [T3] kb=26512 k=25012..27512 EARLY=1497 LATE=1004 BUG=0 ANOMALY=0
+RESULT T3: PASS -- KeepNewest keeps the newest value of every writer (task vs task)
+   [T3i] kb=26512 k=25012..27512 EARLY=1498 LATE=1003 BUG=0 ANOMALY=0
+   [T3i] kb=26512 k=25012..27512 EARLY=1504 LATE=997 BUG=0 ANOMALY=0
+RESULT T3i: PASS -- KeepNewest keeps the newest value of every writer (task vs ISR putFromISR)
+   [T13] kb=26563 k=25063..27563 EARLY=1448 LATE=1053 BUG=0 ANOMALY=0
+   [T13] kb=26512 k=25012..27512 EARLY=1499 LATE=1002 BUG=0 ANOMALY=0
+RESULT T13: PASS -- no livelock: high-priority ALT reader vs preempted low-priority blocking writer
+   [T13] spins detected: 0
+   [T13b] kb=26512 k=25012..27512 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+   [T13b] kb=26514 k=25014..27514 EARLY=1501 LATE=1000 BUG=0 ANOMALY=0
+RESULT T13b: PASS -- no livelock: high-priority ALT writer vs preempted low-priority blocking reader
+   [T13b] spins detected: 0
+   [T15] kb=26502 k=25002..27502 EARLY=1503 LATE=998 BUG=0 ANOMALY=0
+   [T15] kb=26503 k=25003..27503 EARLY=1500 LATE=1001 BUG=0 ANOMALY=0
+RESULT T15: PASS -- no stale rendezvous wakeup: select() never reports C without its data (ALT-vs-ALT)
+   [T15] bad trials=0: PHANTOM (C selected, no data)=0, SILENT (X selected, C data written)=0
+RESULT T16a: REPLACED -- no ISR path into rendezvous channels, so no mutex/BASEPRI race (their state is task-only) (compile check neg_rendezvous_isr.cpp)
+   [T20] timeout 1 ticks: returned after 1..1 ticks, wrong guard 0/5
+   [T20] timeout 3 ticks: returned after 3..3 ticks, wrong guard 0/5
+   [T20] timeout 10 ticks: returned after 10..10 ticks, wrong guard 0/5
+RESULT T20: PASS -- a timeout of d ticks is selected after d or d+1 ticks
+   [T21] channel ready after 8 ticks, timeout 10: channel 3/3, timeout 0/3
+   [T21] channel ready after 9 ticks, timeout 10: channel 3/3, timeout 0/3
+   [T21] channel ready after 10 ticks, timeout 10: channel 0/3, timeout 3/3
+   [T21] channel ready after 11 ticks, timeout 10: channel 0/3, timeout 3/3
+   [T21] channel ready after 12 ticks, timeout 10: channel 0/3, timeout 3/3
+RESULT T21: PASS -- timeout vs late channel: one guard selected, the item neither lost nor doubled
+   [T22] timeouts (30, 5, 15): selected guard 2 after 5 ticks (expect 2 after 5..6)
+RESULT T22: PASS -- several timeout guards: the earliest deadline wins
+   [T23] no channel: guard 1 after 0 ticks; channel ready: guard 0, value 4242, transfers 1
+RESULT T23: PASS -- zero timeout: selected at once; a ready channel listed before it wins
+   [T24] stale wakeup every tick, timeout 10: guard 1 after 10 ticks
+RESULT T24: PASS -- stale wakeups do not postpone a timeout
+   [T25] after Run(): ran 1/1/1; priorities 16/9/16 (expect 16/9/16); default run: 1/1 at 8/8 (expect 8)
+RESULT T25: PASS -- TerminatingNetwork returns after all processes; taskPriority() overrides the composition priority (default osPriorityLow)
+   [T26] processes run when Run() returned: 0 (expect 0); later: 3 (expect 3); thread names ok
+RESULT T26: PASS -- StaticNetwork returns at once; threads named after name(); all processes run
+   [T27] forEachProcess: 3 processes, order ok; HWM before Run(): unavailable; after: 66/66/66 words free of 128 (expect 1..112)
+RESULT T27: PASS -- forEachProcess visits every process in order; stackHighWaterMarkWords() unavailable before Run(), then in words
+   [T28] StaticNetwork: fatal 1 ("CSP4CMSIS: Run(): osThreadNew() failed"), returned 0; TerminatingNetwork: fatal 1, returned 0
+RESULT T28: PASS -- a failed osThreadNew() in Run() is a fatal error, in both execution modes
+   [T29] 17 guards: fatal 1 ("CSP4CMSIS: Alternative: more than 16 guards"), construction completed 0
+RESULT T29: PASS -- a 17th guard in an Alternative is a fatal error
+   [T30] tick frequency 100 Hz: 0 of 15 conversions wrong; Milliseconds(1) = 1, Milliseconds(42962017) = 4296202, saturation ok
+RESULT T30: PASS -- Seconds()/Milliseconds(): rounded up, 0 stays 0, no 32-bit overflow, saturated
+   [T31] SleepFor(Time(5)): 5 ticks (expect 5..6); SleepFor(Time(0)): 0 ticks (expect 0)
+RESULT T31: PASS -- SleepFor(Time) sleeps the given number of ticks
+SUMMARY: PASS=35 FAIL=1 SKIP=0 REPLACED=4; heap used=63016 B; runner stack min free=7384 B
+
+Info: /OSCI/SystemC: Simulation stopped by user.
+
+--- FVP_MPS3_Corstone_SSE_300 statistics: -------------------------------------
+Simulated time                          : 261.195786s
+User time at initialisation             : 0.190308s
+User time                               : 59.097179s
+System time at initialisation           : 0.143232s
+System time                             : 0.028789s
+Wall time at initialisation             : 0.316002s
+Wall time                               : 59.091979s
+Performance index                       : 4.42
+cpu0                                    : 442.01 MIPS ( 26119246675 Inst)
+Memory highwater mark at initialisation : 0x105f0000 bytes ( 0.256 GB )
+Memory highwater mark                   : 0x1117f000 bytes ( 0.267 GB )
+-------------------------------------------------------------------------------

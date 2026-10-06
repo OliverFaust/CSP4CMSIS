@@ -22,7 +22,7 @@ public:
         while (true) {
             start_transfer();
             done >> ok;                 // kept even if it arrived before this read
-            SleepFor(1000);
+            SleepFor(Seconds(1));
         }
     }
 };

@@ -19,15 +19,17 @@ CMSIS-RTOS2-over-FreeRTOS adapter, ST's STM32Cube CMSIS-RTOS2 wrapper over FreeR
 
 | Core (architecture) | Target | CMSIS-RTOS2 backends | Toolchains | Builds | Version: result |
 |---|---|---|---|---|---|
-| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 2.1.0: all pass (PASS=36, heap-free 37; REPLACED=4) |
-| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass |
-| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 2.1.0: all pass |
-| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 2.1.0: all pass |
-| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 2.1.0: all pass (PASS=36, heap-free 37) |
+| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 3.0.0: all pass (PASS=36, heap-free 37; REPLACED=4) |
+| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass; 3.0.0: `-O0` FreeRTOS (GCC) and RTX5 (Arm Compiler 6) pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 3.0.0: all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 3.0.0: all pass |
+| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 3.0.0: all pass (PASS=36, heap-free 37) |
 
-Changes since the DK-E8 runs (2.0.0): timeout guards and build integration (2.0.1,
+Changes since the full DK-E8 runs (2.0.0): timeout guards and build integration (2.0.1,
 [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)); deprecations, fatal errors instead of silent failures,
-rounded-up time conversion and 7 new tests (2.1.0, [`docs/CHANGES_2.1.0.md`](docs/CHANGES_2.1.0.md)).
+rounded-up time conversion and 7 new tests (2.1.0, [`docs/CHANGES_2.1.0.md`](docs/CHANGES_2.1.0.md)); the stable
+3.0 API, static allocation by default (3.0.0, [`docs/CHANGES_3.0.md`](docs/CHANGES_3.0.md)). 3.0.0 also passes
+with the 3.0 defaults (no backend or allocation define) on both FVPs.
 The FVP harness used for these results is not public ([`tests/README.md`](tests/README.md)). Each target also has a
 v1.0.0 positive control (its known defects are detected; on the DK-E8 for RTX5 with Arm Compiler 6
 only), and the 2.0.0 timeout defect is detected on the MPS2 FVP and the NUCLEO-G474RE. Details:
@@ -48,9 +50,9 @@ application-level concern, out of this library's scope.
 ## Design principles
 
 - **No dynamic allocation of its own.** The library never calls an
-  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). With
-  `CSP4CMSIS_STATIC_ALLOCATION` every RTOS object it creates also has a
-  static control block, so it makes no dynamic RTOS allocation either.
+  allocator (`malloc`, `operator new`, `pvPortMalloc`, …). By default
+  (static allocation) every RTOS object it creates also has a static
+  control block, so it makes no dynamic RTOS allocation either.
   Verified by the full test suite passing on FreeRTOS and RTX5 with RTOS
   dynamic allocation disabled. A *completely* heap-free system additionally
   needs RTOS configuration (and, for CMSIS-FreeRTOS, two workarounds) and
@@ -63,12 +65,13 @@ application-level concern, out of this library's scope.
   specific API — CMSIS-RTOS2 has no standardized critical-section
   primitive, so this is CSP4CMSIS's own portable mechanism.
 - **No silent defaults where a wrong guess would be costly.** The
-  interrupt-priority threshold your critical sections need to respect (and,
-  with static allocation, the RTOS2 backend you're building against) is
-  required, explicit configuration — CSP4CMSIS refuses to compile until
-  you've set it deliberately. Errors it cannot recover from (a process
-  that cannot be started, a 17th ALT guard) stop in `csp4cmsis_fatal_error()`
-  instead of failing silently.
+  interrupt-priority threshold your critical sections need to respect is
+  required, explicit configuration, and a value that cannot be right (0, or
+  a shifted value) does not compile. Where a default is safe it is chosen
+  (static allocation, the detected backend); where it is not (both RTOS
+  headers reachable), the build stops and says what to define. Errors it
+  cannot recover from at run time (a process that cannot be started, a 17th
+  ALT guard) stop in `csp4cmsis_fatal_error()` instead of failing silently.
 
 ## Getting started
 
@@ -76,7 +79,7 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.1.0/OliverFaust.CSP4CMSIS.2.1.0.pack
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v3.0.0/OliverFaust.CSP4CMSIS.3.0.0.pack
 ```
 `-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
 script or CI job (no terminal input) it declines and installs nothing.
@@ -100,14 +103,20 @@ components:
   - component: OliverFaust::CSP4CMSIS:Core
 ```
 
-**Project-level defines** — see
-[`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md)
-for what each one means (always required: `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`; optional:
-`CSP4CMSIS_STATIC_ALLOCATION`, needed for a heap-free system, which then also requires the backend,
-`CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `CSP4CMSIS_RTOS2_BACKEND_RTX5`) and how to derive the right
-value for your board, in particular `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, whose correct
-value depends on your board's peripheral interrupt priorities, not (as
-you might expect) on which RTOS backend you're using.
+**One project-level define is required:** `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY`, the unshifted
+NVIC priority your critical sections mask up to. Its correct value depends on your board's peripheral
+interrupt priorities, not (as you might expect) on which RTOS backend you're using. Builds without packs
+also define `CSP4CMSIS_DEVICE_HEADER`. Everything else has a default: static allocation of every RTOS
+object (opt out with `CSP4CMSIS_DYNAMIC_ALLOCATION`), with the CMSIS-RTOS2 backend detected
+automatically. Details:
+[`Documentation/CSP4CMSIS_Configuration.md`](Documentation/CSP4CMSIS_Configuration.md).
+
+## API stability
+
+**3.x will not break source compatibility:** code that compiles with 3.0 compiles with every 3.x release
+(3.x may add API and fix bugs). The API is everything in namespace `csp` outside `csp::internal`, the
+fatal-error hook, the configuration defines and the version macros (`CSP4CMSIS_VERSION_MAJOR`, `_MINOR`,
+`_PATCH`). Migrating from 2.x: [`docs/CHANGES_3.0.md`](docs/CHANGES_3.0.md).
 
 ## Testing / examples
 

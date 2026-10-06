@@ -5,8 +5,10 @@ work (`docs/CHANGES_2.0.md`). It is **test code**: it deliberately uses `csp::in
 heap queries and armlink symbol patching, and is not part of the pack.
 
 The same source builds against:
-- **either library generation:** v1.0.0 (`BufferedChannel<T, P>(capacity)`) or v2
-  (`BufferedChannel<T, SIZE, P>`, detected via `CSP4CMSIS_BUFFERED_CHANNEL_API`);
+- **any library generation:** 3.x (detected by `__has_include("csp/csp_version.h")`; the suite uses the
+  3.0 API), 2.x (detected by its feature macros, e.g. `CSP4CMSIS_BUFFERED_CHANNEL_API`) or v1.0.0
+  (`BufferedChannel<T, P>(capacity)`). The macros `BC_ALTV`/`BC_G`/`BC_T` build each ALT in the form the
+  library offers (`Alternative(in | v, timeout)` in 3.x, guard pointers before);
 - **either CMSIS-RTOS2 backend:** FreeRTOS 11.3.0 through `ARM::CMSIS-FreeRTOS`, or Keil RTX5 5.9.1
   through `ARM::CMSIS-RTX`;
 - **three targets:** the Corstone-300 FVP (Cortex-M55, this README), the MPS2 Cortex-M4 FVP (Armv7E-M,
@@ -21,6 +23,7 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
+| **3.0.0**, `release-3.0.0` @ `d85b9a4` (`results/v3.0.0/`) | the 30 configurations of 2.1.0; plus 8 with the 3.0 defaults (no backend or allocation define) and 2 with `CSP4CMSIS_DYNAMIC_ALLOCATION` | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30 and all 8** (PASS=37 heap-free); dynamic: PASS=35, T17 fails as expected (channels then use the RTOS heap); compile checks all pass; controls: v1.0.0 the same 18 FAILs, 2.0.1 T28-T30 |
 | **2.1.0**, `release-2.1.0` @ `64f8f3e` (`results/v2.1.0/`) | **30**: Corstone-300 AC6 6.24 and GCC 14.2.1 × FreeRTOS/RTX5 × `-O0`/`-O2`/`-Os`, plus NoHeap × AC6/GCC (16); MPS2 M4 AC6/GCC × FreeRTOS/RTX5 × `-O0`/`-O2` (8), ST wrapper GCC (`FreeRTOS-ST`, `-O2`, `-NoHeap`, `-TP2`) and `FreeRTOS-TP2`/`-TP40` (6) | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30** (PASS=37 with T19 in the 4 NoHeap builds); compile checks (`compile_checks.txt`): all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper |
 | 2.0.1 with the 2.1.0 suite (positive control, `results/v2.1.0/controls_2.0.1/`) | Corstone-300 FreeRTOS GCC; MPS2 M4 FreeRTOS-ST GCC | PASS=32 FAIL=3 SKIP=1: T28, T29, T30 fail as they must; T31 SKIP (no `SleepFor(Time)`) |
 | 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
@@ -42,8 +45,8 @@ The 2.1.0 results were produced at c66a8b8, before the branch was rebuilt; libra
   | T16n | `neg_rendezvous_policy.cpp` (also `neg_signal_policy.cpp`) |
 
 - **T15, T15s** (the late wakeup and the lost signal) run and pass on the OWRV protocol.
-- The source still builds against v1.0.0: 1.x code paths are selected by the absence of
-  `CSP4CMSIS_ALT_PROTOCOL_OWRV` / `CSP4CMSIS_ISR_WRITER_API`.
+- The source still builds against v1.0.0 and 2.x: older code paths are selected by `BC_LIB3`,
+  `BC_OWRV`, `BC_ISR_WRITER` (from the version header or the 2.x feature macros).
 - **Harness RTOS heap:** 16 KB (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5 `OS_DYNAMIC_MEM_SIZE`; FVP test
   harness). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
 

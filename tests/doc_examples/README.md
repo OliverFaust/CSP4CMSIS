@@ -2,7 +2,7 @@
 
 Every code example of the CSP4CMSIS API reference
 (<https://oliverfaust.github.io/CSP4CMSIS/api>, source `CSP4CMSIS/api.md` in the website repository)
-is compiled here against this repository's library (v2.1.0), in two configurations.
+is compiled here against this repository's library (v3.0.0), in two configurations.
 
 | Path | Content |
 |---|---|
@@ -18,7 +18,7 @@ An example passes if it compiles with `-Wall -Wextra` and no warning (`-Werror` 
 Needs an STM32CubeIDE project for the NUCLEO-G474RE with FreeRTOS (CMSIS_V2), e.g. a clone of
 [nucleo-g474re_The_Process](https://github.com/OliverFaust/nucleo-g474re_The_Process): its `Core/Inc`
 (`FreeRTOSConfig.h`, HAL configuration), `Drivers/` and `Middlewares/` are used; the CSP4CMSIS headers
-come from this repository. Flags as in the book's CubeIDE projects (GNU++17, the four `CSP4CMSIS_*`
+come from this repository. Flags as in the STM32CubeIDE guide (GNU++17, the two `CSP4CMSIS_*`
 defines, `-fno-exceptions -fno-rtti`).
 
 ```bash
@@ -43,13 +43,13 @@ cbuild doc_examples.csolution.yml --update-rte --rebuild
 ```
 
 To check against a released pack instead, install it (`cpackget add`) and replace the `path:` line by the
-version, e.g. `- pack: OliverFaust::CSP4CMSIS@2.1.0`.
+version, e.g. `- pack: OliverFaust::CSP4CMSIS@3.0.0`.
 
-## Result (2026-10-06, CSP4CMSIS v2.1.0)
+## Result (2026-10-06, CSP4CMSIS v3.0.0, release branch; page draft not yet published)
 
-- `check.py run`: `examples/` matches the page (13 blocks); both synopses found in the 2.1.0 headers; all 11
-  examples compile with ST's wrapper (STM32Cube FW_G4 V1.6.3, FreeRTOS 10.3.1) and GNU Tools for
-  STM32 13.3.rel1.
-- `pack/`: all 11 examples compile with Arm GNU 13.2.rel1, both with this repository's pdsc and with
-  the released `OliverFaust.CSP4CMSIS.2.1.0.pack` installed by `cpackget`.
-- Earlier: the v2.0.1 page passed the same checks on 2026-10-05.
+- `check.py run`: `examples/` matches the page (13 blocks); both synopses found in the 3.0 headers; all 11
+  examples compile with ST's wrapper (STM32Cube FW_G4 V1.6.3, FreeRTOS 10.3.1), GNU Tools for STM32
+  13.3.rel1, with the two defines only (static allocation and backend from the 3.0 defaults).
+- `pack/`: all 11 examples compile with Arm GNU 13.2.rel1 and this repository's pdsc, `-Werror`.
+- Earlier: the v2.1.0 page passed the same checks (with the released 2.1.0 pack too) on 2026-10-06, the
+  v2.0.1 page on 2026-10-05.

@@ -41,6 +41,12 @@ FreeRTOS heap); no trimming was needed. 2.1.0 suite (T25–T31): 129 468 B (Debu
 still without trimming; the new tests keep their probe stacks at 128 words for this. Configurations: Debug
 (`-O0`) and Release (`-Os`, CubeIDE default).
 
+3.0.0 (`release-3.0.0` @ `d85b9a4`, 2026-10-06): projects `csp4cmsis_g474_tests_300` and
+`csp4cmsis_g474_tests_noheap_300` (copies of the 2.1.0 ones) without `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` and
+`CSP4CMSIS_STATIC_ALLOCATION`, i.e. the two defines of the 3.0 STM32CubeIDE guide: Debug and Release
+PASS=36, heap-free PASS=37, FAIL=0; STM32CubeIDE 2.1.0, GNU Tools for STM32 14.3.rel1; RAM as 2.1.0.
+`results/2026-10-06_3.0.0_*`.
+
 2.1.0 (library and suite as `release-2.1.0` @ `64f8f3e`; produced from `c66a8b8`, before the branch was
 rebuilt, whose library sources and suite are identical): `csp4cmsis_g474_tests_210` Debug and Release:
 PASS=36 FAIL=0 SKIP=0 REPLACED=4; `csp4cmsis_g474_tests_noheap_210` Debug and Release: PASS=37 (T19

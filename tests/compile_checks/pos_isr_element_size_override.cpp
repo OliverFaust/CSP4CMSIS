@@ -3,7 +3,7 @@
 #include "csp/csp4cmsis.h"
 struct Mid { unsigned char b[100]; };
 void isr() {
-    static csp::SamplingBufferedChannel<Mid, 2> ch;
+    static csp::BufferedChannel<Mid, 2> ch;
     auto out = ch.isrWriter(); Mid v = {};
     (void)out.putFromISR(v);
 }

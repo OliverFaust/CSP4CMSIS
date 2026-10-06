@@ -1,4 +1,4 @@
-// EXPECT-ERROR: KeepNewest/KeepOldest need a buffer
-// Replaces FVP test T16n: sampling policies only on buffered channels.
+// EXPECT-ERROR: template argument
+// Replaces FVP test T16n: sampling policies only on buffered channels; Channel<T> has none.
 #include "csp/csp4cmsis.h"
-csp::SamplingChannel<unsigned, csp::BufferPolicy::KeepNewest> ch;
+csp::Channel<unsigned, csp::BufferPolicy::KeepNewest> ch;

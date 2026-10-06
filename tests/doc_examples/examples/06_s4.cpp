@@ -6,11 +6,11 @@ struct Command { uint8_t opcode; uint16_t argument; };    // trivially copyable
 struct Sample  { uint32_t timestamp; float value; };
 
 static Channel<Command>          commands;   // rendezvous
-static Any2OneChannel<Command>   requests;   // rendezvous, several writers
-static SignalChannel<>           ready;      // rendezvous without data
+static Channel<Command>          requests;   // rendezvous, several writers (one end each)
+static SignalChannel             ready;      // rendezvous without data
 static BufferedChannel<Sample, 8> samples;   // 8 slots, Block
-static SamplingBufferedChannel<Sample, 1, BufferPolicy::KeepNewest> latest;     // newest value
-static SamplingBufferedChannel<Sample, 4, BufferPolicy::KeepOldest> first_four; // first four values
+static BufferedChannel<Sample, 1, BufferPolicy::KeepNewest> latest;     // newest value
+static BufferedChannel<Sample, 4, BufferPolicy::KeepOldest> first_four; // first four values
 
 class Producer : public CSProcessStatic<256> {
     Chanout<Sample> out = samples.writer();   // this process's own end
