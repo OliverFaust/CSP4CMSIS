@@ -1,8 +1,8 @@
 # config: lib=v2 build type=FreeRTOS toolchain=GCC
-# library: /home/of6/src/CSP4CMSIS @ d85b9a45f3b5585b90a7f08ef4d235b947d8dde0 dirty=0
+# library: <CSP4CMSIS checkout> @ d85b9a45f3b5585b90a7f08ef4d235b947d8dde0 dirty=0
 # harness: Alif-DK-E8-CSP4CMSIS @ 63246577aa1db6beb5614e750fe27c8e34f7c035 dirty=1
 # toolchain: arm-none-eabi-gcc (15:14.2.rel1-1) 14.2.1 20241119; cbuild cbuild version v2.14.0-28-g3d245ce (C) 2022-2026 Arm Ltd. and Contributors
-# image: /media/of6/c615665c-b372-4e0b-8c40-ca60b0369c46/Alif/hwtest-3.0/csp4cmsis_hwtest/out/DevKit-E8/FreeRTOS/GCC/M55_HP.bin sha256=0d87a97471feed2d
+# image: <harness>/out/DevKit-E8/FreeRTOS/GCC/M55_HP.bin sha256=0d87a97471feed2d
 # captured: 2026-10-06T19:48:28+01:00 from /dev/ttyACM0
 �
 === HWTEST header ===
