@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Compile-time checks for CSP4CMSIS 2.0.
+"""Compile-time checks for CSP4CMSIS 2.x.
 
 usage: run_checks.py <compile_commands.json of a harness build> [...]
 Each probe is compiled with the exact flags of the harness's bc_tests.cpp
 (-fsyntax-only). EXPECT-ERROR probes must fail with the given text in the
-diagnostics; EXPECT-OK probes must compile without warnings.
+diagnostics; EXPECT-WARNING probes must compile, with the given text in a
+warning (deprecations); EXPECT-OK probes must compile without warnings.
 """
 import json, os, re, shlex, subprocess, sys
 
@@ -21,12 +22,14 @@ for cc_path in sys.argv[1:]:
     ctx = os.path.basename(os.path.dirname(cc_path))
     for probe in sorted(f for f in os.listdir(here) if f.endswith('.cpp')):
         first = open(os.path.join(here, probe)).readline()
-        m = re.match(r'// EXPECT-(ERROR|OK):\s*(.*)', first)
+        m = re.match(r'// EXPECT-(ERROR|WARNING|OK):\s*(.*)', first)
         r = subprocess.run(cmd + ['-fsyntax-only', '-Wall', '-Wextra', os.path.join(here, probe)],
                            capture_output=True, text=True)
         diag = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', r.stderr)
         if m.group(1) == 'ERROR':
             ok = r.returncode != 0 and m.group(2) in diag
+        elif m.group(1) == 'WARNING':
+            ok = r.returncode == 0 and 'warning:' in diag and m.group(2) in diag
         else:
             ok = r.returncode == 0 and 'warning:' not in diag
         fails += 0 if ok else 1

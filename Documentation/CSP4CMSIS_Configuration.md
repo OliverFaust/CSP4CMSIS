@@ -5,19 +5,18 @@ Every project consuming CSP4CMSIS must set the following in its own
 default any of these, by design: a silently-wrong default is worse than a
 build that refuses to compile until you've made a deliberate choice.
 
-## 1. Select your CMSIS-RTOS2 backend (required, no default)
+## 1. Select your CMSIS-RTOS2 backend (required with `CSP4CMSIS_STATIC_ALLOCATION`)
 
 Define exactly one of:
-- `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` -- for the CMSIS-RTOS2-over-FreeRTOS
-  adapter (`CMSIS:RTOS2:FreeRTOS`).
-- `CSP4CMSIS_RTOS2_BACKEND_RTX5` -- for native RTX5
-  (`CMSIS:RTOS2:Keil RTX5`).
+- `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` -- for any CMSIS-RTOS2 layer over FreeRTOS: Arm's adapter
+  (`CMSIS:RTOS2:FreeRTOS`) or ST's STM32Cube wrapper (CubeMX "CMSIS_V2").
+- `CSP4CMSIS_RTOS2_BACKEND_RTX5` -- for native RTX5 (`CMSIS:RTOS2:Keil RTX5`).
 
-This selects the correct static-allocation control-block types in
-`csp_rtos_static.h` (only relevant if you also enable
-`CSP4CMSIS_STATIC_ALLOCATION`, below) and the correct `FreeRTOSConfig.h`-
-style bootstrap code path where one is needed. Leaving this undefined is a
-hard compile error (`#error`) by design -- CSP4CMSIS will not guess.
+Its only effect: it selects the backend's static control-block types in `csp_rtos_static.h`
+(`StaticTask_t`/`StaticSemaphore_t` or RTX5's `osRtx*_t`), which `CSP4CMSIS_STATIC_ALLOCATION`
+(section 2) needs. With `CSP4CMSIS_STATIC_ALLOCATION` and neither define, the build stops with an
+`#error` -- CSP4CMSIS will not guess. Without `CSP4CMSIS_STATIC_ALLOCATION` the define is not used;
+defining it anyway does no harm and keeps the configuration ready for static allocation.
 
 ## 2. Static allocation (optional, required for a heap-free system)
 

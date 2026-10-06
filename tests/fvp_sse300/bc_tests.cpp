@@ -179,6 +179,21 @@ osTimerId_t __wrap_osTimerNew(osTimerFunc_t f, osTimerType_t t, void* a, const o
     g_timer_news = g_timer_news + 1; return __real_osTimerNew(f, t, a, at);
 }
 #endif
+// T28: make the next osThreadNew() call fail (returns NULL without creating a thread).
+static volatile uint32_t g_fail_next_thread_new = 0;
+#if defined(__ARMCC_VERSION)
+osThreadId_t $Super$$osThreadNew(osThreadFunc_t f, void* a, const osThreadAttr_t* at);
+osThreadId_t $Sub$$osThreadNew(osThreadFunc_t f, void* a, const osThreadAttr_t* at) {
+    if (g_fail_next_thread_new) { g_fail_next_thread_new = 0; return nullptr; }
+    return $Super$$osThreadNew(f, a, at);
+}
+#else
+osThreadId_t __real_osThreadNew(osThreadFunc_t f, void* a, const osThreadAttr_t* at);
+osThreadId_t __wrap_osThreadNew(osThreadFunc_t f, void* a, const osThreadAttr_t* at) {
+    if (g_fail_next_thread_new) { g_fail_next_thread_new = 0; return nullptr; }
+    return __real_osThreadNew(f, a, at);
+}
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1302,6 +1317,204 @@ void test_T24() {
 #endif
 }
 
+
+// ===========================================================================
+// T25..T31 -- processes, Run(), time conversion (2.1.0). T25..T27 also run on
+// 2.0.x (same API); on 2.0.1, T28..T30 are positive controls and must FAIL.
+// ===========================================================================
+#if LIB_V2
+#if defined(CSP4CMSIS_SLEEPFOR_TIME_API)
+  #define LIB_2_1 1
+#else
+  #define LIB_2_1 0
+#endif
+
+// A process that records its thread priority and that it ran, then returns
+// (or parks, for the tests that inspect a live thread).
+constexpr uint32_t PROBE_WORDS = 128, PROBE_TOUCH = 16;
+struct ProbeProc : csp::CSProcessStatic<PROBE_WORDS> {
+    const char*  nm;
+    osPriority_t own;                      // CSP_PRIORITY_UNSPECIFIED: no override
+    bool         parks;
+    volatile osPriority_t seen = osPriorityError;
+    volatile int          ran  = 0;
+    ProbeProc(const char* n, osPriority_t p, bool k) : nm(n), own(p), parks(k) {}
+    const char* name() const override { return nm; }
+    osPriority_t taskPriority() const override { return own; }
+    void run() override {
+        volatile uint32_t touch[PROBE_TOUCH];      // some stack use, for T27
+        for (uint32_t i = 0; i < PROBE_TOUCH; ++i) touch[i] = i;
+        (void)touch[PROBE_TOUCH - 1];
+        seen = osThreadGetPriority(osThreadGetId());
+        ran = ran + 1;
+        if (parks) park();
+    }
+};
+
+// T25 -- TerminatingNetwork: Run() returns after every process returned;
+//        taskPriority() overrides the composition priority, the others run at it;
+//        without a priority argument the composition priority is osPriorityLow
+ProbeProc t25_a("T25a", CSP_PRIORITY_UNSPECIFIED, false), t25_b("T25b", osPriorityLow1, false),
+          t25_c("T25c", CSP_PRIORITY_UNSPECIFIED, false),
+          t25_d("T25d", CSP_PRIORITY_UNSPECIFIED, false), t25_e("T25e", CSP_PRIORITY_UNSPECIFIED, false);
+void test_T25() {
+    g_current_test = "T25";
+    csp::Run(csp::InParallel(t25_a, t25_b, t25_c), csp::ExecutionMode::TerminatingNetwork, osPriorityBelowNormal);
+    bool all = t25_a.ran == 1 && t25_b.ran == 1 && t25_c.ran == 1;
+    bool prio = t25_a.seen == osPriorityBelowNormal && t25_b.seen == osPriorityLow1 && t25_c.seen == osPriorityBelowNormal;
+    csp::Run(csp::InParallel(t25_d, t25_e));                     // default composition priority
+    bool dflt = t25_d.ran == 1 && t25_e.ran == 1 && t25_d.seen == osPriorityLow && t25_e.seen == osPriorityLow;
+    printf("   [T25] after Run(): ran %d/%d/%d; priorities %d/%d/%d (expect %d/%d/%d); default run: %d/%d at %d/%d (expect %d)\r\n",
+           t25_a.ran, t25_b.ran, t25_c.ran, (int)t25_a.seen, (int)t25_b.seen, (int)t25_c.seen,
+           (int)osPriorityBelowNormal, (int)osPriorityLow1, (int)osPriorityBelowNormal,
+           t25_d.ran, t25_e.ran, (int)t25_d.seen, (int)t25_e.seen, (int)osPriorityLow);
+    result("T25", (all && prio && dflt) ? 1 : 0,
+           "TerminatingNetwork returns after all processes; taskPriority() overrides the composition priority (default osPriorityLow)");
+}
+
+// T26 -- StaticNetwork: Run() returns before any (lower-priority) process ran;
+//        each thread is named after name(); all run afterwards
+// T27 -- forEachProcess visits every process in declaration order;
+//        stackHighWaterMarkWords(): unavailable before Run(), afterwards in (0, N)
+//        and reflecting the stack a process used
+ProbeProc t26_a("T26a", CSP_PRIORITY_UNSPECIFIED, true), t26_b("T26b", CSP_PRIORITY_UNSPECIFIED, true),
+          t26_c("T26c", osPriorityLow2, true);
+void test_T26_T27() {
+    g_current_test = "T26";
+    uint32_t hwm_before = t26_a.stackHighWaterMarkWords();
+    auto net = csp::InParallel(t26_a, t26_b, t26_c);
+    csp::Run(net, csp::ExecutionMode::StaticNetwork, osPriorityBelowNormal);
+    int ran_at_return = t26_a.ran + t26_b.ran + t26_c.ran;
+    bool names = t26_a.taskHandle() && t26_b.taskHandle() && t26_c.taskHandle() &&
+                 strcmp(osThreadGetName(t26_a.taskHandle()), "T26a") == 0 &&
+                 strcmp(osThreadGetName(t26_c.taskHandle()), "T26c") == 0;
+    osDelay(5);
+    int ran_later = t26_a.ran + t26_b.ran + t26_c.ran;
+    printf("   [T26] processes run when Run() returned: %d (expect 0); later: %d (expect 3); thread names %s\r\n",
+           ran_at_return, ran_later, names ? "ok" : "WRONG");
+    result("T26", (ran_at_return == 0 && ran_later == 3 && names) ? 1 : 0,
+           "StaticNetwork returns at once; threads named after name(); all processes run");
+
+    g_current_test = "T27";
+    const char* order[3] = {nullptr, nullptr, nullptr}; int n = 0;
+    uint32_t hwm[3] = {0, 0, 0};
+    net.forEachProcess([&](csp::CSProcess& p) { if (n < 3) { order[n] = p.name(); hwm[n] = p.stackHighWaterMarkWords(); } ++n; });
+    bool in_order = n == 3 && order[0] && strcmp(order[0], "T26a") == 0 && strcmp(order[1], "T26b") == 0 && strcmp(order[2], "T26c") == 0;
+    bool hwm_ok = hwm_before == CSP_STACK_HWM_UNAVAILABLE;
+    for (int i = 0; i < 3; ++i) hwm_ok = hwm_ok && hwm[i] > 0 && hwm[i] <= PROBE_WORDS - PROBE_TOUCH;
+    printf("   [T27] forEachProcess: %d processes, order %s; HWM before Run(): %s; after: %lu/%lu/%lu words free of %lu (expect 1..%lu)\r\n",
+           n, in_order ? "ok" : "WRONG", hwm_before == CSP_STACK_HWM_UNAVAILABLE ? "unavailable" : "WRONG",
+           (unsigned long)hwm[0], (unsigned long)hwm[1], (unsigned long)hwm[2], (unsigned long)PROBE_WORDS, (unsigned long)(PROBE_WORDS - PROBE_TOUCH));
+    result("T27", (in_order && hwm_ok) ? 1 : 0,
+           "forEachProcess visits every process in order; stackHighWaterMarkWords() unavailable before Run(), then in words");
+}
+
+// T28 -- a failed osThreadNew() in Run() is a fatal error (2.0.x: printf and
+//        continue, so a TerminatingNetwork caller waited for ever)
+// T28 and T29 run their victims one after another in one slot: a victim parks
+// in the fatal hook and is terminated (which frees a static TCB at once,
+// unlike a thread's own exit) before the slot is reused.
+ThreadSlot fatal_slot; ProbeProc t28_p("T28p", CSP_PRIORITY_UNSPECIFIED, false);  // never gets a thread
+volatile int t28_after1 = 0, t28_after2 = 0;
+void t28_static(void*)      { g_fail_next_thread_new = 1; csp::Run(csp::InParallel(t28_p), csp::ExecutionMode::StaticNetwork);      t28_after1 = 1; park(); }
+void t28_terminating(void*) { g_fail_next_thread_new = 1; csp::Run(csp::InParallel(t28_p), csp::ExecutionMode::TerminatingNetwork); t28_after2 = 1; park(); }
+void run_victim(osThreadFunc_t fn, const char* name) {
+    osThreadId_t t = spawn(fn, nullptr, osPriorityAboveNormal, fatal_slot, name);
+    osDelay(3);
+    if (t) (void)osThreadTerminate(t);
+}
+void test_T28() {
+    g_current_test = "T28";
+    uint32_t f0 = g_fatal_count;
+    run_victim(t28_static, "T28s");
+    uint32_t f1 = g_fatal_count; const char* m1 = g_fatal_msg;
+    run_victim(t28_terminating, "T28t");
+    uint32_t f2 = g_fatal_count; const char* m2 = g_fatal_msg;
+    bool msg_ok = m1 && m2 && strstr(m1, "osThreadNew") && strstr(m2, "osThreadNew");
+    printf("   [T28] StaticNetwork: fatal %lu (\"%s\"), returned %d; TerminatingNetwork: fatal %lu, returned %d\r\n",
+           (unsigned long)(f1 - f0), (f1 != f0 && m1) ? m1 : "-", t28_after1, (unsigned long)(f2 - f1), t28_after2);
+    result("T28", (f1 == f0 + 1 && f2 == f1 + 1 && msg_ok && !t28_after1 && !t28_after2) ? 1 : 0,
+           "a failed osThreadNew() in Run() is a fatal error, in both execution modes");
+}
+
+// T29 -- a 17th guard is a fatal error (2.0.x ignored it silently)
+volatile int t29_after = 0;
+void t29_alt(void*) {
+    static csp::Channel<uint32_t> ch; In in = ch.reader(); uint32_t v = 0;
+    csp::Alternative alt;
+    for (int i = 0; i < 17; ++i) alt.addBinding(in | v);
+    t29_after = 1; park();
+}
+void test_T29() {
+    g_current_test = "T29";
+    uint32_t f0 = g_fatal_count;
+    run_victim(t29_alt, "T29");
+    const char* m = g_fatal_msg;
+    bool ok = g_fatal_count == f0 + 1 && !t29_after && m && strstr(m, "16 guards");
+    printf("   [T29] 17 guards: fatal %lu (\"%s\"), construction completed %d\r\n",
+           (unsigned long)(g_fatal_count - f0), (g_fatal_count != f0 && m) ? m : "-", t29_after);
+    result("T29", ok ? 1 : 0, "a 17th guard in an Alternative is a fatal error");
+}
+
+// T30 -- Seconds()/Milliseconds() round up (2.0.x: down, and ms * freq
+//        overflowed 32 bits above ~71.6 min at 1 kHz). Checked as properties,
+//        in 64 bits: 0 stays 0; otherwise ticks / freq is never shorter than
+//        requested, and at most one tick longer; saturated at 0xFFFFFFFE
+//        (osWaitForever is not a duration).
+bool t30_ok(uint32_t amount, uint64_t per_second, uint32_t ticks, uint64_t f) {
+    const uint64_t want = (uint64_t)amount * f;           // requested duration, in ticks * per_second
+    if (amount == 0) return ticks == 0;
+    if (ticks == 0xFFFFFFFEu) return want > 0xFFFFFFFDull * per_second;   // saturated: the exact count is >= 0xFFFFFFFE
+    return (uint64_t)ticks * per_second >= want && ((uint64_t)ticks - 1) * per_second < want;
+}
+void test_T30() {
+    g_current_test = "T30";
+    const uint32_t f = osKernelGetTickFreq();
+    const uint32_t big = (uint32_t)(0x100000000ull / f) + 12345u;     // big * f overflows 32 bits
+    const uint32_t ms[] = {0u, 1u, 3u, 7u, 999u, 1000u, 1001u, 12345u, big, 0xFFFFFFFFu};
+    const uint32_t s[]  = {0u, 1u, 7u, 3600u, 0xFFFFFFFFu};
+    int bad = 0;
+    for (uint32_t m : ms) {
+        uint32_t got = csp::Milliseconds(m).to_ticks();
+        if (!t30_ok(m, 1000, got, f)) { ++bad; printf("   [T30] Milliseconds(%lu) = %lu ticks: wrong\r\n", (unsigned long)m, (unsigned long)got); }
+    }
+    for (uint32_t x : s) {
+        uint32_t got = csp::Seconds(x).to_ticks();
+        if (!t30_ok(x, 1, got, f)) { ++bad; printf("   [T30] Seconds(%lu) = %lu ticks: wrong\r\n", (unsigned long)x, (unsigned long)got); }
+    }
+    // Saturation: Seconds(0xFFFFFFFF) exceeds 32 bits of ticks at any frequency above 1 Hz.
+    const bool sat = f <= 1u || csp::Seconds(0xFFFFFFFFu).to_ticks() == 0xFFFFFFFEu;
+    printf("   [T30] tick frequency %lu Hz: %d of %u conversions wrong; Milliseconds(1) = %lu, Milliseconds(%lu) = %lu, saturation %s\r\n",
+           (unsigned long)f, bad, (unsigned)(sizeof(ms) / sizeof(ms[0]) + sizeof(s) / sizeof(s[0])),
+           (unsigned long)csp::Milliseconds(1).to_ticks(), (unsigned long)big, (unsigned long)csp::Milliseconds(big).to_ticks(),
+           sat ? "ok" : "WRONG");
+    result("T30", (bad == 0 && sat) ? 1 : 0, "Seconds()/Milliseconds(): rounded up, 0 stays 0, no 32-bit overflow, saturated");
+}
+
+// T31 -- SleepFor(Time) waits the given number of ticks (2.1.0 overload)
+void test_T31() {
+    g_current_test = "T31";
+#if LIB_2_1
+    osDelay(1);                                          // start at a tick edge
+    uint32_t t1 = ticks_now(); csp::SleepFor(csp::Time(5)); uint32_t d1 = ticks_now() - t1;
+    osDelay(1);
+    uint32_t t2 = ticks_now(); csp::SleepFor(csp::Time(0)); uint32_t d2 = ticks_now() - t2;
+    printf("   [T31] SleepFor(Time(5)): %lu ticks (expect 5..6); SleepFor(Time(0)): %lu ticks (expect 0)\r\n",
+           (unsigned long)d1, (unsigned long)d2);
+    result("T31", (d1 >= 5 && d1 <= 6 && d2 == 0) ? 1 : 0, "SleepFor(Time) sleeps the given number of ticks");
+#else
+    result("T31", -1, "SleepFor(Time) (2.1.0 API)");
+#endif
+}
+#else   // 1.x: different process API
+void test_T25() { result("T25", -1, "Run(): TerminatingNetwork and priority precedence (2.0 API)"); }
+void test_T26_T27() { result("T26", -1, "Run(): StaticNetwork (2.0 API)"); result("T27", -1, "forEachProcess, stackHighWaterMarkWords (2.0 API)"); }
+void test_T28() { result("T28", -1, "failed osThreadNew() in Run() (2.0 API)"); }
+void test_T29() { result("T29", -1, "17th guard (2.0 API)"); }
+void test_T30() { result("T30", -1, "time conversion (2.0 API)"); }
+void test_T31() { result("T31", -1, "SleepFor(Time) (2.1.0 API)"); }
+#endif
+
 // ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
@@ -1312,7 +1525,8 @@ void runner(void*) {
     test_T5();  test_T6();  test_T17(); test_T18(); test_T7a(); test_T8();  test_T9();  test_T10();
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
-    test_T20(); test_T21(); test_T22(); test_T23(); test_T24(); test_T19();
+    test_T20(); test_T21(); test_T22(); test_T23(); test_T24();
+    test_T25(); test_T26_T27(); test_T28(); test_T29(); test_T30(); test_T31(); test_T19();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)g_replaced, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));

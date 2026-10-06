@@ -5,10 +5,11 @@ as a C++ project, and runs a small CSP network. No CMSIS packs are involved: the
 the project as source.
 
 **Tested with:** STM32CubeMX 6.17.0, STM32Cube FW_G4 V1.6.3 (FreeRTOS 10.3.1 with ST's CMSIS-RTOS2
-wrapper), STM32CubeIDE 2.1.0 (GNU Tools for STM32 14.3.rel1), CSP4CMSIS 2.0.1. How each step was
+wrapper), STM32CubeIDE 2.1.0 (GNU Tools for STM32 14.3.rel1), CSP4CMSIS 2.0.1 (the regression suite
+also with 2.1.0, `tests/hw_nucleo_g474/README.md`). How each step was
 checked is in `docs/results_nucleo_g474.md`.
 
-**Requires CSP4CMSIS 2.0.1.** CSP4CMSIS 2.0.0 includes `RTE_Components.h`, which only pack builds have,
+**Requires CSP4CMSIS 2.0.1 or later.** CSP4CMSIS 2.0.0 includes `RTE_Components.h`, which only pack builds have,
 and its timeout guards need FreeRTOS's timer task above every thread that uses them (CubeMX's default,
 2, is not; `docs/known-issues.md`).
 
@@ -65,7 +66,7 @@ task priority, stay at CubeMX's defaults.
 ## 3. Add CSP4CMSIS
 
 1. Download the library source: the release page
-   <https://github.com/OliverFaust/CSP4CMSIS/releases/tag/v2.0.1>, **Source code (zip)** or
+   <https://github.com/OliverFaust/CSP4CMSIS/releases/latest>, **Source code (zip)** or
    **(tar.gz)**. (Not the `.pack`, which is for pack-based builds.)
 2. In the project folder, create `lib/` and copy the folder **`csp4cmsis/`** from the archive into it,
    together with the archive's `LICENSE` (MIT; keep it with the code):

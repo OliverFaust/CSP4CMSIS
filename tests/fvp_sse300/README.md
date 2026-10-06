@@ -21,11 +21,16 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 
 | Library | Configurations | Result |
 |---|---|---|
+| **2.1.0**, `release-2.1.0` @ `64f8f3e` (`results/v2.1.0/`) | **30**: Corstone-300 AC6 6.24 and GCC 14.2.1 × FreeRTOS/RTX5 × `-O0`/`-O2`/`-Os`, plus NoHeap × AC6/GCC (16); MPS2 M4 AC6/GCC × FreeRTOS/RTX5 × `-O0`/`-O2` (8), ST wrapper GCC (`FreeRTOS-ST`, `-O2`, `-NoHeap`, `-TP2`) and `FreeRTOS-TP2`/`-TP40` (6) | **PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30** (PASS=37 with T19 in the 4 NoHeap builds); compile checks (`compile_checks.txt`): all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper |
+| 2.0.1 with the 2.1.0 suite (positive control, `results/v2.1.0/controls_2.0.1/`) | Corstone-300 FreeRTOS GCC; MPS2 M4 FreeRTOS-ST GCC | PASS=32 FAIL=3 SKIP=1: T28, T29, T30 fail as they must; T31 SKIP (no `SleepFor(Time)`) |
 | 2.0, `buffered-channel-v2`: OWRV rendezvous/signal channels (`08c6d8a`), C1/C2 API (`0cca916`), static Barrier (`7c176c7`), migrated harness | **12**: Arm Compiler 6.24 and GCC 14.2.1 × `-O0`/`-O2`/`-Os` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 12.** T13/T13b: 0 spins in every sweep; T15: 0 bad trials |
 | 2.0, heap-free builds (see "Heap-free proof") | **4**: `FreeRTOS-NoHeap`, `RTX5-NoHeap` × AC6/GCC, `-O0` | **PASS=25 FAIL=0 SKIP=0 REPLACED=4** (T19 included); RTOS heap used: 0 B |
 | v1.0.0 @ `a789d2a` (regression baseline; 26-test suite of `11858f6`) | AC6 `-O0`, FreeRTOS and RTX5 | PASS=8 FAIL=17 SKIP=1 on both |
 | **MPS2 Cortex-M4 FVP** (Armv7E-M), 2.0 @ `73f46b7` (library sources as `c60665d`) | **8**: AC6 and GCC × `-O0`/`-O2` × FreeRTOS/RTX5 | **PASS=24 FAIL=0 SKIP=0 REPLACED=4 in all 8**; every sweep BUG=0/ANOMALY=0, both regimes; T13/T13b 0 spins; T15 0 bad trials |
 | MPS2 Cortex-M4 FVP, v1.0.0 @ `a789d2a` (current suite) | AC6 `-O0` and GCC `-O2`, FreeRTOS and RTX5 | PASS=8 FAIL=18 SKIP=2 in all 4 (the same 18 failures) |
+
+The 2.1.0 results were produced at c66a8b8, before the branch was rebuilt; library sources identical to 64f8f3e
+(the log headers and the control logs name c66a8b8).
 
 - **REPLACED** = the defect cannot be written any more: the API that allowed it was removed, and a compile
   check in `tests/compile_checks/` proves the removal. Not counted as PASS.
@@ -40,7 +45,7 @@ A `SUMMARY` line follows, and then EOT, which ends the FVP run.
 - The source still builds against v1.0.0: 1.x code paths are selected by the absence of
   `CSP4CMSIS_ALT_PROTOCOL_OWRV` / `CSP4CMSIS_ISR_WRITER_API`.
 - **Harness RTOS heap:** 16 KB (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5 `OS_DYNAMIC_MEM_SIZE`; FVP test
-  branch `f364bf2`). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
+  harness). The suite uses at most 1.4 KB, and none for CSP4CMSIS objects.
 
 Positive control for the other toolchain and optimisation levels: v1.0.0 built with GCC `-O2` and with
 AC6 `-O2` (FreeRTOS) gives the same PASS=6 FAIL=12 SKIP=1 as at `-O0` (19-test suite, before T14). So T2's
@@ -55,7 +60,7 @@ History:
 
 ## Heap-free proof (`FreeRTOS-NoHeap`, `RTX5-NoHeap` build types)
 
-Two extra build types of the harness (local, unpublished harness project) disable RTOS dynamic allocation completely. The
+Two extra build types of the harness disable RTOS dynamic allocation completely. The
 whole suite runs on them with Arm Compiler 6 and GCC.
 
 | Build type | RTOS configuration | What proves "no dynamic RTOS allocation" |
@@ -84,82 +89,33 @@ whole suite runs on them with Arm Compiler 6 and GCC.
 
 ## Harness
 
-- **Project:** the CSP4CMSIS test harness: a local, unpublished adaptation of the public Arm example project
-  `helloworld_sse300` (github.com/joseph-yiu/arm_fvp_helloworld, Apache-2.0). The harness
-  project itself (build types, RTOS configuration, heap-free shims) is not part of this repository.
-- **Target:** Corstone-300 FVP (Fast Models 11.28.32, `FVP_Corstone_SSE-300_Ethos-U55`), Cortex-M55.
-- **Second target (Armv7E-M):** `helloworld_mps2_m4/` in the same local harness repository:
-  `FVP_MPS2_Cortex-M4` (Fast Models 11.28.32), device `ARM::ARMCM4` (Cortex_DFP 1.2.0), stdout on the
-  CMSDK UART0, `BC_SWI_IRQn = Interrupt0_IRQn`, 25 MHz core clock, 100 Hz tick, the same RTOS test
-  settings (plus the Armv7-M `vPortSVCHandler`/`xPortPendSVHandler` aliases for FreeRTOS). Build types
-  `FreeRTOS`, `FreeRTOS-O2`, `RTX5`, `RTX5-O2`; `run_m4.sh` builds against the chosen library tree and
-  writes the logs in `results/mps2_m4/`.
-  CMSIS-Toolbox 2.14.1.
-- **Build types** (`hello.csolution.yml`): each backend at three optimisation levels.
+The FVP results come from a private Corstone-300 / MPS2 Cortex-M4 FVP harness, which is not public. It is
+a CMSIS-Toolbox (csolution) project that builds `bc_tests.cpp` and this repository's library, loaded as a
+local pack from the checkout's `.pdsc` (an installed CSP4CMSIS pack is not used), and runs the image on
+the FVPs. Its settings, as far as they affect the results:
 
-  | Build types | CSP4CMSIS backend define | RTOS components |
-  |---|---|---|
-  | `.FreeRTOS`, `.FreeRTOS-O2`, `.FreeRTOS-Os` | `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` | CMSIS-RTOS2 FreeRTOS adapter + FreeRTOS 11.3.0; config in `RTE/RTOS/FreeRTOSConfig.h` (32 KB heap_4) |
-  | `.RTX5`, `.RTX5-O2`, `.RTX5-Os` | `CSP4CMSIS_RTOS2_BACKEND_RTX5` | `ARM::CMSIS:RTOS2:Keil RTX5&Source` 5.9.1; `RTE/CMSIS/RTX_Config.h` |
-
-  - The plain types use the compiler default (`-O0`); the `-O2`/`-Os` types pass that flag verbatim
-    (`misc`).
-  - Toolchains: `--toolchain AC6` (Arm Compiler 6.24) or `--toolchain GCC` (GCC 14.2.1; set
-    `GCC_TOOLCHAIN_14_2_1=/usr/bin`).
-  - Output goes to `out/<target>/<build type>/<compiler>/`.
-
-  `RTX_Config.h` is aligned with the FreeRTOS setup:
-  - `OS_TICK_FREQ 100`
-  - `OS_ROBIN_ENABLE 0`
-  - `OS_TIMER_THREAD_PRIO 55`
-  - `OS_THREAD_LIBSPACE_NUM 8`
-  - `OS_STACK_WATERMARK 1`
-- **Both builds:** `CSP4CMSIS_STATIC_ALLOCATION` and `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5`
-  (BASEPRI 0xA0).
-- **Timing:** the FVP tick runs at about 312.5 Hz on both backends. `core_clk.mul` is 100 MHz while the
-  software assumes 32 MHz. The tests use tick counts only.
-
-### Which library is under test
-
-`hello.cproject.yml` loads CSP4CMSIS as a **local pack** from the symlink `./csp4cmsis_under_test`:
-
-```yaml
-    - pack: OliverFaust::CSP4CMSIS
-      path: ./csp4cmsis_under_test
-```
-
-csolution reads `OliverFaust.CSP4CMSIS.pdsc` directly from the linked tree, so
-`OliverFaust::CSP4CMSIS:Core` compiles that tree's sources. An installed `OliverFaust::CSP4CMSIS@1.0.0` in
-the pack root (`$CMSIS_PACK_ROOT`) is **not** used, and nothing is registered with `cpackget`. The test source itself always
-comes from this repository's working tree.
-
-```sh
-cd <harness>/helloworld_sse300
-ln -sfn <CSP4CMSIS checkout>        csp4cmsis_under_test   # working tree (v2)
-ln -sfn <CSP4CMSIS v1.0.0 worktree> csp4cmsis_under_test   # v1.0.0 regression baseline
-#   (git -C <CSP4CMSIS checkout> worktree add --detach <CSP4CMSIS v1.0.0 worktree> v1.0.0)
-```
-
-To verify which library was used:
-`grep -o '[^"]*/csp4cmsis/src/[a-z_]*\.cpp' out/MPS3-Corstone-300/*/*/compile_commands.json | sort -u`
-
-## Run
-
-```sh
-source ../env.sh
-export GCC_TOOLCHAIN_14_2_1=/usr/bin                                    # for GCC builds
-cbuild hello.csolution.yml --packs --toolchain AC6 --rebuild           # all 6 build types
-cbuild hello.csolution.yml --packs --toolchain GCC                     # all 6 build types
-for d in out/MPS3-Corstone-300/*/*/; do
-  img=$(ls $d/hello.axf $d/hello.elf 2>/dev/null | head -1)
-  $FVP_BIN_DIR/FVP_Corstone_SSE-300_Ethos-U55 -a $img -C ethosu.num_macs=128 \
-      -f model_config_sse300.txt --simlimit 1500 --stat > run_$(basename $(dirname $d))_$(basename $d).txt &
-done; wait
-```
-
-- Each run takes about 130 s of simulated time. The v1.0.0 RTX5 run takes about 310 s, because T3i hangs
-  on every trial there. That is about 5–10 minutes of wall-clock time.
-- Two runs of the same image produce identical output (apart from telnet port numbers).
+- **Targets:** Corstone-300 FVP (`FVP_Corstone_SSE-300_Ethos-U55`, Cortex-M55) and MPS2 Cortex-M4 FVP
+  (`FVP_MPS2_Cortex-M4`, device `ARM::ARMCM4`, Cortex_DFP 1.2.0, 25 MHz core clock,
+  `BC_SWI_IRQn = Interrupt0_IRQn`), both Fast Models 11.28.32; stdout on the CMSDK UART0; the run
+  ends at the EOT after the `SUMMARY` line. CMSIS-Toolbox 2.14.1.
+- **Backends:** Arm's CMSIS-RTOS2 adapter with FreeRTOS 11.3.0 (`ARM::CMSIS-FreeRTOS`), Keil RTX5 5.9.1
+  (`ARM::CMSIS-RTX`), and on the M4 also ST's CMSIS-RTOS2 wrapper with FreeRTOS 10.3.1 from STM32CubeG4
+  1.6.3.
+- **Build types:** each backend at `-O0` (compiler default), `-O2` and (Corstone-300) `-Os`; heap-free
+  build types (see "Heap-free proof"); on the M4 also timer task priorities 2 and 40. Toolchains: Arm
+  Compiler 6.24 and GCC 14.2.1 (ST's wrapper: GCC only).
+- **RTOS settings, all backends:** 100 Hz tick, no time slicing (`OS_ROBIN_ENABLE 0`), timer task
+  priority 55 (`osPriorityRealtime7`), 16 KB RTOS heap (FreeRTOS `configTOTAL_HEAP_SIZE`, RTX5
+  `OS_DYNAMIC_MEM_SIZE`); RTX5 `OS_STACK_WATERMARK 1`, `OS_THREAD_LIBSPACE_NUM 8`. The Armv7-M FreeRTOS
+  port needs the `vPortSVCHandler`/`xPortPendSVHandler` aliases.
+- **CSP4CMSIS:** `CSP4CMSIS_STATIC_ALLOCATION`, `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` (BASEPRI
+  0xA0); the backend define per build type.
+- **Interposition** (T2, T6, T28): armlink `$Sub$$`/`$Super$$` in `bc_tests.cpp` (Arm Compiler), or
+  `-Wl,--wrap=` for `osEventFlagsSet`, `osThreadFlagsSet`, `osSemaphoreRelease`, `osSemaphoreAcquire`,
+  `osMessageQueuePut`, `osMessageQueueGet`, `osMessageQueueGetCount`, `osMessageQueueGetSpace`,
+  `osMutexAcquire`, `osMutexRelease`, `osTimerNew` and `osThreadNew` (GCC).
+- **Timing:** the Corstone-300 FVP tick runs at about 312.5 Hz (the model's core clock is 100 MHz, the
+  software assumes 32 MHz). The tests use tick counts only.
 
 ## Tests
 
@@ -194,6 +150,13 @@ done; wait
 | T22 | several timeout guards (30, 5, 15 ticks): the earliest deadline wins, after 5..6 ticks |
 | T23 | zero timeout: selected at once (0 ticks, no wait); a channel that is ready and listed before it wins |
 | T24 | a stale ALT wakeup every tick (up to 50) does not postpone a 10-tick timeout. FAIL on 2.0.0 (60 ticks: the timer restarted every round); SKIP on 1.x |
+| T25 | `Run(InParallel(…), TerminatingNetwork, prio)` returns after all three processes returned; a process's `taskPriority()` override wins, the others run at `prio`; without `prio`, `osPriorityLow` (2.1.0: `CSP_DEFAULT_NETWORK_PRIORITY`) |
+| T26 | `Run(…, StaticNetwork, prio)` returns before any (lower-priority) process ran; threads named after `name()`; all three run afterwards |
+| T27 | `forEachProcess` visits the three processes in order; `stackHighWaterMarkWords()` is `CSP_STACK_HWM_UNAVAILABLE` before `Run()`, afterwards between 1 and (stack − 16) words (each process touches 16 words) |
+| T28 | a failed `osThreadNew()` (forced through the interposition, see "T2 method") in `Run()` is a fatal error and `Run()` does not return, in both modes. FAIL on 2.0.1 (prints and continues) |
+| T29 | a 17th guard in an `Alternative` is a fatal error. FAIL on 2.0.1 (ignored) |
+| T30 | `Seconds()`/`Milliseconds()`: 0 stays 0; otherwise never shorter than requested and at most one tick longer, computed in 64 bits (`ms * freq` above 2³²); saturated at `0xFFFFFFFE`. FAIL on 2.0.1 (rounds down, overflows) |
+| T31 | `SleepFor(Time(5))` sleeps 5..6 ticks, `SleepFor(Time(0))` 0 (2.1.0 API; SKIP before) |
 | T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |
@@ -209,8 +172,8 @@ and `osMutexAcquire/Release`. Every call from the library therefore passes a che
 with `BASEPRI != 0`. The map file lists the wrappers, and the disassembly shows the library's call sites
 resolved to them.
 
-The same mechanism counts `osTimerNew()` calls for T6 (GCC: `-Wl,--wrap=osTimerNew` in the harness
-cproject too).
+The same mechanism counts `osTimerNew()` calls for T6, and makes one `osThreadNew()` call fail for T28
+(GCC: `-Wl,--wrap=osTimerNew,--wrap=osThreadNew` in the harness cproject too).
 
 The workload drives every notification path:
 - an ALT reader woken by `output()` and by `putFromISR()`;
@@ -240,7 +203,9 @@ The workload drives every notification path:
   harness's 124.5 KB `RW_RAM0`.
 - T15 priorities: runner > ALT reader (target) > ALT writer (victim). `check()` waits 2 ticks so that the
   target has finished before its log is read.
-- Test threads are never deleted. Threads that are expected to hang (on v1.0.0) stay blocked forever.
+- Test threads are never deleted, except T28's and T29's: each parks in the fatal-error hook and is terminated
+  (`osThreadTerminate()`) so the next one can reuse its static slot. The processes of T25 return (a
+  `TerminatingNetwork`). Threads that are expected to hang (on v1.0.0) stay blocked forever.
 - `csp4cmsis_fatal_error()` is overridden: the test records the message and parks the calling thread.
 - RTX5: `osRtxErrorNotify()` is overridden to print the error code before halting.
 - `results/2026-09-26_fvp_run.txt` is the output of the earlier, v1.0.0-only analysis suite (commit

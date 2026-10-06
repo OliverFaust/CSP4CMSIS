@@ -36,24 +36,33 @@ struct Time {
 // C++CSP Style Time Unit Helpers
 // ----------------------------------------------------
 
-/**
- * @brief Creates a csp::Time duration representing a number of seconds.
- *
- * osKernelGetTickFreq() (a runtime call) replaces FreeRTOS's
- * configTICK_RATE_HZ (a compile-time macro) -- CMSIS-RTOS2 doesn't
- * expose the kernel tick frequency as a constant, since a portable
- * RTOS2 caller can't assume any particular backend defines one the
- * same way.
- */
-inline Time Seconds(uint32_t s) {
-    return Time(s * osKernelGetTickFreq());
+namespace internal {
+    /// ticks = ceil(amount * tick_frequency / per_second), computed in 64 bits;
+    /// 0 stays 0, any other duration is at least 1 tick; saturates at
+    /// 0xFFFFFFFE (0xFFFFFFFF is osWaitForever, not a duration).
+    inline uint32_t to_ticks_round_up(uint32_t amount, uint32_t per_second) {
+        const uint64_t f = osKernelGetTickFreq();
+        const uint64_t t = ((uint64_t)amount * f + (per_second - 1U)) / per_second;
+        return t > 0xFFFFFFFEULL ? 0xFFFFFFFEUL : (uint32_t)t;
+    }
 }
 
 /**
- * @brief Creates a csp::Time duration representing a number of milliseconds.
+ * @brief A duration of `s` seconds, in ticks of the kernel tick frequency
+ * (osKernelGetTickFreq(), a run-time call: CMSIS-RTOS2 has no compile-time
+ * tick rate).
+ */
+inline Time Seconds(uint32_t s) {
+    return Time(internal::to_ticks_round_up(s, 1U));
+}
+
+/**
+ * @brief A duration of `ms` milliseconds, in ticks, rounded UP (2.1.0): a
+ * non-zero duration is never shorter than requested, and never 0 ticks.
+ * Milliseconds(0) is 0 ticks.
  */
 inline Time Milliseconds(uint32_t ms) {
-    return Time((ms * osKernelGetTickFreq()) / 1000U);
+    return Time(internal::to_ticks_round_up(ms, 1000U));
 }
 
 } // namespace csp
