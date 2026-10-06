@@ -118,7 +118,8 @@ Results (2026-10-06, `release-3.0.0` @ `d85b9a4`):
   defines of the 3.0 STM32CubeIDE guide: PASS=36 (`-O0`, `-Os`) and PASS=37 heap-free (`-O0`, `-Os`),
   FAIL=0 (`tests/hw_nucleo_g474/results/2026-10-06_3.0.0_*`).
 - **Alif DK-E8** (RTSS-HP, Cortex-M55 at 400 MHz, 1 kHz tick): FreeRTOS with GCC and RTX5 with Arm
-  Compiler 6, PASS=36 FAIL=0 each (`docs/dk_e8_results_3.0.0/`).
+  Compiler 6, PASS=36 FAIL=0 each (`docs/dk_e8_results_3.0.0/`; harness tag `hwtest-3.0-evidence` of
+  Alif-DK-E8-CSP4CMSIS).
 - **Positive controls** with the 3.0 suite: v1.0.0 fails the same 18 tests as before (PASS=12 FAIL=18
   SKIP=10 on the MPS2 M4, Arm's adapter and ST's wrapper); 2.0.1 fails T28, T29, T30 as before (PASS=32
   FAIL=3 SKIP=1) (`results/v3.0.0/controls/`).
