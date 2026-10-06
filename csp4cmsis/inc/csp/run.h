@@ -4,16 +4,13 @@
 #include "cmsis_os2.h"
 #include <tuple>
 #include <utility>
-#include <cstdio>
-#include "csp4cmsis.h"
+#include "process.h"
 #include "csp_fatal.h"
 
 // --- 1. START CSP NAMESPACE (For Definitions) ---
 namespace csp {
-    class CSProcess; // Defined in process.h
-    // TaskCtx is defined in process.h (needed there so public_task.h can
-    // see it too -- csp4cmsis.h includes public_task.h before run.h).
 
+    /// How Run() starts a network (3.0: always given explicitly).
     enum class ExecutionMode {
         TerminatingNetwork, // Blocking: spawns all processes, waits for all to finish.
         StaticNetwork        // Non-blocking: spawns all processes, returns immediately.
@@ -29,14 +26,9 @@ extern "C" {
 // --- 3. Continue CSP Namespace (For Template Logic) ---
 namespace csp {
 
-// Composition-wide default priority for the ParallelHelper Run()
-// overloads: used for every process that does not override taskPriority().
-// osPriorityLow: low, but above osPriorityIdle.
-constexpr osPriority_t CSP_DEFAULT_NETWORK_PRIORITY = osPriorityLow;
-
-/// Deprecated (2.1.0) name of CSP_DEFAULT_NETWORK_PRIORITY.
-[[deprecated("CSP4CMSIS 2.1.0: use CSP_DEFAULT_NETWORK_PRIORITY")]]
-constexpr osPriority_t CSP_LEGACY_PARALLEL_PRIORITY = CSP_DEFAULT_NETWORK_PRIORITY;
+/// Default composition priority of Run(): for every process that does not
+/// override taskPriority(). osPriorityLow: low, but above osPriorityIdle.
+inline constexpr osPriority_t CSP_DEFAULT_NETWORK_PRIORITY = osPriorityLow;
 
 // --- Parallel Helper ---
 template <typename... Processes>
@@ -61,8 +53,8 @@ private:
     void spawn_task(osSemaphoreId_t sem, osPriority_t composition_priority) {
         CSProcess& proc = std::get<I>(procs);
 
-        TaskCtx* ctx = proc.prepareTaskCtx(sem);
-        osPriority_t priority = resolveTaskPriority(proc, composition_priority);
+        internal::TaskCtx* ctx = proc.prepareTaskCtx(sem);
+        osPriority_t priority = internal::resolveTaskPriority(proc, composition_priority);
 
         // osThreadAttr_t -- same pattern as public_task.h's Run(); see
         // that file's comment and csp_rtos_static.h for why stack_mem/
@@ -165,16 +157,13 @@ ParallelHelper<Processes...> InParallel(Processes&... procs) {
     return ParallelHelper<Processes...>(procs...);
 }
 
-// 1. Terminating-network Run(). 'priority' is the COMPOSITION-WIDE
-// default: it applies to any process that hasn't overridden
-// taskPriority(). The default value matches pre-1.2 behavior exactly.
-template <typename... Processes>
-void Run(ParallelHelper<Processes...> helper,
-         osPriority_t priority = CSP_DEFAULT_NETWORK_PRIORITY) {
-    helper.execute_terminating(priority);
-}
-
-// 2. Explicit ExecutionMode selection. Same priority semantics as (1).
+/**
+ * @brief Starts every process of `helper` as its own thread.
+ * StaticNetwork: returns at once. TerminatingNetwork: returns when every
+ * process has returned from run() (call it from a thread). `priority` is the
+ * composition priority, for every process that does not override
+ * taskPriority(). A thread that cannot be created is a fatal error.
+ */
 template <typename... Processes>
 void Run(ParallelHelper<Processes...> helper, ExecutionMode mode,
          osPriority_t priority = CSP_DEFAULT_NETWORK_PRIORITY) {

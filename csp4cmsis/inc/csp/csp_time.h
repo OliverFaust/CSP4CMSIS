@@ -1,4 +1,5 @@
-// --- time.h (CMSIS-RTOS2 migration) ---
+// --- csp_time.h ---  (csp/time.h before 3.0: renamed, so that it can never
+// hide the C library's <time.h>)
 #ifndef CSP4CMSIS_TIME_H
 #define CSP4CMSIS_TIME_H
 
@@ -11,26 +12,26 @@
 namespace csp {
 
 /**
- * @brief Represents a duration or absolute time point in a type-safe manner.
- * Encapsulates a raw RTOS2 tick count and provides conversion helpers.
+ * @brief A duration in RTOS ticks. Make one with Ticks(), Milliseconds(),
+ * Seconds() or Forever; use it with SleepFor() and RelTimeoutGuard.
  */
-struct Time {
-    // The internal representation is the raw tick count
-    uint32_t ticks;
-
-    // Default constructor for Time()
-    Time() : ticks(0) {}
-
-    // Constructor required for the Time unit helpers (e.g., Seconds())
-    explicit Time(uint32_t t) : ticks(t) {}
-
-    /**
-    * @brief Converts the Time object into the raw tick count for RTOS2 API calls.
-    */
-    uint32_t to_ticks() const {
-        return ticks;
-    }
+class Time {
+public:
+    constexpr Time() : ticks_(0) {}
+    /// A tick count. Explicit, so a plain number is never taken as a Time.
+    constexpr explicit Time(uint32_t ticks) : ticks_(ticks) {}
+    /// The raw tick count, for CMSIS-RTOS2 calls.
+    constexpr uint32_t to_ticks() const { return ticks_; }
+private:
+    uint32_t ticks_;
 };
+
+/// A duration of `n` RTOS ticks (the kernel tick, osKernelGetTickFreq()).
+constexpr Time Ticks(uint32_t n) { return Time(n); }
+
+/// No end: SleepFor(Forever) is osDelay(osWaitForever). As a RelTimeoutGuard
+/// delay it is the longest timeout, 0xFFFFFFFE ticks.
+inline constexpr Time Forever{osWaitForever};
 
 // ----------------------------------------------------
 // C++CSP Style Time Unit Helpers
