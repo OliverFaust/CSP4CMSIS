@@ -88,7 +88,8 @@ namespace csp {
         template <typename... Processes> friend class ParallelHelper;
         friend void ::ThreadFuncWrapper(void* pvParameters);
 
-        /// The stack, at least stackWords() words, owned by the process.
+        /// The stack, at least stackWords() words, owned by the process;
+        /// nullptr with dynamic allocation (the RTOS allocates it).
         virtual internal::csp_stack_word_t* stackBuffer() = 0;
         /// The thread control block (static allocation), or nullptr.
         virtual void* taskBuffer() = 0;
@@ -104,10 +105,14 @@ namespace csp {
     };
 
     /**
-     * @brief A process with its own static stack of StackWords words
-     * (4 bytes each on Cortex-M) and, with static allocation, its own thread
-     * control block. Instances must have static storage duration (namespace
-     * scope or function-local `static`): the object is the thread's storage.
+     * @brief A process with a stack of StackWords words (4 bytes each on
+     * Cortex-M). With static allocation (the default) the stack and the thread
+     * control block are members of the object, so instances must have static
+     * storage duration (namespace scope or function-local `static`): the object
+     * is the thread's storage. With CSP4CMSIS_DYNAMIC_ALLOCATION the RTOS
+     * allocates both when Run() starts the thread (CMSIS-RTOS2 implementations
+     * such as Arm's FreeRTOS adapter accept a caller-provided stack only
+     * together with a caller-provided control block).
      */
     template <size_t StackWords>
     class CSProcessStatic : public CSProcess {
@@ -118,20 +123,17 @@ namespace csp {
         size_t stackWords() const final { return StackWords; }
 
     private:
-        internal::csp_stack_word_t* stackBuffer() final { return m_stack; }
-        void* taskBuffer() final {
 #if defined(CSP4CMSIS_STATIC_ALLOCATION)
-            return &m_tcb;
-#else
-            return nullptr;
-#endif
-        }
+        internal::csp_stack_word_t* stackBuffer() final { return m_stack; }
+        void* taskBuffer() final { return &m_tcb; }
 
         // alignas(8): AAPCS requires an 8-byte aligned stack; RTX5's
         // osThreadNew() rejects a 4-byte aligned stack_mem.
         alignas(8) internal::csp_stack_word_t m_stack[StackWords];
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
         internal::csp_static_thread_storage_t m_tcb;
+#else
+        internal::csp_stack_word_t* stackBuffer() final { return nullptr; }   // the RTOS allocates it
+        void* taskBuffer() final { return nullptr; }
 #endif
     };
 

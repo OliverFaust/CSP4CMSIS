@@ -254,10 +254,15 @@ constexpr uint32_t F_START = 0x10000000u;   // runner -> victim (outside CSP4CMS
 constexpr uint32_t F_ACK   = 0x20000000u;   // victim -> runner
 constexpr uint32_t T_ACK   = 30u;           // ticks before a victim counts as hung
 
+// Test threads: static stacks; static control blocks unless the library is
+// built with dynamic allocation (3.0: CSP4CMSIS_DYNAMIC_ALLOCATION), where the
+// backend's control-block types are not declared.
 template <size_t WORDS>
 struct ThreadSlotN {
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
     alignas(8) uint32_t stack[WORDS];
     csp::internal::csp_static_thread_storage_t tcb;
+#endif
 };
 using ThreadSlot = ThreadSlotN<256>;      // 1 KB workers (T5 needs a 32 KB static channel in RAM)
 using RunnerSlot = ThreadSlotN<2048>;     // 8 KB runner
@@ -266,8 +271,13 @@ template <size_t WORDS>
 osThreadId_t spawn(osThreadFunc_t fn, void* arg, osPriority_t prio, ThreadSlotN<WORDS>& s, const char* name) {
     osThreadAttr_t a = {};
     a.name = name; a.priority = prio;
-    a.stack_mem = s.stack; a.stack_size = sizeof(s.stack);
+    a.stack_size = WORDS * sizeof(uint32_t);
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+    a.stack_mem = s.stack;
     a.cb_mem = &s.tcb;     a.cb_size = sizeof(s.tcb);
+#else
+    (void)s;                 // dynamic: the RTOS allocates stack and control block together
+#endif
     return osThreadNew(fn, arg, &a);
 }
 
@@ -1203,10 +1213,15 @@ struct PreInitProbe {
     osKernelState_t state = osKernelError;
     bool static_sem_ok = false, dynamic_sem_ok = false;
     osSemaphoreId_t static_sem = nullptr;
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
     csp::internal::csp_static_semaphore_storage_t cb;
+#endif
     PreInitProbe() {
         state = osKernelGetState();
-        osSemaphoreAttr_t a = {}; a.cb_mem = &cb; a.cb_size = sizeof(cb);
+        osSemaphoreAttr_t a = {};
+#if defined(CSP4CMSIS_STATIC_ALLOCATION)
+        a.cb_mem = &cb; a.cb_size = sizeof(cb);
+#endif
         static_sem = osSemaphoreNew(1, 0, &a);
         static_sem_ok = static_sem != nullptr;
         osSemaphoreId_t d = osSemaphoreNew(1, 0, nullptr);

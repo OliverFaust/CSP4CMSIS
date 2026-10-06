@@ -34,11 +34,14 @@ Every RTOS object CSP4CMSIS creates has a statically allocated control block:
 - `Run()`'s completion semaphore;
 - the semaphores of buffered, rendezvous and signal channels and of `Barrier`.
 
-Timeout guards (`RelTimeoutGuard`) create no RTOS object at all (2.0.1, section 8). Stacks are always
-static (`CSProcessStatic<N>`).
+Timeout guards (`RelTimeoutGuard`) create no RTOS object at all (2.0.1, section 8). Process stacks are
+members of the process objects (`CSProcessStatic<N>`).
 
-Define `CSP4CMSIS_DYNAMIC_ALLOCATION` to take those control blocks from the RTOS's own allocator
-(FreeRTOS heap, RTX5 dynamic memory) instead; then no backend is needed. Defining both
+Define `CSP4CMSIS_DYNAMIC_ALLOCATION` to take those control blocks, and the process stacks, from the RTOS's
+own allocator (FreeRTOS heap, RTX5 dynamic memory) instead; then no backend is needed. The stacks go with
+the control blocks because CMSIS-RTOS2 implementations such as Arm's FreeRTOS adapter accept a
+caller-provided stack only together with a caller-provided control block. Size the RTOS heap for every
+process's stack (`CSProcessStatic<N>`: N words) plus its control block. Defining both
 `CSP4CMSIS_DYNAMIC_ALLOCATION` and `CSP4CMSIS_STATIC_ALLOCATION` is an error.
 `CSP4CMSIS_STATIC_ALLOCATION` alone is still accepted (before 3.0 it opted in to static allocation; now it
 restates the default).

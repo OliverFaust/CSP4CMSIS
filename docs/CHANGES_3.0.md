@@ -46,6 +46,12 @@ reader and one writer of a channel may be ALTing; a second one is a fatal error,
 - **Static allocation is the default.** Every RTOS object CSP4CMSIS creates has a static control block
   unless the project defines `CSP4CMSIS_DYNAMIC_ALLOCATION`. Defining both that and
   `CSP4CMSIS_STATIC_ALLOCATION` is an error.
+- **Dynamic allocation fixed for FreeRTOS:** with `CSP4CMSIS_DYNAMIC_ALLOCATION` the RTOS now allocates
+  each process's stack together with its control block. Before, a process passed its own (static) stack
+  with a dynamic control block, which Arm's FreeRTOS adapter rejects: `osThreadNew()` failed, so no
+  process started (2.0.x printed an error and continued; 2.1.0 stopped in the fatal-error hook). This was
+  2.x's default configuration, unused by every tested and documented setup (all defined
+  `CSP4CMSIS_STATIC_ALLOCATION`); RTX5 accepted the mixed form.
 - **The backend is detected:** from `RTE_Components.h` in pack builds, otherwise from `FreeRTOS.h` or
   `rtx_os.h` on the include path. If neither or both headers are reachable and nothing else decides, an
   `#error` asks for `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` or `_RTX5`.
