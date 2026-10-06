@@ -61,9 +61,8 @@
     #include "task.h"
     #include "event_groups.h"
     #include "semphr.h"
-    #if !defined(configSUPPORT_STATIC_ALLOCATION) || (configSUPPORT_STATIC_ALLOCATION == 0)
-      #error "CSP4CMSIS: static allocation (the default) needs configSUPPORT_STATIC_ALLOCATION 1 in FreeRTOSConfig.h (STM32CubeMX: FREERTOS > Config parameters > Memory Allocation: Dynamic / Static). Or define CSP4CMSIS_DYNAMIC_ALLOCATION for dynamic allocation."
-    #endif
+    // configSUPPORT_STATIC_ALLOCATION is checked in glue.cpp (FreeRTOS defines
+    // StaticTask_t etc. regardless of it).
     namespace csp::internal {
         using csp_static_thread_storage_t     = StaticTask_t;
         using csp_static_eventflags_storage_t = StaticEventGroup_t;

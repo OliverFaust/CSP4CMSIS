@@ -1,0 +1,8 @@
+// EXPECT-ERROR: define only one of
+#ifndef CSP4CMSIS_RTOS2_BACKEND_FREERTOS
+#define CSP4CMSIS_RTOS2_BACKEND_FREERTOS 1
+#endif
+#ifndef CSP4CMSIS_RTOS2_BACKEND_RTX5
+#define CSP4CMSIS_RTOS2_BACKEND_RTX5 1
+#endif
+#include "csp/csp4cmsis.h"

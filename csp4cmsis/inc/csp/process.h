@@ -144,4 +144,9 @@ namespace csp {
 
 } // namespace csp
 
+// CSP_PRIORITY_UNSPECIFIED and CSP_STACK_HWM_UNAVAILABLE were global macros
+// before 3.0: still usable without the csp:: prefix.
+using csp::CSP_PRIORITY_UNSPECIFIED;
+using csp::CSP_STACK_HWM_UNAVAILABLE;
+
 #endif // CSP4CMSIS_PROCESS_H

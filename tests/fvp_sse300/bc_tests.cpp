@@ -103,9 +103,58 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// Library-version shim
+// Library-version shim. 3.0 on: csp/csp_version.h (no feature macros). Before:
+// the feature macros of 2.x (undefined in 1.x).
 // ---------------------------------------------------------------------------
-#if defined(CSP4CMSIS_BUFFERED_CHANNEL_API) && (CSP4CMSIS_BUFFERED_CHANNEL_API >= 2)
+#if __has_include("csp/csp_version.h")
+  #define BC_LIB3          1
+  #define BC_ISR_WRITER    1
+  #define BC_OWRV          1
+  #define BC_BUFFERED_V2   1
+  #define BC_SLEEPFOR_TIME 1
+#else
+  #define BC_LIB3          0
+  #if defined(CSP4CMSIS_ISR_WRITER_API)
+    #define BC_ISR_WRITER  1
+  #else
+    #define BC_ISR_WRITER  0
+  #endif
+  #if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+    #define BC_OWRV        1
+  #else
+    #define BC_OWRV        0
+  #endif
+  #if defined(CSP4CMSIS_BUFFERED_CHANNEL_API) && (CSP4CMSIS_BUFFERED_CHANNEL_API >= 2)
+    #define BC_BUFFERED_V2 1
+  #else
+    #define BC_BUFFERED_V2 0
+  #endif
+  #if defined(CSP4CMSIS_SLEEPFOR_TIME_API)
+    #define BC_SLEEPFOR_TIME 1
+  #else
+    #define BC_SLEEPFOR_TIME 0
+  #endif
+#endif
+// ALT construction. 3.0: Alternative alt(in | v, timeout) (guard internals are
+// private). 1.x/2.x: Alternative alt({in.getGuard(v), timeout.internal_guard_ptr}).
+// Usage: csp::Alternative alt BC_ALTV(BC_G(in, v), BC_T(timeout));
+#if BC_LIB3
+  #define BC_ALTV(...)     (__VA_ARGS__)
+  #define BC_G(end, var)   (end) | (var)
+  #define BC_T(tg)         (tg)
+  #define BC_OUT_GUARD(out, var) csp::internal::Access::outputGuard(out, var)
+  using BC_SignalChannel = csp::SignalChannel;
+#else
+  #define BC_ALTV(...)     ({__VA_ARGS__})
+  #define BC_G(end, var)   (end).getGuard(var)
+  #define BC_T(tg)         (tg).internal_guard_ptr
+  #define BC_OUT_GUARD(out, var) (out).getGuard(var)
+#endif
+#if !BC_LIB3
+  using BC_SignalChannel = csp::SignalChannel<>;
+#endif
+
+#if BC_BUFFERED_V2
   #define LIB_V2 1
   #define LIB_NAME "v2 API (ring buffer)"
   template <typename T, size_t N, csp::BufferPolicy P>
@@ -227,7 +276,7 @@ void park() { for (;;) osDelay(osWaitForever); }
 template <typename C> void drain(C& ch) { uint32_t x; while (ch.pending()) ch.input(&x); }
 // ISR write: 2.0 through the public ISR writer end (IsrChanout), 1.x through
 // the channel's own putFromISR().
-#if defined(CSP4CMSIS_ISR_WRITER_API)
+#if BC_ISR_WRITER
 template <typename C> bool isr_put(C* ch, uint32_t v) { csp::IsrChanout<uint32_t> w(ch); return w.putFromISR(v); }
 #else
 template <typename C> bool isr_put(C* ch, uint32_t v) { return ch->putFromISR(v); }
@@ -360,7 +409,7 @@ void test_T0() {
     static BlockChan<4> ch; t0_ch = &ch;
     spawn(t0_writer, nullptr, osPriorityNormal, t0_slot, "T0w");
     In in(&ch); uint32_t v = 0, sum = 0, n = 0;
-    csp::Alternative alt({in.getGuard(v)});
+    csp::Alternative alt BC_ALTV(BC_G(in, v));
     for (int i = 0; i < 10; ++i) { alt.priSelect(); sum += v; n++; }
     result("T0", (n == 10 && sum == 55) ? 1 : 0, "control: 10 values through a Block BufferedChannel via ALT");
 }
@@ -373,7 +422,7 @@ void t1a_reset() { drain(*t1a_ch); }
 bool t1a_probe() { return t1a_ch->pending(); }
 void t1a_victim() {
     static In in(t1a_ch); static uint32_t v;
-    static csp::Alternative alt({in.getGuard(v)});
+    static csp::Alternative alt BC_ALTV(BC_G(in, v));
     alt.priSelect();
     drain(*t1a_ch);
 }
@@ -392,7 +441,7 @@ void t1b_reset() { drain(*t1b_ch); uint32_t one = 1; t1b_ch->output(&one); }
 bool t1b_probe() { return t1b_ch->space_available(); }
 void t1b_victim() {
     static Out out(t1b_ch); static uint32_t w = 77;
-    static csp::Alternative alt({out.getGuard(w)});
+    static csp::Alternative alt BC_ALTV(BC_G(out, w));
     alt.priSelect();
 }
 void t1b_aggr()   { uint32_t x; t1b_ch->input(&x); }
@@ -415,28 +464,28 @@ BlockChan<1>* t2_b; NewestChan<1>* t2_n; csp::Channel<uint32_t>* t2_r;
 ThreadSlot t2_s1, t2_s2, t2_s3, t2_s4;
 volatile uint32_t t2_got = 0;
 void t2_alt_reader(void*) {            // ALT reader on the Block channel, 2 rounds
-    In in(t2_b); uint32_t v; csp::Alternative alt({in.getGuard(v)});
+    In in(t2_b); uint32_t v; csp::Alternative alt BC_ALTV(BC_G(in, v));
     for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
     park();
 }
 void t2_alt_writer(void*) {            // ALT writer on the (full) Block channel
-    Out out(t2_b); uint32_t w = 7; csp::Alternative alt({out.getGuard(w)});
+    Out out(t2_b); uint32_t w = 7; csp::Alternative alt BC_ALTV(BC_G(out, w));
     alt.priSelect(); park();
 }
 void t2_newest_reader(void*) {         // ALT reader on KeepNewest, 2 rounds
-    In in(t2_n); uint32_t v; csp::Alternative alt({in.getGuard(v)});
+    In in(t2_n); uint32_t v; csp::Alternative alt BC_ALTV(BC_G(in, v));
     for (int i = 0; i < 2; ++i) { alt.priSelect(); t2_got = t2_got + v; }
     park();
 }
 void t2_isr_buffered() { (void)isr_put(t2_b, 1000u); }
 void t2_isr_newest()   { (void)isr_put(t2_n, 2000u); }
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
-csp::SignalChannel<>* t2_sig; ThreadSlot t2_s5, t2_s6, t2_s7;
-void t2_rv_alt_reader(void*) { In in = t2_r->reader(); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t2_got = t2_got + v; park(); }
-void t2_rv_alt_writer(void*) { Out out = t2_r->writer(); uint32_t w = 4000; csp::Alternative alt({out.getGuard(w)}); alt.priSelect(); park(); }
-void t2_sig_alt(void*) { csp::Chanin<csp::Signal> in = t2_sig->reader(); csp::Signal s; csp::Alternative alt({in.getGuard(s)}); alt.priSelect(); t2_got = t2_got + 1; park(); }
+#if BC_OWRV
+BC_SignalChannel* t2_sig; ThreadSlot t2_s5, t2_s6, t2_s7;
+void t2_rv_alt_reader(void*) { In in = t2_r->reader(); uint32_t v = 0; csp::Alternative alt BC_ALTV(BC_G(in, v)); alt.priSelect(); t2_got = t2_got + v; park(); }
+void t2_rv_alt_writer(void*) { Out out = t2_r->writer(); uint32_t w = 4000; csp::Alternative alt BC_ALTV(BC_G(out, w)); alt.priSelect(); park(); }
+void t2_sig_alt(void*) { csp::Chanin<csp::Signal> in = t2_sig->reader(); csp::Signal s; csp::Alternative alt BC_ALTV(BC_G(in, s)); alt.priSelect(); t2_got = t2_got + 1; park(); }
 #endif
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
 void t2_rv_reader(void*) { uint32_t v; csp::Chanin<uint32_t> in = t2_r->reader(); in >> v; t2_got = t2_got + v; park(); }
 void t2_isr_rv()       { uint32_t v = 3000; Out out = t2_r->writer(); out.putFromISR(v); }
 #endif
@@ -456,7 +505,7 @@ void test_T2() {
     spawn(t2_newest_reader, nullptr, osPriorityAboveNormal, t2_s3, "T2nr");
     osDelay(2); { uint32_t v = 10, w = 20; n.output(&v); n.output(&w); } osDelay(2);
     g_isr_op = t2_isr_newest; isr_fire(); osDelay(2);
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
     // (4) rendezvous putFromISR() to a blocked reader (1.x only: 2.0 has no ISR path into rendezvous)
     spawn(t2_rv_reader, nullptr, osPriorityAboveNormal, t2_s4, "T2rv"); osDelay(2);
     g_isr_op = t2_isr_rv; isr_fire(); osDelay(2);
@@ -464,13 +513,13 @@ void test_T2() {
     (void)t2_s4;
     // (4) 2.0 rendezvous and signal channels (task-only, OWRV): plain writer -> ALT reader,
     //     ALT writer -> plain reader, ALT writer vs ALT reader, signal to an ALT reader
-    static csp::SignalChannel<> sig; t2_sig = &sig;
+    static BC_SignalChannel sig; t2_sig = &sig;
     spawn(t2_rv_alt_reader, nullptr, osPriorityAboveNormal, t2_s5, "T2ra"); osDelay(2);
     { Out o = r.writer(); o << 3000u; } osDelay(2);
     spawn(t2_rv_alt_writer, nullptr, osPriorityAboveNormal, t2_s6, "T2wa"); osDelay(2);
     { In i = r.reader(); uint32_t x = 0; i >> x; t2_got = t2_got + x; } osDelay(2);
     spawn(t2_rv_alt_writer, nullptr, osPriorityAboveNormal, t2_s7, "T2wb"); osDelay(2);
-    { In i = r.reader(); uint32_t x = 0; csp::Alternative alt({i.getGuard(x)}); alt.priSelect(); t2_got = t2_got + x; } osDelay(2);
+    { In i = r.reader(); uint32_t x = 0; csp::Alternative alt BC_ALTV(BC_G(i, x)); alt.priSelect(); t2_got = t2_got + x; } osDelay(2);
     static ThreadSlot t2_s8; spawn(t2_sig_alt, nullptr, osPriorityAboveNormal, t2_s8, "T2sg"); osDelay(2);
     { csp::Chanout<csp::Signal> o = sig.writer(); o << csp::Signal{}; } osDelay(2);
 #endif
@@ -524,11 +573,11 @@ BlockChan<1>* t13_ch; ThreadSlot t13_vs, t13_as, t13b_vs, t13b_as; Case t13, t13
 osThreadId_t t13_aggr_tid; volatile bool t13_go = false, t13_livelock = false;
 uint32_t t13_livelocks = 0;
 void t13_reader_aggr(void*) {                     // high-priority ALT reader
-    In in(t13_ch); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)});
+    In in(t13_ch); uint32_t v = 0; csp::Alternative alt BC_ALTV(BC_G(in, v));
     for (;;) { osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever); alt.priSelect(); osThreadFlagsSet(t13.runner, F_ACK2); }
 }
 void t13_writer_aggr(void*) {                     // high-priority ALT writer
-    Out out(t13_ch); uint32_t w = 9; csp::Alternative alt({out.getGuard(w)});
+    Out out(t13_ch); uint32_t w = 9; csp::Alternative alt BC_ALTV(BC_G(out, w));
     for (;;) { osThreadFlagsWait(F_GO, osFlagsWaitAny, osWaitForever); alt.priSelect(); osThreadFlagsSet(t13b.runner, F_ACK2); }
 }
 void t13_kick() {
@@ -573,8 +622,8 @@ void test_T13b() {
 //        re-target a blocked writer's ALT
 // ---------------------------------------------------------------------------
 BlockChan<1>* t4_ch; ThreadSlot t4_sa, t4_sb; volatile int t4_doneA = 0, t4_doneB = 0;
-void t4_writerA(void*) { Out out(t4_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4_doneA = 1; park(); }
-void t4_writerB(void*) { osDelay(2); Out out(t4_ch); uint32_t b = 20; csp::Alternative alt({out.getGuard(b)}); alt.priSelect(); t4_doneB = 1; park(); }
+void t4_writerA(void*) { Out out(t4_ch); uint32_t a = 10; csp::Alternative alt BC_ALTV(BC_G(out, a)); alt.priSelect(); t4_doneA = 1; park(); }
+void t4_writerB(void*) { osDelay(2); Out out(t4_ch); uint32_t b = 20; csp::Alternative alt BC_ALTV(BC_G(out, b)); alt.priSelect(); t4_doneB = 1; park(); }
 void test_T4a() {
     static BlockChan<1> ch; t4_ch = &ch; uint32_t x = 1; ch.output(&x);
     uint32_t fatal0 = g_fatal_count;
@@ -593,7 +642,7 @@ void test_T4a() {
 }
 
 BlockChan<1>* t4b_ch; ThreadSlot t4b_sa; volatile int t4b_doneA = 0;
-void t4b_writerA(void*) { Out out(t4b_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4b_doneA = 1; park(); }
+void t4b_writerA(void*) { Out out(t4b_ch); uint32_t a = 10; csp::Alternative alt BC_ALTV(BC_G(out, a)); alt.priSelect(); t4b_doneA = 1; park(); }
 void test_T4b() {
     static BlockChan<1> ch; t4b_ch = &ch; uint32_t x = 1; ch.output(&x);
     spawn(t4b_writerA, nullptr, osPriorityNormal, t4b_sa, "T4bA");
@@ -601,7 +650,7 @@ void test_T4b() {
     {   // unrelated ALT: timeout guard ready first -> output guard never enabled
         static Out outB(&ch); uint32_t b = 20;
         static csp::RelTimeoutGuard instant(csp::Time(0));
-        csp::Alternative alt({instant.internal_guard_ptr, outB.getGuard(b)});
+        csp::Alternative alt BC_ALTV(BC_T(instant), BC_G(outB, b));
         (void)alt.priSelect();
     }
     uint32_t v; ch.input(&v); osDelay(5);
@@ -609,13 +658,13 @@ void test_T4b() {
 }
 
 BlockChan<1>* t4c_ch; ThreadSlot t4c_sa; volatile int t4c_doneA = 0;
-void t4c_writerA(void*) { Out out(t4c_ch); uint32_t a = 10; csp::Alternative alt({out.getGuard(a)}); alt.priSelect(); t4c_doneA = 1; park(); }
+void t4c_writerA(void*) { Out out(t4c_ch); uint32_t a = 10; csp::Alternative alt BC_ALTV(BC_G(out, a)); alt.priSelect(); t4c_doneA = 1; park(); }
 void test_T4c() {
     static BlockChan<1> ch; t4c_ch = &ch; uint32_t x = 1; ch.output(&x);
     spawn(t4c_writerA, nullptr, osPriorityNormal, t4c_sa, "T4cA");
     osDelay(3);
     static Out outB(&ch); static uint32_t b = 20;
-    (void)outB.getGuard(b);                        // another writer builds its guard
+    (void)BC_OUT_GUARD(outB, b);                        // another writer builds its guard
     uint32_t v1, v2 = 0; ch.input(&v1); osDelay(3);
     if (ch.pending()) ch.input(&v2);
     printf("   [T4c] writer A (sends 10) done=%d; reader received %lu\r\n", t4c_doneA, (unsigned long)v2);
@@ -645,7 +694,7 @@ void test_T6() {
     uint32_t u0 = heap_used(), u_in = 0, u_alt = 0, allocs = 0, tn0 = g_timer_news;
     { csp::RelTimeoutGuard g(csp::Time(5)); u_in = heap_used(); }
     { static BlockChan<1> ch; static In in(&ch); uint32_t v; uint32_t b = heap_used();
-      csp::Alternative alt({in.getGuard(v)}); u_alt = heap_used() - b; }
+      csp::Alternative alt BC_ALTV(BC_G(in, v)); u_alt = heap_used() - b; }
     for (int i = 0; i < 200; ++i) { uint32_t b = heap_used(); csp::RelTimeoutGuard g(csp::Time(5)); if (heap_used() > b) allocs++; }
     uint32_t timers = g_timer_news - tn0;
     printf("   [T6] RelTimeoutGuard: %lu B heap while alive; Alternative: %lu B; 200 loop constructions -> %lu allocations, %lu RTOS timers\r\n",
@@ -659,11 +708,11 @@ void test_T6() {
 //        allocation): 50 constructions/destructions of each
 // ---------------------------------------------------------------------------
 void test_T17() {
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+#if BC_OWRV
     uint32_t allocs = 0, fatal0 = g_fatal_count, u0 = heap_used();
     for (int i = 0; i < 50; ++i) {
         uint32_t b = heap_used();
-        { csp::Channel<uint32_t> c; csp::SignalChannel<> s; csp::Barrier bar(3); if (heap_used() > b) allocs++; }
+        { csp::Channel<uint32_t> c; BC_SignalChannel s; csp::Barrier bar(3); if (heap_used() > b) allocs++; }
     }
     printf("   [T17] 50 x (Channel + SignalChannel + Barrier): %lu allocations, heap delta %ld B, fatal=%lu\r\n",
            (unsigned long)allocs, (long)heap_used() - (long)u0, (unsigned long)(g_fatal_count - fatal0));
@@ -737,7 +786,7 @@ void test_T19() {
 // T7a -- a read via ALT wakes a writer blocked in ALT (control: plain input)
 // ---------------------------------------------------------------------------
 BlockChan<1>* t7_ch; ThreadSlot t7_s1, t7_s2; volatile int t7_done = 0;
-void t7_writer(void*) { Out out(t7_ch); uint32_t w = 10; csp::Alternative alt({out.getGuard(w)}); alt.priSelect(); t7_done = 1; park(); }
+void t7_writer(void*) { Out out(t7_ch); uint32_t w = 10; csp::Alternative alt BC_ALTV(BC_G(out, w)); alt.priSelect(); t7_done = 1; park(); }
 bool t7_run(bool reader_uses_alt, ThreadSlot& slot) {
     static BlockChan<1> chA, chB;
     BlockChan<1>& ch = reader_uses_alt ? chA : chB; t7_ch = &ch; t7_done = 0;
@@ -745,7 +794,7 @@ bool t7_run(bool reader_uses_alt, ThreadSlot& slot) {
     spawn(t7_writer, nullptr, osPriorityNormal, slot, reader_uses_alt ? "T7alt" : "T7ctl");
     osDelay(3);
     uint32_t r = 0;
-    if (reader_uses_alt) { static In in(&chA); csp::Alternative alt({in.getGuard(r)}); alt.priSelect(); }
+    if (reader_uses_alt) { static In in(&chA); csp::Alternative alt BC_ALTV(BC_G(in, r)); alt.priSelect(); }
     else                 { ch.input(&r); }
     osDelay(5);
     return t7_done == 1;
@@ -784,7 +833,7 @@ void test_T8() {
 #if LIB_V2
 BlockChan<1>* t9_ch; ThreadSlot t9_s; volatile uint32_t t9_ret = 0, t9_val = 0; osThreadId_t t9_tid;
 void t9_reader(void*) {
-    In in(t9_ch); uint32_t v = 0; csp::Alternative alt({in.getGuard(v)});
+    In in(t9_ch); uint32_t v = 0; csp::Alternative alt BC_ALTV(BC_G(in, v));
     alt.priSelect(); t9_val = v; t9_ret = t9_ret + 1; park();
 }
 #endif
@@ -809,8 +858,8 @@ void test_T9() {
 // T10 -- a second ALTing reader on one channel is rejected (assert)
 // ---------------------------------------------------------------------------
 BlockChan<1>* t10_ch; ThreadSlot t10_s1, t10_s2; volatile int t10_done1 = 0, t10_done2 = 0;
-void t10_r1(void*) { In in(t10_ch); uint32_t v; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t10_done1 = 1; park(); }
-void t10_r2(void*) { osDelay(2); In in(t10_ch); uint32_t v; csp::Alternative alt({in.getGuard(v)}); alt.priSelect(); t10_done2 = 1; park(); }
+void t10_r1(void*) { In in(t10_ch); uint32_t v; csp::Alternative alt BC_ALTV(BC_G(in, v)); alt.priSelect(); t10_done1 = 1; park(); }
+void t10_r2(void*) { osDelay(2); In in(t10_ch); uint32_t v; csp::Alternative alt BC_ALTV(BC_G(in, v)); alt.priSelect(); t10_done2 = 1; park(); }
 void test_T10() {
     static BlockChan<1> ch; t10_ch = &ch;
     uint32_t fatal0 = g_fatal_count;
@@ -831,7 +880,7 @@ csp::Channel<uint32_t>* t11_ch; ThreadSlot t11_s; volatile int t11_wsel = -1, t1
 void t11_writer(void*) {
     Out out = t11_ch->writer(); uint32_t w = 77;
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt({out.getGuard(w), to.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(out, w), BC_T(to));
     t11_wsel = alt.priSelect(); t11_wdone = 1; park();
 }
 void test_T11() {
@@ -840,7 +889,7 @@ void test_T11() {
     osDelay(3);                                          // writer is waiting in its ALT
     In in = ch.reader(); uint32_t r = 0;
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt({in.getGuard(r), to.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(in, r), BC_T(to));
     int sel = alt.priSelect(); osDelay(3);
     printf("   [T11] reader selected %d (value %lu); writer selected %d, done=%d (0 = channel, 1 = timeout)\r\n",
            sel, (unsigned long)r, t11_wsel, t11_wdone);
@@ -884,7 +933,7 @@ void test_T12() {
 // ---------------------------------------------------------------------------
 constexpr uint32_t T15_SENT = 0xDEADBEEFu;   // "nothing received" marker
 
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
 // T15i -- rendezvous putFromISR() to a waiting ALT reader: the ISR reports
 // success, the reader's select() returns the channel guard. Correct: the
 // reader has the ISR's value (or putFromISR() returns false and the reader
@@ -894,7 +943,7 @@ volatile int t15i_sel = -2; volatile uint32_t t15i_msg = 0; volatile bool t15i_i
 void t15i_reader(void*) {
     In in = t15i_ch->reader(); uint32_t msg = T15_SENT;
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt({in.getGuard(msg), to.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(in, msg), BC_T(to));
     int s = alt.priSelect(); t15i_msg = msg; t15i_sel = s; park();
 }
 void t15i_isr() { Out out = t15i_ch->writer(); t15i_isr_ok = out.putFromISR(1234u); }
@@ -924,16 +973,16 @@ void test_T15i() {
 // X becomes ready and a sender signals before the receiver runs; the receiver
 // takes X (lower index). The signal must still be received by the next
 // select(), and the sender must complete.
-BlockChan<1>* t15s_x; csp::SignalChannel<>* t15s_sig; ThreadSlot t15s_rs, t15s_ss;
+BlockChan<1>* t15s_x; BC_SignalChannel* t15s_sig; ThreadSlot t15s_rs, t15s_ss;
 osThreadId_t t15s_sender_tid; volatile int t15s_sel1 = -2, t15s_sel2 = -2, t15s_sent = 0;
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+#if BC_OWRV
 void t15s_receiver(void*) {                  // 2.0: a signal is a data-less rendezvous
     In xin(t15s_x); uint32_t xv = 0;
     csp::Chanin<csp::Signal> sin = t15s_sig->reader(); csp::Signal sv;
-    csp::Alternative alt1({xin.getGuard(xv), sin.getGuard(sv)});
+    csp::Alternative alt1 BC_ALTV(BC_G(xin, xv), BC_G(sin, sv));
     t15s_sel1 = alt1.priSelect();
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt2({xin.getGuard(xv), sin.getGuard(sv), to.internal_guard_ptr});
+    csp::Alternative alt2 BC_ALTV(BC_G(xin, xv), BC_G(sin, sv), BC_T(to));
     t15s_sel2 = alt2.priSelect();
     park();
 }
@@ -946,10 +995,10 @@ void t15s_sender(void*) {
 void t15s_receiver(void*) {
     In xin(t15s_x); uint32_t xv = 0;
     auto* sig = t15s_sig->getInternal();
-    csp::Alternative alt1({xin.getGuard(xv), sig->getInputGuard()});
+    csp::Alternative alt1 BC_ALTV(BC_G(xin, xv), sig->getInputGuard());
     t15s_sel1 = alt1.priSelect();
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt2({xin.getGuard(xv), sig->getInputGuard(), to.internal_guard_ptr});
+    csp::Alternative alt2 BC_ALTV(BC_G(xin, xv), sig->getInputGuard(), BC_T(to));
     t15s_sel2 = alt2.priSelect();
     park();
 }
@@ -960,7 +1009,7 @@ void t15s_sender(void*) {
 }
 #endif
 void test_T15s() {
-    static BlockChan<1> x; static csp::SignalChannel<> sig; t15s_x = &x; t15s_sig = &sig;
+    static BlockChan<1> x; static BC_SignalChannel sig; t15s_x = &x; t15s_sig = &sig;
     spawn(t15s_receiver, nullptr, osPriorityNormal, t15s_rs, "T15sR");
     t15s_sender_tid = spawn(t15s_sender, nullptr, osPriorityAboveNormal, t15s_ss, "T15sS");
     osDelay(3);                                          // receiver waits on both guards
@@ -994,7 +1043,7 @@ uint32_t t15_phantoms = 0, t15_silents = 0, t15_badtrials = 0;
 void t15_target(void*) {
     In in = t15_ch->reader(); In xin(t15_x);
     static uint32_t msg, xv;
-    csp::Alternative alt({in.getGuard(msg), xin.getGuard(xv)});
+    csp::Alternative alt BC_ALTV(BC_G(in, msg), BC_G(xin, xv));
     for (;;) {
         msg = T15_SENT;
         int s = alt.priSelect();
@@ -1007,7 +1056,7 @@ void t15_reset()  { t15_n = 0; t15_aggr_done = false; t15_w = t15_w + 1; }
 bool t15_probe()  { return t15_aggr_done; }
 void t15_victim() {
     static Out out = t15_ch->writer(); static uint32_t w;
-    static csp::Alternative alt({out.getGuard(w)});
+    static csp::Alternative alt BC_ALTV(BC_G(out, w));
     w = t15_w;
     alt.priSelect();
 }
@@ -1042,11 +1091,11 @@ void test_T15() {
 // ---------------------------------------------------------------------------
 const char* volatile g_current_test = "-";
 
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
 // T16s -- SignalChannel putFromISR() to a receiver blocked in input(): it
 // must release the receiver (or return false).
-csp::SignalChannel<>* t16s_sig; ThreadSlot t16s_s; volatile int t16s_done = 0; volatile bool t16s_ok = false;
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+BC_SignalChannel* t16s_sig; ThreadSlot t16s_s; volatile int t16s_done = 0; volatile bool t16s_ok = false;
+#if BC_OWRV
 void t16s_receiver(void*) { csp::Chanin<csp::Signal> in = t16s_sig->reader(); csp::Signal s; in >> s; t16s_done = 1; park(); }
 void t16s_isr() { csp::Chanout<csp::Signal> out = t16s_sig->writer(); t16s_ok = out.putFromISR(csp::Signal{}); }
 #else
@@ -1054,7 +1103,7 @@ void t16s_receiver(void*) { t16s_sig->getInternal()->input(nullptr); t16s_done =
 void t16s_isr() { t16s_ok = t16s_sig->getInternal()->putFromISR(); }
 #endif
 void test_T16s() {
-    static csp::SignalChannel<> sig; t16s_sig = &sig; g_current_test = "T16s";
+    static BC_SignalChannel sig; t16s_sig = &sig; g_current_test = "T16s";
     spawn(t16s_receiver, nullptr, osPriorityNormal, t16s_s, "T16s");
     osDelay(3);                                          // receiver blocked in input()
     g_isr_op = t16s_isr; isr_fire(); osDelay(3); g_isr_op = nullptr;
@@ -1070,7 +1119,7 @@ void test_T16s() {
 }
 #endif
 
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
 // T16n -- KeepNewest rendezvous: output() while a reader waits in an ALT.
 // The reader is waiting, so the value must be taken (API: "data is captured
 // only if a receiver is already waiting").
@@ -1079,7 +1128,7 @@ volatile int t16n_sel = -2; volatile uint32_t t16n_msg = 0;
 void t16n_reader(void*) {
     In in = t16n_ch->reader(); uint32_t msg = T15_SENT;
     csp::RelTimeoutGuard to(csp::Time(50));
-    csp::Alternative alt({in.getGuard(msg), to.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(in, msg), BC_T(to));
     int s = alt.priSelect(); t16n_msg = msg; t16n_sel = s; park();
 }
 void test_T16n() {
@@ -1102,7 +1151,7 @@ void test_T16n() {
 }
 #endif
 
-#if !defined(CSP4CMSIS_ISR_WRITER_API)
+#if !BC_ISR_WRITER
 // T16a (sweep) -- rendezvous putFromISR() vs a plain reader entering input().
 // The task path protects AltChanSyncBase with the mutex, putFromISR() with
 // BASEPRI; they do not exclude each other. registerWaitingTask() stores
@@ -1202,7 +1251,7 @@ void test_T20() {
         for (int rep = 0; rep < 5; ++rep) {
             osDelay(1); spin((uint32_t)rep * 997u);           // vary the phase within the tick
             csp::RelTimeoutGuard to{csp::Time(d)};
-            csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+            csp::Alternative alt BC_ALTV(BC_G(in, v), BC_T(to));
             uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
             if (sel != 1) bad_sel++;
             if (dt < lo) lo = dt;
@@ -1243,7 +1292,7 @@ void test_T21() {
             uint32_t val = 1000u * k + (uint32_t)rep, v = 0, sent0 = t21_sent;
             t21_delay = k; t21_val = val; osThreadFlagsSet(t21_tid, F_START);
             csp::RelTimeoutGuard to{csp::Time(D)};
-            csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+            csp::Alternative alt BC_ALTV(BC_G(in, v), BC_T(to));
             uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
             if (sel == 0) { c++; if (v != val) ok = false; }
             else {                                            // timed out: the item must still be there
@@ -1266,7 +1315,7 @@ void test_T22() {
     g_current_test = "T22";
     static csp::Channel<uint32_t> never; In in = never.reader(); uint32_t v = 0;
     csp::RelTimeoutGuard a{csp::Time(30)}, b{csp::Time(5)}, c{csp::Time(15)};
-    csp::Alternative alt({in.getGuard(v), a.internal_guard_ptr, b.internal_guard_ptr, c.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(in, v), BC_T(a), BC_T(b), BC_T(c));
     uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
     printf("   [T22] timeouts (30, 5, 15): selected guard %d after %lu ticks (expect 2 after 5..6)\r\n", sel, (unsigned long)dt);
     result("T22", (sel == 2 && dt >= 5 && dt <= 6) ? 1 : 0, "several timeout guards: the earliest deadline wins");
@@ -1277,12 +1326,12 @@ void test_T23() {
     g_current_test = "T23";
     static csp::Channel<uint32_t> never; In nin = never.reader(); uint32_t v = 0;
     csp::RelTimeoutGuard z{csp::Time(0)};
-    csp::Alternative alt({nin.getGuard(v), z.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(nin, v), BC_T(z));
     uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
     t21_start(); In in = t21_ch->reader(); uint32_t w = 0, sent0 = t21_sent;
     t21_delay = 0; t21_val = 4242; osThreadFlagsSet(t21_tid, F_START); osDelay(2);   // writer now waits
     csp::RelTimeoutGuard z2{csp::Time(0)};
-    csp::Alternative alt2({in.getGuard(w), z2.internal_guard_ptr});
+    csp::Alternative alt2 BC_ALTV(BC_G(in, w), BC_T(z2));
     int sel2 = alt2.priSelect(); osDelay(2);
     printf("   [T23] no channel: guard %d after %lu ticks; channel ready: guard %d, value %lu, transfers %lu\r\n",
            sel, (unsigned long)dt, sel2, (unsigned long)w, (unsigned long)(t21_sent - sent0));
@@ -1293,7 +1342,7 @@ void test_T23() {
 // T24 -- stale wakeups do not postpone a timeout (2.0.0 restarted its timer
 //        in every select() round: a wakeup per tick keeps it from expiring,
 //        here until the waker stops after 50 ticks)
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+#if BC_OWRV
 ThreadSlot t24_s; osThreadId_t t24_target = nullptr; volatile int t24_stop = 0;
 void t24_waker(void*) {                                    // a stale ALT wakeup every tick, at most 50
     for (int i = 0; i < 50 && !t24_stop; ++i) { osDelay(1); if (!t24_stop) (void)osThreadFlagsSet(t24_target, csp::internal::altFlag(0)); }
@@ -1302,12 +1351,12 @@ void t24_waker(void*) {                                    // a stale ALT wakeup
 #endif
 void test_T24() {
     g_current_test = "T24";
-#if defined(CSP4CMSIS_ALT_PROTOCOL_OWRV)
+#if BC_OWRV
     static csp::Channel<uint32_t> never; In in = never.reader(); uint32_t v = 0;
     t24_target = osThreadGetId(); t24_stop = 0;
     spawn(t24_waker, nullptr, osPriorityAboveNormal, t24_s, "T24w");
     csp::RelTimeoutGuard to{csp::Time(10)};
-    csp::Alternative alt({in.getGuard(v), to.internal_guard_ptr});
+    csp::Alternative alt BC_ALTV(BC_G(in, v), BC_T(to));
     uint32_t t1 = ticks_now(); int sel = alt.priSelect(); uint32_t dt = ticks_now() - t1;
     t24_stop = 1; osDelay(3); (void)osThreadFlagsClear(csp::internal::ALT_FLAG_MASK);
     printf("   [T24] stale wakeup every tick, timeout 10: guard %d after %lu ticks\r\n", sel, (unsigned long)dt);
@@ -1323,7 +1372,7 @@ void test_T24() {
 // 2.0.x (same API); on 2.0.1, T28..T30 are positive controls and must FAIL.
 // ===========================================================================
 #if LIB_V2
-#if defined(CSP4CMSIS_SLEEPFOR_TIME_API)
+#if BC_SLEEPFOR_TIME
   #define LIB_2_1 1
 #else
   #define LIB_2_1 0
@@ -1362,7 +1411,7 @@ void test_T25() {
     csp::Run(csp::InParallel(t25_a, t25_b, t25_c), csp::ExecutionMode::TerminatingNetwork, osPriorityBelowNormal);
     bool all = t25_a.ran == 1 && t25_b.ran == 1 && t25_c.ran == 1;
     bool prio = t25_a.seen == osPriorityBelowNormal && t25_b.seen == osPriorityLow1 && t25_c.seen == osPriorityBelowNormal;
-    csp::Run(csp::InParallel(t25_d, t25_e));                     // default composition priority
+    csp::Run(csp::InParallel(t25_d, t25_e), csp::ExecutionMode::TerminatingNetwork);   // default composition priority
     bool dflt = t25_d.ran == 1 && t25_e.ran == 1 && t25_d.seen == osPriorityLow && t25_e.seen == osPriorityLow;
     printf("   [T25] after Run(): ran %d/%d/%d; priorities %d/%d/%d (expect %d/%d/%d); default run: %d/%d at %d/%d (expect %d)\r\n",
            t25_a.ran, t25_b.ran, t25_c.ran, (int)t25_a.seen, (int)t25_b.seen, (int)t25_c.seen,

@@ -88,7 +88,7 @@
              from their own directory. The headers are listed as
              category="other": category="header" would make the build add
              each header's directory (csp4cmsis/inc/csp/) to the include
-             path, where csp/time.h would hide the C library's <time.h>. -->
+             path (before 3.0, csp/time.h there hid the C library's <time.h>). -->
         <file category="include" name="csp4cmsis/inc/"/>
 
         <!-- Headers (not include paths, see above) -->
@@ -106,7 +106,8 @@
         <file category="other" name="csp4cmsis/inc/csp/public_task.h"/>
         <file category="other" name="csp4cmsis/inc/csp/rendezvous_channel.h"/>
         <file category="other" name="csp4cmsis/inc/csp/run.h"/>
-        <file category="other" name="csp4cmsis/inc/csp/time.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_time.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_version.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
 
         <!-- Sources -->
