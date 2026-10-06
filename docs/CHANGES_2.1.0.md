@@ -81,12 +81,12 @@ Results (2026-10-05, `release-2.1.0` @ `c66a8b8`):
   FreeRTOS 11.3.0 through Arm's adapter, Keil RTX5, FreeRTOS 10.3.1 through ST's STM32Cube wrapper;
   `-O0`/`-O2`/`-Os`; heap-free builds): PASS=36 FAIL=0 SKIP=0 REPLACED=4 in all 30 (PASS=37 with T19 in the
   4 heap-free builds). `tests/fvp_sse300/results/v2.1.0/`.
-- NUCLEO-G474RE, ST's wrapper, Debug `-O0` and Release `-Os`, with and without heap: PASS=36 / 37, FAIL=0.
-  `tests/hw_nucleo_g474/results/2026-10-05_2.1.0_*`.
+- NUCLEO-G474RE, ST's wrapper, Debug `-O0` and Release `-Os`, with and without heap: PASS=36 / 37, FAIL=0,
+  with GNU Tools for STM32 14.3.rel1 (`tests/hw_nucleo_g474/results/2026-10-06_2.1.0_*`) and 13.3.rel1
+  (`…/2026-10-05_2.1.0_*`).
 - Positive control, 2.0.1 with the new suite: T28, T29, T30 FAIL, T31 SKIP (`results/v2.1.0/controls_2.0.1/`).
 - Compile checks: all 24 probes pass with AC6 and GCC on FreeRTOS, RTX5 and ST's wrapper
   (`results/v2.1.0/compile_checks.txt`).
 
-Not done (release steps): the version number (pdsc `Cversion`, release entry), the API reference page
-(`CSP4CMSIS/api.md`: its synopsis still shows the 2.0.1 default arguments, so `tests/doc_examples`
-reports three changed synopsis lines until the page is updated), the pack.
+The API reference page (`CSP4CMSIS/api.md` on the website) is updated for 2.1.0 after the release; until
+then `tests/doc_examples` reports the three synopsis lines whose default arguments changed.

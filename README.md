@@ -19,14 +19,16 @@ CMSIS-RTOS2-over-FreeRTOS adapter, ST's STM32Cube CMSIS-RTOS2 wrapper over FreeR
 
 | Core (architecture) | Target | CMSIS-RTOS2 backends | Toolchains | Builds | Version: result |
 |---|---|---|---|---|---|
-| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 2.0.1: all pass (PASS=29, heap-free 30; REPLACED=4) |
+| Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 2.1.0: all pass (PASS=36, heap-free 37; REPLACED=4) |
 | Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass |
-| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 2.0.1: all pass |
-| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 2.0.1: all pass |
-| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 2.0.1: all pass (PASS=29, heap-free 30) |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 2.1.0: all pass |
+| Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 2.1.0: all pass |
+| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 2.1.0: all pass (PASS=36, heap-free 37) |
 
-2.0.1 changed only timeout guards and build integration against 2.0.0
-([`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)); the DK-E8 runs used 2.0.0. Each target also has a
+Changes since the DK-E8 runs (2.0.0): timeout guards and build integration (2.0.1,
+[`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)); deprecations, fatal errors instead of silent failures,
+rounded-up time conversion and 7 new tests (2.1.0, [`docs/CHANGES_2.1.0.md`](docs/CHANGES_2.1.0.md)).
+The FVP harness used for these results is not public ([`tests/README.md`](tests/README.md)). Each target also has a
 v1.0.0 positive control (its known defects are detected; on the DK-E8 for RTX5 with Arm Compiler 6
 only), and the 2.0.0 timeout defect is detected on the MPS2 FVP and the NUCLEO-G474RE. Details:
 `tests/fvp_sse300/README.md` (FVPs), `docs/hardware_results_dk_e8.md` and
@@ -60,11 +62,13 @@ application-level concern, out of this library's scope.
   CMSIS-Core-based (`BASEPRI`) critical section rather than an RTOS-
   specific API — CMSIS-RTOS2 has no standardized critical-section
   primitive, so this is CSP4CMSIS's own portable mechanism.
-- **No silent defaults where a wrong guess would be costly.** Which RTOS2
-  backend you're building against, and the interrupt-priority threshold
-  your critical sections need to respect, are both required, explicit
-  configuration — CSP4CMSIS refuses to compile until you've set them
-  deliberately.
+- **No silent defaults where a wrong guess would be costly.** The
+  interrupt-priority threshold your critical sections need to respect (and,
+  with static allocation, the RTOS2 backend you're building against) is
+  required, explicit configuration — CSP4CMSIS refuses to compile until
+  you've set it deliberately. Errors it cannot recover from (a process
+  that cannot be started, a 17th ALT guard) stop in `csp4cmsis_fatal_error()`
+  instead of failing silently.
 
 ## Getting started
 
@@ -72,7 +76,7 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.0.1/OliverFaust.CSP4CMSIS.2.0.1.pack
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v2.1.0/OliverFaust.CSP4CMSIS.2.1.0.pack
 ```
 `-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
 script or CI job (no terminal input) it declines and installs nothing.
@@ -86,8 +90,8 @@ script or CI job (no terminal input) it declines and installs nothing.
 > CSP4CMSIS release ("can be upgraded from … to …"); `cpackget list --updates` does not show it.
 
 Without packs (STM32CubeIDE, vendor SDK makefiles), copy the source into your project instead:
-[`Documentation/CSP4CMSIS_STM32CubeIDE.md`](Documentation/CSP4CMSIS_STM32CubeIDE.md) (needs 2.0.1's
-`csp_critical.h`, see [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)).
+[`Documentation/CSP4CMSIS_STM32CubeIDE.md`](Documentation/CSP4CMSIS_STM32CubeIDE.md) (needs 2.0.1 or
+later: `csp_critical.h` without `RTE_Components.h`, see [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)).
 
 Then reference the component in your `.cproject.yml`:
 

@@ -37,13 +37,16 @@ Changes from the guide project for the suite:
   ```
 
 RAM (Debug, 2.0.1): the suite uses 121 300 B of 131 072 B (`.data` + `.bss`, including T5's 32 KB channel and the 16 KB
-FreeRTOS heap); no trimming was needed. 2.1.0 suite (T25–T31): 129 448 B (Debug, `csp4cmsis_g474_tests_210`),
+FreeRTOS heap); no trimming was needed. 2.1.0 suite (T25–T31): 129 468 B (Debug, `csp4cmsis_g474_tests_210`),
 still without trimming; the new tests keep their probe stacks at 128 words for this. Configurations: Debug
 (`-O0`) and Release (`-Os`, CubeIDE default).
 
-2.1.0 (`release-2.1.0` @ `c66a8b8`, 2026-10-05): `results/2026-10-05_2.1.0_*`. `csp4cmsis_g474_tests_210`
-Debug and Release: PASS=36 FAIL=0 SKIP=0 REPLACED=4; `csp4cmsis_g474_tests_noheap_210` Debug and
-Release: PASS=37 (T19 included). T25–T31 pass in all four; tick frequency 1000 Hz.
+2.1.0 (library and suite as `release-2.1.0` @ `c66a8b8`): `csp4cmsis_g474_tests_210` Debug and Release:
+PASS=36 FAIL=0 SKIP=0 REPLACED=4; `csp4cmsis_g474_tests_noheap_210` Debug and Release: PASS=37 (T19
+included). T25–T31 pass in all four; tick frequency 1000 Hz. Built twice, same results:
+- `results/2026-10-06_2.1.0_*`: STM32CubeIDE 2.1.0, GNU Tools for STM32 14.3.rel1 (the toolchain of the
+  2.0.1 runs and of the guide; the release result);
+- `results/2026-10-05_2.1.0_*`: STM32CubeIDE 1.19.0 headless, GNU Tools for STM32 13.3.rel1.
 
 ## Running
 

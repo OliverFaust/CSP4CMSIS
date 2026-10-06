@@ -10,6 +10,15 @@
   <license>LICENSE</license>
 
   <releases>
+    <release version="2.1.0" date="2026-10-06">
+      A failed osThreadNew() in Run() and a 17th ALT guard are fatal errors
+      (csp4cmsis_fatal_error) instead of a silent hang or an ignored guard.
+      Seconds()/Milliseconds() round up (64-bit, no overflow); SleepFor(Time).
+      Deprecated (removed in 3.0): Run(CSProcess&amp;), CSP_DEFAULT_TASK_PRIORITY,
+      CSP_LEGACY_PARALLEL_PRIORITY (now CSP_DEFAULT_NETWORK_PRIORITY),
+      One2OneChannel, BufferedOne2OneChannel. Removed the never-called
+      CSProcess::endProcess(). docs/CHANGES_2.1.0.md.
+    </release>
     <release version="2.0.1" date="2026-10-03">
       ALT timeouts (RelTimeoutGuard) without an RTOS timer: the deadline is
       fixed when select() starts, so no timer service priority requirement,
@@ -71,7 +80,7 @@
   </conditions>
 
   <components>
-    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="2.0.1" condition="CSP4CMSIS Core">
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="2.1.0" condition="CSP4CMSIS Core">
       <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
         <!-- Include path: csp4cmsis/inc/ only. Applications include
@@ -118,6 +127,7 @@
         <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>
         <file category="doc" name="docs/CHANGES_2.0.md"/>
         <file category="doc" name="docs/CHANGES_2.0.1.md"/>
+        <file category="doc" name="docs/CHANGES_2.1.0.md"/>
         <file category="doc" name="Documentation/CSP4CMSIS_STM32CubeIDE.md"/>
       </files>
     </component>

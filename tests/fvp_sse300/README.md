@@ -200,7 +200,9 @@ The workload drives every notification path:
   harness's 124.5 KB `RW_RAM0`.
 - T15 priorities: runner > ALT reader (target) > ALT writer (victim). `check()` waits 2 ticks so that the
   target has finished before its log is read.
-- Test threads are never deleted. Threads that are expected to hang (on v1.0.0) stay blocked forever.
+- Test threads are never deleted, except T28's and T29's: each parks in the fatal-error hook and is terminated
+  (`osThreadTerminate()`) so the next one can reuse its static slot. The processes of T25 return (a
+  `TerminatingNetwork`). Threads that are expected to hang (on v1.0.0) stay blocked forever.
 - `csp4cmsis_fatal_error()` is overridden: the test records the message and parks the calling thread.
 - RTX5: `osRtxErrorNotify()` is overridden to print the error code before halting.
 - `results/2026-09-26_fvp_run.txt` is the output of the earlier, v1.0.0-only analysis suite (commit
