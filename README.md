@@ -20,7 +20,7 @@ CMSIS-RTOS2-over-FreeRTOS adapter, ST's STM32Cube CMSIS-RTOS2 wrapper over FreeR
 | Core (architecture) | Target | CMSIS-RTOS2 backends | Toolchains | Builds | Version: result |
 |---|---|---|---|---|---|
 | Cortex-M55 (Armv8.1-M Mainline) | Corstone-300 FVP (Fast Models 11.28.32) | FreeRTOS 11.3.0 via ARM CMSIS-FreeRTOS; Keil RTX5 5.9.1 | Arm Compiler 6.24, GCC 14.2.1 | `-O0`, `-O2`, `-Os`; heap-free `-O0` | 3.0.0: all pass (PASS=36, heap-free 37; REPLACED=4) |
-| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass; 3.0.0: `-O0` FreeRTOS (GCC) and RTX5 (Arm Compiler 6) pass |
+| Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass; 3.0.0: `-O0` FreeRTOS (GCC) and RTX5 (Arm Compiler 6) pass; the three [example projects](#testing--examples) run on 3.0.0 |
 | Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 3.0.0: all pass |
 | Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 3.0.0: all pass |
 | Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 3.0.0: all pass (PASS=36, heap-free 37) |
@@ -122,7 +122,8 @@ fatal-error hook, the configuration defines and the version macros (`CSP4CMSIS_V
 
 Board examples live in
 [Alif-DK-E8-CSP4CMSIS](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS) (Alif DevKit-E8,
-Cortex-M55). All use the published pack, pinned `OliverFaust::CSP4CMSIS@2.0.0`:
+Cortex-M55). All use the published pack, pinned `OliverFaust::CSP4CMSIS@3.0.0`, with only
+`CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY` defined:
 
 - [`csp4cmsis_alt_test`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/csp4cmsis_alt_test)
   — ALT/select smoke test (two senders, one fair-select receiver) on RTX5.
@@ -133,7 +134,9 @@ Cortex-M55). All use the published pack, pinned `OliverFaust::CSP4CMSIS@2.0.0`:
   FreeRTOS.
 
 Their move from 1.0.0 to 2.0.0 (no source change needed; board runs before and after) is recorded in
-[`docs/migration-2.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-2.0).
+[`docs/migration-2.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-2.0), the
+move to 3.0.0 (defines removed, `SleepFor(Milliseconds(10))`; board runs against 2.0.0) in
+[`docs/migration-3.0/`](https://github.com/OliverFaust/Alif-DK-E8-CSP4CMSIS/tree/main/docs/migration-3.0).
 
 The 2.0 regression suite and its results are in [`tests/fvp_sse300/`](tests/fvp_sse300/).
 
