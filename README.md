@@ -23,13 +23,15 @@ CMSIS-RTOS2-over-FreeRTOS adapter, ST's STM32Cube CMSIS-RTOS2 wrapper over FreeR
 | Cortex-M55 (Armv8.1-M Mainline) | **Alif DK-E8 hardware**, RTSS-HP at 400 MHz | same | same | `-O0`, `-O2`, `-Os`; heap-free `-O0`; hardware-only checks; 67-pass soak | 2.0.0: all pass; 3.0.0: `-O0` FreeRTOS (GCC) and RTX5 (Arm Compiler 6) pass; the three [example projects](#testing--examples) run on 3.0.0 |
 | Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP (Fast Models 11.28.32) | same | same | `-O0`, `-O2` | 3.0.0: all pass |
 | Cortex-M4F (Armv7E-M) | MPS2 Cortex-M4 FVP | FreeRTOS 10.3.1 via **ST's STM32Cube CMSIS-RTOS2 wrapper** (STM32CubeG4 1.6.3) | GCC 14.2.1 | `-O0`, `-O2`, heap-free `-O0` | 3.0.0: all pass |
-| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 3.0.0: all pass (PASS=36, heap-free 37) |
+| Cortex-M4F (Armv7E-M) | **NUCLEO-G474RE hardware**, 170 MHz (STM32CubeMX/CubeIDE project) | same (ST's wrapper) | GNU Tools for STM32 14.3.1 | `-O0`, `-Os`, heap-free `-O0`/`-Os` | 3.0.0 and 3.0.1: all pass (PASS=36, heap-free 37) |
 
 Changes since the full DK-E8 runs (2.0.0): timeout guards and build integration (2.0.1,
 [`docs/CHANGES_2.0.1.md`](docs/CHANGES_2.0.1.md)); deprecations, fatal errors instead of silent failures,
 rounded-up time conversion and 7 new tests (2.1.0, [`docs/CHANGES_2.1.0.md`](docs/CHANGES_2.1.0.md)); the stable
 3.0 API, static allocation by default (3.0.0, [`docs/CHANGES_3.0.md`](docs/CHANGES_3.0.md)). 3.0.0 also passes
-with the 3.0 defaults (no backend or allocation define) on both FVPs.
+with the 3.0 defaults (no backend or allocation define) on both FVPs. 3.0.1 changes only how the ALT picks
+the first ready guard (one `__CLZ` instead of a loop; no behaviour change) and was verified like 3.0.0 except
+on the DK-E8 ([`docs/CHANGES_3.0.1.md`](docs/CHANGES_3.0.1.md)).
 The FVP harness used for these results is not public ([`tests/README.md`](tests/README.md)). Each target also has a
 v1.0.0 positive control (its known defects are detected; on the DK-E8 for RTX5 with Arm Compiler 6
 only), and the 2.0.0 timeout defect is detected on the MPS2 FVP and the NUCLEO-G474RE. Details:
@@ -79,7 +81,7 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v3.0.0/OliverFaust.CSP4CMSIS.3.0.0.pack
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v3.0.1/OliverFaust.CSP4CMSIS.3.0.1.pack
 ```
 `-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
 script or CI job (no terminal input) it declines and installs nothing.
