@@ -10,6 +10,11 @@
   <license>LICENSE</license>
 
   <releases>
+    <release version="3.0.1" date="2026-10-12">
+      ALT winner selection with one __CLZ of a mask of the re-verified guards
+      instead of a loop (AltScheduler::select(), phase 4). No behaviour
+      change, no API change. docs/CHANGES_3.0.1.md.
+    </release>
     <release version="3.0.0" date="2026-10-06">
       The stable "book API"; 3.x will not break source compatibility.
       Removed: the 2.1.0 deprecations, Any2OneChannel, SamplingChannel,
@@ -91,7 +96,7 @@
   </conditions>
 
   <components>
-    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.0.0" condition="CSP4CMSIS Core">
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.0.1" condition="CSP4CMSIS Core">
       <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
         <!-- Include path: csp4cmsis/inc/ only. Applications include
