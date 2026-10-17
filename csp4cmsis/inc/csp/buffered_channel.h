@@ -75,6 +75,7 @@
 #include "csp_semaphore.h"
 #include "channel_base.h"
 #include "alt.h"
+#include "csp4cmsis_trace.h"
 #include <cstring>
 #include <cstddef>
 #include <type_traits>
@@ -130,11 +131,15 @@ namespace csp::internal {
         void pushLocked(const T* src) {
             std::memcpy(at(head_ + count_), src, sizeof(T));
             count_ = count_ + 1;
+            // Trace: BufferedPut from a thread, PutFromISR from an interrupt handler.
+            CSP4CMSIS_TRACE_EVENT(__get_IPSR() != 0U ? CSP4CMSIS_EVT_PUT_FROM_ISR : CSP4CMSIS_EVT_BUFFERED_PUT,
+                                  CSP4CMSIS_TRACE_SELF(), this);
         }
         void popLocked(T* dst) {
             std::memcpy(dst, at(head_), sizeof(T));
             head_  = (head_ + 1) % SIZE;
             count_ = count_ - 1;
+            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_BUFFERED_GET, CSP4CMSIS_TRACE_SELF(), this);
         }
         // S: snapshot a registration (after the token was released).
         AltWake snapshot(const AltWake& slot) {
@@ -172,6 +177,8 @@ namespace csp::internal {
                     // (count_ and the tokens are unchanged).
                     std::memcpy(at(head_), src, sizeof(T));
                     head_ = (head_ + 1) % SIZE;
+                    CSP4CMSIS_TRACE_EVENT(__get_IPSR() != 0U ? CSP4CMSIS_EVT_PUT_FROM_ISR : CSP4CMSIS_EVT_BUFFERED_PUT,
+                                          CSP4CMSIS_TRACE_SELF(), this);
                 }
                 // KeepOldest and full: drop.
                 csp_exit_critical(s);

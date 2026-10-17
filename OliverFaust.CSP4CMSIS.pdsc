@@ -125,6 +125,7 @@
         <file category="other" name="csp4cmsis/inc/csp/csp_time.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp_version.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp4cmsis_trace.h"/>
 
         <!-- Sources -->
         <file category="source" name="csp4cmsis/src/alt_channel_sync.cpp"/>

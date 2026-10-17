@@ -1,11 +1,17 @@
 #include "csp/alt_channel_sync.h"
 #include "csp/csp_critical.h"
 #include "csp/csp_fatal.h"
+#include "csp/csp4cmsis_trace.h"
 #include <cstring>
 
 // Rendezvous core, one-winner ALT with re-verification (see the header and
 // docs/formal/alt_owrv_extended.csp). Every "Crit c;" scope below is one CSP
 // critical section; RTOS calls and element copies happen outside them.
+//
+// RV_DONE: trace event RendezvousDone (csp4cmsis_trace.h), recorded once per
+// communication by the second arriver, in the critical section in which it
+// takes the pending partner or claims the partner ALT.
+#define RV_DONE() CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RENDEZVOUS_DONE, osThreadGetId(), this)
 
 namespace csp::internal {
 
@@ -51,6 +57,7 @@ void RendezvousCore::output(const void* src) {
         Crit c;
         if (in_.pend_thread != nullptr) {                  // a plain reader waits: copy to it
             reader = in_.pend_thread; dst = in_.pend_data; in_.pend_thread = nullptr;
+            RV_DONE();
         } else {                                           // offer; an ALT reader re-verifies
             out_.pend_thread = osThreadGetId(); out_.pend_data = const_cast<void*>(src); out_.pend_done = false;
             if (in_.alt != nullptr) { wake.thread = in_.alt->ownerThread(); wake.flag = in_.alt_flag; }
@@ -74,6 +81,7 @@ void RendezvousCore::input(void* dst) {
         Crit c;
         if (out_.pend_thread != nullptr) {                 // a plain writer waits: copy from it
             writer = out_.pend_thread; src = out_.pend_data; out_.pend_thread = nullptr;
+            RV_DONE();
         } else {                                           // offer; an ALT writer re-verifies
             in_.pend_thread = osThreadGetId(); in_.pend_data = dst; in_.pend_done = false;
             if (out_.alt != nullptr) { wake.thread = out_.alt->ownerThread(); wake.flag = out_.alt_flag; }
@@ -105,6 +113,7 @@ bool RendezvousCore::inEnable(AltScheduler* alt, uint32_t flag, void* dst) {
             pair_src_ = out_.alt_data; pair_writer_ = out_.alt->ownerThread(); pair_done_ = false;
             wake.thread = pair_writer_; wake.flag = out_.alt_flag;
             ready = true;
+            RV_DONE();
         } else if (in_.alt != nullptr && in_.alt != alt) {
             conflict = true;
         } else {
@@ -131,11 +140,13 @@ bool RendezvousCore::inActivate(AltScheduler* alt, uint32_t flag, void* dst) {
             kind = PAIR; src = pair_src_; writer = pair_writer_;
         } else if (out_.pend_thread != nullptr) {          // take the pending plain writer
             kind = PLAIN; src = out_.pend_data; writer = out_.pend_thread; out_.pend_thread = nullptr;
+            RV_DONE();
         } else if (out_.alt != nullptr && out_.alt->claimableLocked()) {
             out_.alt->claimLocked(out_.alt_flag);          // claim the ALT writer now
             kind = PAIR; src = out_.alt_data; writer = out_.alt->ownerThread();
             pair_src_ = src; pair_writer_ = writer; pair_done_ = false;
             wake.thread = writer; wake.flag = out_.alt_flag;
+            RV_DONE();
         }
     }
     if (kind == NONE) return false;                        // partner went away: new round
@@ -161,6 +172,7 @@ bool RendezvousCore::outEnable(AltScheduler* alt, uint32_t flag, const void* src
             pair_src_ = src; pair_writer_ = alt->ownerThread(); pair_done_ = false;
             wake.thread = in_.alt->ownerThread(); wake.flag = in_.alt_flag;
             ready = true;
+            RV_DONE();
         } else if (out_.alt != nullptr && out_.alt != alt) {
             conflict = true;
         } else {
@@ -187,11 +199,13 @@ bool RendezvousCore::outActivate(AltScheduler* alt, uint32_t flag, const void* s
             kind = PAIR;
         } else if (in_.pend_thread != nullptr) {           // take the pending plain reader
             kind = PLAIN; reader = in_.pend_thread; dst = in_.pend_data; in_.pend_thread = nullptr;
+            RV_DONE();
         } else if (in_.alt != nullptr && in_.alt->claimableLocked()) {
             in_.alt->claimLocked(in_.alt_flag);            // claim the ALT reader now
             pair_src_ = src; pair_writer_ = alt->ownerThread(); pair_done_ = false;
             wake.thread = in_.alt->ownerThread(); wake.flag = in_.alt_flag;
             kind = PAIR;
+            RV_DONE();
         }
     }
     if (kind == NONE) return false;                        // partner went away: new round

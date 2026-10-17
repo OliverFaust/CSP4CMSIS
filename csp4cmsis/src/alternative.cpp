@@ -1,5 +1,6 @@
 #include "csp/alt.h"
 #include "csp/csp_critical.h"
+#include "csp/csp4cmsis_trace.h"
 #include <cstdio>
 // CMSIS compiler intrinsics -- typically pulled in via the device header,
 // but included explicitly here since this file uses __CLZ directly: phase 4
@@ -99,6 +100,7 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         // took the item or space (it made progress): new round.
         if (!guardArray[selected]->activate()) continue;
         { uint32_t s = csp_enter_critical(); state_ = IDLE; csp_exit_critical(s); }
+        CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_ALT_SELECTED, owner, selected);
         return (unsigned int)selected;
     }
 }
