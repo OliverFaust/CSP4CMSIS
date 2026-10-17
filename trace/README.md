@@ -16,6 +16,23 @@ decodes them. Decode a log (Semihosting variant) to CSV with
 `EVENTLIST=` / `NM=`). On a simulator pass `--model-time`: time stamps then
 count model cycles, not simulated seconds.
 
+## Known limitations
+
+- Event Recorder's Semihosting variant reads the time stamp and then writes
+  the record. If an interrupt or a task switch comes in between, records with
+  later time stamps reach the log first, so the log is not always in
+  time-stamp order. Fix: write each record with interrupts masked, e.g. a
+  wrapper around EventRecord2/EventRecord4/EventRecordData that saves PRIMASK,
+  disables interrupts, records and restores PRIMASK (GNU ld --wrap or Arm
+  Compiler $Sub$$/$Super$$).
+- RTX5 built with Arm Compiler 6 initialises the kernel (and Event Recorder)
+  before main(), from the C library start-up; its events are recorded on the
+  main stack (SVC handler). With Event Recorder this needs a main stack of at
+  least 2 KB; a 512-byte main stack overflows.
+- eventlist 1.2.0 prints %t text of a data record (ProcessName) as empty and
+  labels every event with the last component it read from the .scvd files.
+  decode.py takes the text from the log and the component from the event ID.
+
 ## Results, FVP regression matrix (Step 1)
 
 30 configurations: Corstone-300 (Cortex-M55) and MPS2 Cortex-M4; Arm Compiler
@@ -31,21 +48,31 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   configurations (ST's FreeRTOS records none). Logs complete, time stamps
   monotonic.
 - Content checks, all 30: 500 RendezvousDone on each of the two channels of
-  test T12; its 1000 AltSelected select guard 0 / 1 exactly when the channel
-  that just paired is the first / second; one PutFromISR from an interrupt on
-  each buffered channel of T2; every ProcessStart precedes the other events of
-  its thread; two SpawnFailed in T28.
+  test T12, each naming the channel object; its 1000 AltSelected select guard
+  0 / 1 exactly when the channel that just paired is the first / second; one
+  PutFromISR in handler mode on each buffered channel of T2; every ProcessStart
+  precedes the other events of its thread, every ProcessEnd follows its
+  ProcessStart; two SpawnFailed in T28; five writes, with no reader, into a 2-element
+  KeepOldest / KeepNewest channel give exactly 2 BufferedPut + 3 DroppedNew /
+  2 BufferedPut + 3 OverwroteOldest.
 - Buffer overflow is not testable here: the Semihosting variant writes every
   record to the file as it is recorded. Deferred to hardware.
+- Repeated runs of one image: identical without tracing. With tracing, the
+  simulator's time-keeping depends on the host at semihosting calls: a few
+  time stamps can shift by some hundred cycles, and a timing-sensitive test
+  can occasionally take a different path (a few more or fewer thread
+  switches). Event counts of the CSP4CMSIS checks above are not affected.
 
-Cost (bytes, text = code + read-only data):
+Cost (bytes, text = code + read-only data; Corstone-300, RTX5):
 
 | | GCC -O2 | GCC -O0 | Arm Compiler -O2 | Arm Compiler -O0 |
 |---|---|---|---|---|
 | library objects, off (= v3.0.1) | 3650 | 5830 | 3775 | 5913 |
-| library objects, on | 4061 (+411) | 6284 (+454) | 4201 (+426) | 6227 (+314) |
-| whole image, on vs off (incl. channel templates, RTOS event code) | +7468 | +6756 | +8300 | +6896 |
-| Event Recorder object (code / RAM) | 2394 / 1192 | 3294 / 1192 | 6970 / 1192 | 3896 / 1192 |
+| library objects, on | 4061 (+411) | 6296 (+466) | 4201 (+426) | 6243 (+330) |
+| Event Recorder object, code | 2394 | 3294 | 6970 | 3896 |
+| Event Recorder RAM (64 records) | 1192 | 1192 | 1192 | 1192 |
 
-(Corstone-300, RTX5; library data/bss unchanged at 0/4. The whole-image
-figure also contains RTX5's own event functions and the Event Recorder.)
+Library data/bss are unchanged (0/4). Channel templates compiled in
+application files grow as well (each traced put/get: one EventRecord2 call).
+Arm Compiler -O2 makes the Event Recorder object larger than -O0: it inlines
+the record-locking helpers and unrolls the filter loops.
