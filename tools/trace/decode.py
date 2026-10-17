@@ -238,7 +238,7 @@ class Perfetto:
             self.switch_out(self.running[0], us)
         self.running = (tid, us)
         if self.inside(us) and self.wanted(tid):
-            self.expect_run[self.names.get(tid)] += 1     # switch-ins in the window
+            self.expect_run[tid] += 1     # switch-ins in the window (named at the end)
 
     def switch_out(self, tid, us):
         if self.running is not None and self.running[0] == tid:
@@ -343,7 +343,8 @@ class Perfetto:
             'running_slices': self.has_switch,
             'channel_capacity': self.capacity,
             'expected_flows_per_channel': dict(self.expect_rv),
-            'expected_switch_ins_per_thread': dict(self.expect_run),
+            'expected_switch_ins_per_thread': dict(sum((collections.Counter({self.names.get(t): k})
+                                                        for t, k in self.expect_run.items()), collections.Counter())),
             'trace_end_us': end_us,
             'occupancy_mismatches': self.occ_mismatch,
             'stats': dict(self.stats),
