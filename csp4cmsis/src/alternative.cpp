@@ -11,6 +11,10 @@ extern "C" {
 
 namespace csp::internal {
 
+// Trace: the Alternative whose internal_alt this scheduler is (every
+// AltScheduler is one; Alternative is standard-layout).
+#define TRACE_ALT (reinterpret_cast<const char*>(this) - offsetof(::csp::Alternative, internal_alt))
+
 // ready_mask in select() has one bit per enabled guard.
 static_assert(ALT_MAX_GUARDS <= 32, "AltScheduler::select(): ready_mask holds at most 32 guards");
 
@@ -61,7 +65,10 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
             bool wait;
             { uint32_t s = csp_enter_critical(); wait = (state_ == ENABLING); if (wait) state_ = WAITING; csp_exit_critical(s); }
             if (wait && !expired) {
+                CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_ALT, CSP4CMSIS_TRACE_SELF(), TRACE_ALT);
                 uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, timeout);
+                CSP4CMSIS_TRACE_EVENT(r == (uint32_t)osFlagsErrorTimeout ? CSP4CMSIS_EVT_RESUME_TIMEOUT : CSP4CMSIS_EVT_RESUME,
+                                      CSP4CMSIS_TRACE_SELF(), TRACE_ALT);
                 if ((r & osFlagsError) != 0U && r != (uint32_t)osFlagsErrorTimeout) {
                     for (size_t k = 0; k < enabled; ++k) (void)guardArray[order[k]]->disable();
                     fatal("CSP4CMSIS: Alternative: osThreadFlagsWait() failed");

@@ -128,9 +128,11 @@ public:
 
         spawn_all<0>(done_sem, composition_priority);
 
+        CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_JOIN, CSP4CMSIS_TRACE_SELF(), done_sem);
         for (size_t i = 0; i < num_procs; ++i) {
             osSemaphoreAcquire(done_sem, osWaitForever);
         }
+        CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RESUME, CSP4CMSIS_TRACE_SELF(), done_sem);
         osSemaphoreDelete(done_sem); // releases the handle, not done_sem_storage's memory
     }
 

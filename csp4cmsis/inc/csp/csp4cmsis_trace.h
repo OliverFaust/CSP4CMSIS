@@ -15,34 +15,44 @@
 //     EventRecorderEnable(EventRecordAll, 0x50U, 0x50U);
 // trace/CSP4CMSIS.scvd decodes the events (eventlist, uVision, Keil Studio).
 //
-//   msg   event            level  val1 (a)                  val2 (b)
-//   0x00  ProcessStart     Op     context (its thread)      process object
-//   0x01  ProcessEnd       Op     context (its thread)      process object
-//   0x02  ProcessName      Op     (data record: the process's name(), after ProcessStart)
-//   0x10  RendezvousDone   Op     context (second arriver)  channel
-//   0x20  AltSelected      Op     context (its thread)      guard-list index
-//   0x30  BufferedPut      Op     context                   channel
-//   0x31  BufferedGet      Op     context                   channel
-//   0x32  PutFromISR       Op     context (handler mode)    channel
-//   0x33  DroppedNew       Op     context                   channel (KeepOldest, full: put rejected)
-//   0x34  OverwroteOldest  Op     context                   channel (KeepNewest, full: oldest replaced)
-//   0x40  SpawnFailed      Error  context                   process object
+//   msg   event             level   values
+//   0x00  ProcessStart      Op      a context (its thread), b process object
+//   0x01  ProcessEnd        Op      a context (its thread), b process object
+//   0x02  ProcessName       Op      (data record: the process's name(), after ProcessStart)
+//   0x10  RendezvousDone    Op      a writer thread, b reader thread, c channel,
+//                                   d 1 if the reader recorded it (arrived second), else 0
+//   0x20  AltSelected       Op      a context (its thread), b guard-list index
+//   0x30  BufferedPut       Op      a context, b channel, c elements after, d capacity
+//   0x31  BufferedGet       Op      a context, b channel, c elements after, d capacity
+//   0x32  PutFromISR        Op      as BufferedPut (a put in handler mode)
+//   0x33  DroppedNew        Op      as BufferedPut (KeepOldest, full: put rejected)
+//   0x34  OverwroteOldest   Op      as BufferedPut (KeepNewest, full: oldest replaced)
+//   0x40  SpawnFailed       Error   a context, b process object
+//   0x60  WaitChannel       Detail  a context, b channel (rendezvous: end busy, or partner)
+//   0x61  WaitBufferedFull  Detail  a context, b channel (Block, put waits for space)
+//   0x62  WaitBufferedEmpty Detail  a context, b channel (get waits for an element)
+//   0x63  WaitAlt           Detail  a context, b Alternative (select() waits for a guard)
+//   0x64  WaitBarrier       Detail  a context, b barrier
+//   0x65  WaitJoin          Detail  a context, b completion semaphore (TerminatingNetwork)
+//   0x6E  Resume            Detail  a context, b the object of the wait
+//   0x6F  ResumeTimeout     Detail  as Resume: the ALT wait ended by its timeout
 //
 // Context (a): the thread id (osThreadId_t) in thread mode while the kernel
 // runs; 0x80000000 | IPSR (the exception number) in handler mode; 0 in thread
 // mode before the kernel runs.
 //
+// Wait events (0x6x) are recorded before a call that can block and Resume
+// after it returns, whether or not it blocked; nothing else is recorded by the
+// thread in between. Message numbers: one high nibble per group (0x0x
+// processes, 0x1x rendezvous, 0x2x ALT, 0x3x buffered channels, 0x4x errors,
+// 0x6x waits); in the wait group the low nibble is the kind, 0xE/0xF resume.
+//
 // Invariants: every put to a buffered channel produces exactly one record:
 // BufferedPut (PutFromISR in handler mode), DroppedNew or OverwroteOldest
 // (putFromISR() on a full Block channel returns false and is no put); every
 // get one BufferedGet; every rendezvous communication exactly one
-// RendezvousDone.
-//
-// Not traced: blocking and unblocking. They would go before and after the
-// waits in RendezvousCore::output()/input() (serial semaphore) and waitDone(),
-// BufferedChannel::input()/output() (items_/spaces_ semaphores),
-// AltScheduler::select() phase 2 (thread flags), Barrier::sync() and
-// ParallelHelper::execute_terminating() (completion semaphore).
+// RendezvousDone, recorded inside the critical section in which the
+// communication is decided.
 
 #define CSP4CMSIS_TRACE_COMPONENT        0x50U
 
@@ -57,6 +67,14 @@
 #define CSP4CMSIS_EVT_DROPPED_NEW        0x33U
 #define CSP4CMSIS_EVT_OVERWROTE_OLDEST   0x34U
 #define CSP4CMSIS_EVT_SPAWN_FAILED       0x40U
+#define CSP4CMSIS_EVT_WAIT_CHANNEL       0x60U
+#define CSP4CMSIS_EVT_WAIT_BUFFERED_FULL 0x61U
+#define CSP4CMSIS_EVT_WAIT_BUFFERED_EMPTY 0x62U
+#define CSP4CMSIS_EVT_WAIT_ALT           0x63U
+#define CSP4CMSIS_EVT_WAIT_BARRIER       0x64U
+#define CSP4CMSIS_EVT_WAIT_JOIN          0x65U
+#define CSP4CMSIS_EVT_RESUME             0x6EU
+#define CSP4CMSIS_EVT_RESUME_TIMEOUT     0x6FU
 
 #if defined(CSP4CMSIS_TRACE)
   #include <stdint.h>
@@ -67,12 +85,18 @@
 
   // EventID() does not parenthesise its arguments.
   #define CSP4CMSIS_TRACE_ID(msg) \
-      EventID((((msg) == CSP4CMSIS_EVT_SPAWN_FAILED) ? EventLevelError : EventLevelOp), \
+      EventID((((msg) == CSP4CMSIS_EVT_SPAWN_FAILED) ? EventLevelError : \
+               ((((msg) & 0xF0U) == 0x60U) ? EventLevelDetail : EventLevelOp)), \
               (CSP4CMSIS_TRACE_COMPONENT), (msg))
 
   /// One event with two values (a, b: integers or pointers).
   #define CSP4CMSIS_TRACE_EVENT(msg, a, b) \
       ((void)EventRecord2(CSP4CMSIS_TRACE_ID(msg), (uint32_t)(uintptr_t)(a), (uint32_t)(uintptr_t)(b)))
+
+  /// One event with four values.
+  #define CSP4CMSIS_TRACE_EVENT4(msg, a, b, c, d) \
+      ((void)EventRecord4(CSP4CMSIS_TRACE_ID(msg), (uint32_t)(uintptr_t)(a), (uint32_t)(uintptr_t)(b), \
+                          (uint32_t)(uintptr_t)(c), (uint32_t)(uintptr_t)(d)))
 
   /// One event carrying a NUL-terminated string (without the NUL).
   #define CSP4CMSIS_TRACE_STRING(msg, s) \
@@ -93,6 +117,7 @@
   #define CSP4CMSIS_TRACE_SELF() (::csp::internal::traceContext())
 #else
   #define CSP4CMSIS_TRACE_EVENT(msg, a, b)   ((void)0)
+  #define CSP4CMSIS_TRACE_EVENT4(msg, a, b, c, d) ((void)0)
   #define CSP4CMSIS_TRACE_STRING(msg, s)     ((void)0)
 #endif
 

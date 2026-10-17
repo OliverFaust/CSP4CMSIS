@@ -132,14 +132,14 @@ namespace csp::internal {
             std::memcpy(at(head_ + count_), src, sizeof(T));
             count_ = count_ + 1;
             // Trace: BufferedPut from a thread, PutFromISR from an interrupt handler.
-            CSP4CMSIS_TRACE_EVENT(__get_IPSR() != 0U ? CSP4CMSIS_EVT_PUT_FROM_ISR : CSP4CMSIS_EVT_BUFFERED_PUT,
-                                  CSP4CMSIS_TRACE_SELF(), this);
+            CSP4CMSIS_TRACE_EVENT4(__get_IPSR() != 0U ? CSP4CMSIS_EVT_PUT_FROM_ISR : CSP4CMSIS_EVT_BUFFERED_PUT,
+                                   CSP4CMSIS_TRACE_SELF(), this, count_, SIZE);
         }
         void popLocked(T* dst) {
             std::memcpy(dst, at(head_), sizeof(T));
             head_  = (head_ + 1) % SIZE;
             count_ = count_ - 1;
-            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_BUFFERED_GET, CSP4CMSIS_TRACE_SELF(), this);
+            CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_BUFFERED_GET, CSP4CMSIS_TRACE_SELF(), this, count_, SIZE);
         }
         // S: snapshot a registration (after the token was released).
         AltWake snapshot(const AltWake& slot) {
@@ -177,10 +177,10 @@ namespace csp::internal {
                     // (count_ and the tokens are unchanged).
                     std::memcpy(at(head_), src, sizeof(T));
                     head_ = (head_ + 1) % SIZE;
-                    CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_OVERWROTE_OLDEST, CSP4CMSIS_TRACE_SELF(), this);
+                    CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_OVERWROTE_OLDEST, CSP4CMSIS_TRACE_SELF(), this, count_, SIZE);
                 } else {
                     // KeepOldest and full: drop.
-                    CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_DROPPED_NEW, CSP4CMSIS_TRACE_SELF(), this);
+                    CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_DROPPED_NEW, CSP4CMSIS_TRACE_SELF(), this, count_, SIZE);
                 }
                 csp_exit_critical(s);
             }
@@ -252,13 +252,17 @@ namespace csp::internal {
         }
 
         void input(T* const dest) override {
+            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_BUFFERED_EMPTY, CSP4CMSIS_TRACE_SELF(), this);
             if (!items_.acquire(osWaitForever)) fatal("CSP4CMSIS: BufferedChannel: input() wait failed");
+            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RESUME, CSP4CMSIS_TRACE_SELF(), this);
             popWithToken(dest);
         }
 
         void output(const T* const source) override {
             if constexpr (kBlock) {
+                CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_BUFFERED_FULL, CSP4CMSIS_TRACE_SELF(), this);
                 if (!spaces_.acquire(osWaitForever)) fatal("CSP4CMSIS: BufferedChannel: output() wait failed");
+                CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RESUME, CSP4CMSIS_TRACE_SELF(), this);
                 pushWithToken(source);
             } else {
                 offer(source);

@@ -264,6 +264,9 @@ namespace csp {
 
     private:
         friend struct internal::Access;
+#if defined(CSP4CMSIS_TRACE)
+        friend class internal::AltScheduler;   // trace: names the Alternative (alternative.cpp)
+#endif
         void addBinding(internal::Guard* g) {
             if (num_guards >= MAX_GUARDS) internal::fatal("CSP4CMSIS: Alternative: more than 16 guards");
             internal_guards[num_guards++] = g;
