@@ -155,11 +155,12 @@ def main():
                 m = re.search(r'\b(?:%s)=(0x[0-9A-Fa-f]+)' % '|'.join(THREAD_KEYS), value)
                 if m:
                     thread = '0x%08x' % int(m.group(1), 16)
-            # eventlist prints %S as a number when it finds no symbol name.
+            # eventlist prints %S as a hex number (without 0x) when it finds
+            # no symbol name.
             def resolve(m):
                 name = syms.name(int(m.group(2), 16))
                 return '%s=%s' % (m.group(1), name) if name else m.group(0)
-            value = re.sub(r'\b(%s)=(0x[0-9A-Fa-f]+)' % '|'.join(ADDR_KEYS), resolve, value)
+            value = re.sub(r'\b(%s)=(0x[0-9A-Fa-f]+|[0-9A-Fa-f]{8})\b' % '|'.join(ADDR_KEYS), resolve, value)
             t = float(ev['time'])
             first_time = t if first_time is None else first_time
             last_time = t
