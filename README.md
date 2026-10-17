@@ -31,7 +31,9 @@ rounded-up time conversion and 7 new tests (2.1.0, [`docs/CHANGES_2.1.0.md`](doc
 3.0 API, static allocation by default (3.0.0, [`docs/CHANGES_3.0.md`](docs/CHANGES_3.0.md)). 3.0.0 also passes
 with the 3.0 defaults (no backend or allocation define) on both FVPs. 3.0.1 changes only how the ALT picks
 the first ready guard (one `__CLZ` instead of a loop; no behaviour change) and was verified like 3.0.0 except
-on the DK-E8 ([`docs/CHANGES_3.0.1.md`](docs/CHANGES_3.0.1.md)).
+on the DK-E8 ([`docs/CHANGES_3.0.1.md`](docs/CHANGES_3.0.1.md)). 3.1.0 adds opt-in event tracing to CMSIS-View
+Event Recorder (`CSP4CMSIS_TRACE`; without it the code is that of 3.0.1), verified on both FVPs
+([`docs/CHANGES_3.1.0.md`](docs/CHANGES_3.1.0.md), [`trace/README.md`](trace/README.md)).
 The FVP harness used for these results is not public ([`tests/README.md`](tests/README.md)). Each target also has a
 v1.0.0 positive control (its known defects are detected; on the DK-E8 for RTX5 with Arm Compiler 6
 only), and the 2.0.0 timeout defect is detected on the MPS2 FVP and the NUCLEO-G474RE. Details:

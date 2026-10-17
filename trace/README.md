@@ -52,7 +52,7 @@ Invariants:
   labels every event with the last component it read from the .scvd files.
   decode.py takes the text from the log and the component from the event ID.
 
-## Results, FVP regression matrix (Step 1)
+## Results, FVP regression matrix (3.1.0)
 
 30 configurations: Corstone-300 (Cortex-M55) and MPS2 Cortex-M4; Arm Compiler
 6.24 and GCC 14.2.1; FreeRTOS 11.3 (CMSIS-FreeRTOS adapter), RTX5 5.9.1 and
@@ -69,18 +69,20 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
 - Content checks, all 30: 500 RendezvousDone on each of the two channels of
   test T12, each naming the channel object; its 1000 AltSelected select guard
   0 / 1 exactly when the channel that just paired is the first / second; one
-  PutFromISR in handler mode on each buffered channel of T2; every ProcessStart
-  precedes the other events of its thread, every ProcessEnd follows its
-  ProcessStart; two SpawnFailed in T28; five writes, with no reader, into a 2-element
-  KeepOldest / KeepNewest channel give exactly 2 BufferedPut + 3 DroppedNew /
-  2 BufferedPut + 3 OverwroteOldest.
+  PutFromISR in handler mode ("irq N") on each buffered channel of T2; every
+  ProcessStart precedes the other events of its thread, every ProcessEnd
+  follows its ProcessStart; two SpawnFailed in T28; tests/trace/drop_policy.cpp
+  gives exactly 2 BufferedPut + 3 DroppedNew and 2 BufferedPut +
+  3 OverwroteOldest (context "pre-kernel").
 - Buffer overflow is not testable here: the Semihosting variant writes every
   record to the file as it is recorded. Deferred to hardware.
-- Repeated runs of one image: identical without tracing. With tracing, the
-  simulator's time-keeping depends on the host at semihosting calls: a few
-  time stamps can shift by some hundred cycles, and a timing-sensitive test
-  can occasionally take a different path (a few more or fewer thread
-  switches). Event counts of the CSP4CMSIS checks above are not affected.
+- Repeated runs of one image are not always identical: the simulator's
+  time-keeping can depend on the host. Without tracing this was seen rarely
+  (MPS2 Cortex-M4 model, under host load); with tracing (semihosting calls)
+  more often: a few time stamps shift by some hundred cycles, and a
+  timing-sensitive test can take a different path (a few more or fewer
+  thread switches). Builds are reproducible, and the results and checks
+  above are not affected.
 
 Cost (bytes, text = code + read-only data; Corstone-300, RTX5):
 
