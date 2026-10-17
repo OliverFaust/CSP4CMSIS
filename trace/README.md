@@ -16,6 +16,25 @@ decodes them. Decode a log (Semihosting variant) to CSV with
 `EVENTLIST=` / `NM=`). On a simulator pass `--model-time`: time stamps then
 count model cycles, not simulated seconds.
 
+## What is recorded
+
+Every event names its context: the thread (thread mode, kernel running),
+handler mode as 0x80000000 | IPSR (decode.py: "irq N", N the exception
+number) or 0 in thread mode before the kernel runs ("pre-kernel"). Channel
+events name the channel object, process events the process object.
+
+Invariants:
+
+- every put to a buffered channel produces exactly one record: BufferedPut
+  (PutFromISR in handler mode), DroppedNew (KeepOldest, full) or
+  OverwroteOldest (KeepNewest, full; no BufferedPut for it). putFromISR() on a
+  full Block channel returns false and is not a put;
+- every get produces one BufferedGet;
+- every rendezvous communication produces exactly one RendezvousDone,
+  recorded by the second of the two partners to arrive.
+
+`tests/trace/drop_policy.cpp` checks the put invariant with exact counts.
+
 ## Known limitations
 
 - Event Recorder's Semihosting variant reads the time stamp and then writes

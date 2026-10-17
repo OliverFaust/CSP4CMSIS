@@ -1,26 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- CSP4CMSIS events for CMSIS-View Event Recorder (component 0x50).
+     context: the thread (thread mode, kernel running), "irq" and the
+     exception number (handler mode; recorded as 0x80000000 | IPSR) or
+     "pre-kernel" (thread mode before the kernel runs; recorded as 0).
      Recorded only in builds with CSP4CMSIS_TRACE: see
      csp4cmsis/inc/csp/csp4cmsis_trace.h. Decode together with the RTOS's
      .scvd file, e.g. with tools/trace/decode.py. -->
 <component_viewer schemaVersion="1.2.0" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="Component_Viewer.xsd">
-  <component name="CSP4CMSIS" shortname="CSP" version="3.0.1"/>
+  <component name="CSP4CMSIS" shortname="CSP" version="3.1.0"/>
 
   <events>
     <group name="CSP4CMSIS">
       <component name="CSP4CMSIS Events" brief="CSP" no="0x50" prefix="CSP4CMSIS_EVT_" info="CSP4CMSIS processes, channels and ALT"/>
     </group>
 
-    <event id="0x5000 + 0x00" level="Op"    property="ProcessStart"   value="thread=%x[val1], process=%S[val2]" info="A process started: its thread entered run()."/>
-    <event id="0x5000 + 0x01" level="Op"    property="ProcessEnd"     value="thread=%x[val1], process=%S[val2]" info="A process returned from run()."/>
+    <event id="0x5000 + 0x00" level="Op"    property="ProcessStart"   value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], process=%S[val2]" info="A process started: its thread entered run()."/>
+    <event id="0x5000 + 0x01" level="Op"    property="ProcessEnd"     value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], process=%S[val2]" info="A process returned from run()."/>
     <event id="0x5000 + 0x02" level="Op"    property="ProcessName"    value="name=%t[val1]"                     info="Name of the process that just started (CSProcess::name())."/>
-    <event id="0x5000 + 0x10" level="Op"    property="RendezvousDone" value="thread=%x[val1], channel=%S[val2]" info="A rendezvous paired its two ends; recorded once, by the second arriver."/>
-    <event id="0x5000 + 0x20" level="Op"    property="AltSelected"    value="thread=%x[val1], guard=%d[val2]"   info="An Alternative selected the guard with this index in its guard list."/>
-    <event id="0x5000 + 0x30" level="Op"    property="BufferedPut"    value="thread=%x[val1], channel=%S[val2]" info="A thread stored an element in a buffered channel."/>
-    <event id="0x5000 + 0x31" level="Op"    property="BufferedGet"    value="thread=%x[val1], channel=%S[val2]" info="A thread took an element from a buffered channel."/>
-    <event id="0x5000 + 0x32" level="Op"    property="PutFromISR"     value="thread=%x[val1], channel=%S[val2]" info="Put executed in handler mode: an element was stored in a buffered channel."/>
-    <event id="0x5000 + 0x33" level="Op"    property="DroppedNew"     value="thread=%x[val1], channel=%S[val2]" info="A put to a full KeepOldest channel was rejected (thread 0: handler mode)."/>
-    <event id="0x5000 + 0x34" level="Op"    property="OverwroteOldest" value="thread=%x[val1], channel=%S[val2]" info="A put to a full KeepNewest channel replaced the oldest element (thread 0: handler mode)."/>
-    <event id="0x5000 + 0x40" level="Error" property="SpawnFailed"    value="thread=%x[val1], process=%S[val2]" info="Run() could not create the thread of this process (osThreadNew() failed)."/>
+    <event id="0x5000 + 0x10" level="Op"    property="RendezvousDone" value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="A rendezvous paired its two ends; recorded once, by the second arriver."/>
+    <event id="0x5000 + 0x20" level="Op"    property="AltSelected"    value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], guard=%d[val2]"   info="An Alternative selected the guard with this index in its guard list."/>
+    <event id="0x5000 + 0x30" level="Op"    property="BufferedPut"    value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="A thread stored an element in a buffered channel."/>
+    <event id="0x5000 + 0x31" level="Op"    property="BufferedGet"    value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="A thread took an element from a buffered channel."/>
+    <event id="0x5000 + 0x32" level="Op"    property="PutFromISR"     value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="Put executed in handler mode: an element was stored in a buffered channel."/>
+    <event id="0x5000 + 0x33" level="Op"    property="DroppedNew"     value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="A put to a full KeepOldest channel was rejected."/>
+    <event id="0x5000 + 0x34" level="Op"    property="OverwroteOldest" value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], channel=%S[val2]" info="A put to a full KeepNewest channel replaced the oldest element (no BufferedPut is recorded for it)."/>
+    <event id="0x5000 + 0x40" level="Error" property="SpawnFailed"    value="context=%t[val1 == 0 ? &quot;pre-kernel&quot; : ((val1 &amp; 0x80000000) ? &quot;irq&quot; : &quot;thread&quot;)] %x[val1 &amp; 0x7FFFFFFF], process=%S[val2]" info="Run() could not create the thread of this process (osThreadNew() failed)."/>
   </events>
 </component_viewer>

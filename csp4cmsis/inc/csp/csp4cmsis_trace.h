@@ -16,17 +16,27 @@
 // trace/CSP4CMSIS.scvd decodes the events (eventlist, uVision, Keil Studio).
 //
 //   msg   event            level  val1 (a)                  val2 (b)
-//   0x00  ProcessStart     Op     thread                    process object
-//   0x01  ProcessEnd       Op     thread                    process object
+//   0x00  ProcessStart     Op     context (its thread)      process object
+//   0x01  ProcessEnd       Op     context (its thread)      process object
 //   0x02  ProcessName      Op     (data record: the process's name(), after ProcessStart)
-//   0x10  RendezvousDone   Op     second arriver's thread   channel
-//   0x20  AltSelected      Op     thread                    guard-list index
-//   0x30  BufferedPut      Op     thread                    channel
-//   0x31  BufferedGet      Op     thread                    channel
-//   0x32  PutFromISR       Op     0 (handler mode)          channel
-//   0x33  DroppedNew       Op     thread, 0 in handler mode channel (KeepOldest, full: put rejected)
-//   0x34  OverwroteOldest  Op     thread, 0 in handler mode channel (KeepNewest, full: oldest replaced)
-//   0x40  SpawnFailed      Error  spawning thread           process object
+//   0x10  RendezvousDone   Op     context (second arriver)  channel
+//   0x20  AltSelected      Op     context (its thread)      guard-list index
+//   0x30  BufferedPut      Op     context                   channel
+//   0x31  BufferedGet      Op     context                   channel
+//   0x32  PutFromISR       Op     context (handler mode)    channel
+//   0x33  DroppedNew       Op     context                   channel (KeepOldest, full: put rejected)
+//   0x34  OverwroteOldest  Op     context                   channel (KeepNewest, full: oldest replaced)
+//   0x40  SpawnFailed      Error  context                   process object
+//
+// Context (a): the thread id (osThreadId_t) in thread mode while the kernel
+// runs; 0x80000000 | IPSR (the exception number) in handler mode; 0 in thread
+// mode before the kernel runs.
+//
+// Invariants: every put to a buffered channel produces exactly one record:
+// BufferedPut (PutFromISR in handler mode), DroppedNew or OverwroteOldest
+// (putFromISR() on a full Block channel returns false and is no put); every
+// get one BufferedGet; every rendezvous communication exactly one
+// RendezvousDone.
 //
 // Not traced: blocking and unblocking. They would go before and after the
 // waits in RendezvousCore::output()/input() (serial semaphore) and waitDone(),
@@ -51,6 +61,8 @@
 #if defined(CSP4CMSIS_TRACE)
   #include <stdint.h>
   #include <string.h>
+  #include "cmsis_os2.h"
+  #include "csp_critical.h"       // device header: __get_IPSR()
   #include "EventRecorder.h"
 
   // EventID() does not parenthesise its arguments.
@@ -66,10 +78,19 @@
   #define CSP4CMSIS_TRACE_STRING(msg, s) \
       ((void)EventRecordData(CSP4CMSIS_TRACE_ID(msg), (s), (uint32_t)strlen(s)))
 
-  /// The calling thread, or 0 in handler mode. Needs the device
-  /// header (csp_critical.h) for __get_IPSR().
-  #define CSP4CMSIS_TRACE_SELF() \
-      ((__get_IPSR() != 0U) ? 0U : (uint32_t)(uintptr_t)osThreadGetId())
+  namespace csp::internal {
+      /// Context value a (see above). Safe with BASEPRI raised: RTX5 and the
+      /// FreeRTOS adapters answer osKernelGetState()/osThreadGetId() directly
+      /// when interrupts are masked.
+      inline uint32_t traceContext() {
+          uint32_t ipsr = __get_IPSR();
+          if (ipsr != 0U) return 0x80000000UL | ipsr;
+          osKernelState_t k = osKernelGetState();
+          if (k != osKernelRunning && k != osKernelLocked) return 0U;
+          return (uint32_t)(uintptr_t)osThreadGetId();
+      }
+  }
+  #define CSP4CMSIS_TRACE_SELF() (::csp::internal::traceContext())
 #else
   #define CSP4CMSIS_TRACE_EVENT(msg, a, b)   ((void)0)
   #define CSP4CMSIS_TRACE_STRING(msg, s)     ((void)0)

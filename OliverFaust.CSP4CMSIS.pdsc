@@ -10,6 +10,12 @@
   <license>LICENSE</license>
 
   <releases>
+    <release version="3.1.0" date="2026-10-17">
+      Opt-in event tracing to CMSIS-View Event Recorder (CSP4CMSIS_TRACE):
+      processes, rendezvous, ALT selection, buffered puts/gets and drops,
+      failed spawns; trace/CSP4CMSIS.scvd and tools/trace/decode.py. Without
+      CSP4CMSIS_TRACE nothing changes. docs/CHANGES_3.1.0.md.
+    </release>
     <release version="3.0.1" date="2026-10-12">
       ALT winner selection with one __CLZ of a mask of the re-verified guards
       instead of a loop (AltScheduler::select(), phase 4). No behaviour
@@ -96,7 +102,7 @@
   </conditions>
 
   <components>
-    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.0.1" condition="CSP4CMSIS Core">
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.1.0" condition="CSP4CMSIS Core">
       <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
         <!-- Include path: csp4cmsis/inc/ only. Applications include
@@ -147,6 +153,12 @@
         <file category="doc" name="docs/CHANGES_2.0.1.md"/>
         <file category="doc" name="docs/CHANGES_2.1.0.md"/>
         <file category="doc" name="docs/CHANGES_3.0.md"/>
+        <file category="doc" name="docs/CHANGES_3.0.1.md"/>
+        <file category="doc" name="docs/CHANGES_3.1.0.md"/>
+        <file category="doc" name="trace/README.md"/>
+
+        <!-- Event Recorder: event descriptions for CMSIS-View (CSP4CMSIS_TRACE builds) -->
+        <file category="other" name="trace/CSP4CMSIS.scvd"/>
         <file category="doc" name="Documentation/CSP4CMSIS_STM32CubeIDE.md"/>
       </files>
     </component>

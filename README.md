@@ -81,7 +81,7 @@ CSP4CMSIS ships as a [CMSIS-Pack](https://open-cmsis-pack.github.io/Open-CMSIS-P
 Add it to your project:
 
 ```bash
-cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v3.0.1/OliverFaust.CSP4CMSIS.3.0.1.pack
+cpackget add -a https://github.com/OliverFaust/CSP4CMSIS/releases/download/v3.1.0/OliverFaust.CSP4CMSIS.3.1.0.pack
 ```
 `-a` accepts the pack's embedded MIT licence non-interactively; without it `cpackget` asks, and in a
 script or CI job (no terminal input) it declines and installs nothing.

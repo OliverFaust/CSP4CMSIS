@@ -13,8 +13,10 @@ writes one CSV row per event:
   the timer counts model cycles, which are not simulated seconds.
 - component: taken from the event ID in the log, named by the .scvd files
   (eventlist 1.2.0 labels every event with the last component it read).
-- thread: the thread the event names (CSP4CMSIS: val1; "ISR" for 0 in an
-  interrupt handler; RTOS events: thread_id=, pxCurrentTCB=, ...).
+- thread: the thread the event names. CSP4CMSIS: its context value, shown as
+  the thread id, "irq N" (handler mode, exception number N) or "pre-kernel"
+  (thread mode before the kernel runs); RTOS events: thread_id=,
+  pxCurrentTCB=, ...
 - value: eventlist's value text; addresses of channels and processes that
   eventlist printed as numbers are resolved to symbols with nm.
 
@@ -63,6 +65,15 @@ def read_log(path, tail):
         yield info & 0xFFFF, ts, info >> 31, val1, payload
         i += 4 + length
     tail[0] = len(data) - i
+
+
+def context(val1):
+    """CSP4CMSIS context value (csp4cmsis_trace.h) as text."""
+    if val1 == 0:
+        return 'pre-kernel'
+    if val1 & 0x80000000:
+        return 'irq %d' % (val1 & 0x1FF)
+    return '0x%08x' % val1
 
 
 def component_names(scvd_files):
@@ -155,7 +166,8 @@ def main():
             value = ev.get('value', '')
             thread = ''
             if comp_no == CSP_COMPONENT and val1 is not None:
-                thread = 'ISR' if (val1 == 0 and irq) else '0x%08x' % val1
+                thread = context(val1)
+                value = re.sub(r'\bcontext=[^,]*', 'context=' + thread, value)
             else:
                 m = re.search(r'\b(?:%s)=(0x[0-9A-Fa-f]+)' % '|'.join(THREAD_KEYS), value)
                 if m:

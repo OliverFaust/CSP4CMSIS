@@ -78,7 +78,7 @@ private:
         // A process that did not start would leave its partners, or a
         // TerminatingNetwork's caller, blocked for ever: stop instead.
         if (handle == NULL) {
-            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_SPAWN_FAILED, osThreadGetId(), &proc);
+            CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_SPAWN_FAILED, CSP4CMSIS_TRACE_SELF(), &proc);
             internal::fatal("CSP4CMSIS: Run(): osThreadNew() failed");
         }
     }
