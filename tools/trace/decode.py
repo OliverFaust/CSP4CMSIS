@@ -44,9 +44,13 @@ THREAD_KEYS = ('thread_id', 'thread', 'pxCurrentTCB', 'pxNewTCB', 'pxTCB', 'xTas
 ADDR_KEYS = ('channel', 'process')
 
 
+EVENT_TYPE_DATA, EVENT_TYPE_VAL2, EVENT_TYPE_VAL4 = 1, 2, 3
+
+
 def read_log(path, tail):
-    """Records of an Event Recorder log file: (id, ts, irq, val1). Bytes
-    after the last complete record are counted in tail[0]."""
+    """Records of an Event Recorder log file: (id, ts, irq, val1 or None,
+    data bytes or None). Bytes after the last complete record are counted
+    in tail[0]."""
     data = open(path, 'rb').read()
     i = 0
     while i + 4 <= len(data):
@@ -54,8 +58,9 @@ def read_log(path, tail):
         if length < 12 or i + 4 + length > len(data):
             break
         ts, info = struct.unpack_from('<QI', data, i + 4)
-        val1 = struct.unpack_from('<I', data, i + 16)[0] if typ != 3 and length >= 16 else None
-        yield info & 0xFFFF, ts, info >> 31, val1
+        val1 = struct.unpack_from('<I', data, i + 16)[0] if typ in (EVENT_TYPE_VAL2, EVENT_TYPE_VAL4) else None
+        payload = data[i + 16:i + 4 + length] if typ == EVENT_TYPE_DATA else None
+        yield info & 0xFFFF, ts, info >> 31, val1, payload
         i += 4 + length
     tail[0] = len(data) - i
 
@@ -140,7 +145,7 @@ def main():
             rec = next(records, None)
             if rec is None:
                 sys.exit('eventlist decoded more events than the log has records')
-            eid, ts, irq, val1 = rec
+            eid, ts, irq, val1, payload = rec
             n += 1
             if last_ts is not None and ts < last_ts:
                 decreases += 1
@@ -161,6 +166,9 @@ def main():
                 name = syms.name(int(m.group(2), 16))
                 return '%s=%s' % (m.group(1), name) if name else m.group(0)
             value = re.sub(r'\b(%s)=(0x[0-9A-Fa-f]+|[0-9A-Fa-f]{8})\b' % '|'.join(ADDR_KEYS), resolve, value)
+            # eventlist 1.2.0 prints %t of a data record (ProcessName) as empty.
+            if comp_no == CSP_COMPONENT and payload is not None and value.endswith('='):
+                value += payload.split(b'\0')[0].decode('ascii', 'replace')
             t = float(ev['time'])
             first_time = t if first_time is None else first_time
             last_time = t
