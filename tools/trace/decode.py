@@ -163,15 +163,60 @@ def run_eventlist(eventlist, elf, scvd_files, log):
 
 class Names:
     """Thread names: CSProcess::name() from ProcessName, else the symbol of
-    the thread's control block (static allocation), else 'thread 0x...'."""
+    the thread's control block (static allocation), else 'thread 0x...'.
+    Processes also get a role summary, from the channels they used:
+    "Merger — ALT in: a, b; out: c"."""
     def __init__(self, syms):
         self.syms, self.process = syms, {}
+        self.roles = collections.defaultdict(lambda: {'ALT in': {}, 'in': {}, 'out': {}})
+        self.pending_in = {}              # thread -> channel read, until its next event shows how
 
     def get(self, tid):
         if tid in self.process:
             return self.process[tid]
         s = self.syms.short(tid)
         return s if s else 'thread 0x%08x' % tid
+
+    def display(self, tid):
+        name = self.get(tid)
+        if tid not in self.process or tid not in self.roles:
+            return name
+        r = self.roles[tid]
+        parts = ['%s: %s' % (k, ', '.join(r[k])) for k in ('ALT in', 'in', 'out') if r[k]]
+        return name + (' \u2014 ' + '; '.join(parts) if parts else '')
+
+    def channel(self, addr):
+        return self.syms.short(addr) or '0x%08x' % addr
+
+    def csp(self, msg, vals):
+        """Role bookkeeping for one CSP4CMSIS event."""
+        if vals is None:
+            return
+        if msg == RENDEZVOUS_DONE:
+            writer, reader, chan = vals[0], vals[1], vals[2]
+            self.resolve(writer, False)
+            self.roles[writer]['out'][self.channel(chan)] = True
+            self.resolve(reader, False)
+            self.pending_in[reader] = chan
+            return
+        tid = vals[0]
+        if tid == 0 or tid & 0x80000000:
+            return
+        if msg in WAIT_KIND or msg in (RESUME, RESUME_TIMEOUT):
+            return                        # the ALT's own waits come between read and AltSelected
+        if msg == ALT_SELECTED:
+            self.resolve(tid, True)
+            return
+        self.resolve(tid, False)
+        if msg in (BUFFERED_PUT, DROPPED_NEW, OVERWROTE_OLDEST):
+            self.roles[tid]['out'][self.channel(vals[1])] = True
+        elif msg == BUFFERED_GET:
+            self.pending_in[tid] = vals[1]
+
+    def resolve(self, tid, by_alt):
+        chan = self.pending_in.pop(tid, None)
+        if chan is not None:
+            self.roles[tid]['ALT in' if by_alt else 'in'][self.channel(chan)] = True
 
 
 class Perfetto:
@@ -331,7 +376,7 @@ class Perfetto:
                           {'object': label, 'timeout': False}):
                 self.stats['wait_open_at_end'] += 1
         for tid, p in self.pids.items():
-            name = self.names.get(tid)
+            name = self.names.display(tid)
             self.emit({'ph': 'M', 'name': 'process_name', 'pid': p, 'args': {'name': name}})
             for track, tname in ((self.RUN, 'running'), (self.WAIT, 'waiting'), (self.EVENTS, 'events')):
                 self.emit({'ph': 'M', 'name': 'thread_name', 'pid': p, 'tid': p * 10 + track, 'args': {'name': tname}})
@@ -343,7 +388,7 @@ class Perfetto:
             'running_slices': self.has_switch,
             'channel_capacity': self.capacity,
             'expected_flows_per_channel': dict(self.expect_rv),
-            'expected_switch_ins_per_thread': dict(sum((collections.Counter({self.names.get(t): k})
+            'expected_switch_ins_per_thread': dict(sum((collections.Counter({self.names.display(t): k})
                                                         for t, k in self.expect_run.items()), collections.Counter())),
             'trace_end_us': end_us,
             'occupancy_mismatches': self.occ_mismatch,
@@ -479,6 +524,8 @@ def main():
         if out:
             out.writerow(['%.8f' % t, comp, prop, thread, value])
         counts[(comp, prop)] += 1
+        if comp_no == CSP_COMPONENT:
+            names.csp(msg, vals)
         if perf:
             us = t * 1e6
             if comp_no == CSP_COMPONENT:

@@ -52,8 +52,12 @@ Invariants:
 
 writes Chrome Trace Event JSON; open it at https://ui.perfetto.dev (Open trace
 file; the trace stays in the browser). Each thread is a group named after the
-process (`CSProcess::name()`), else the symbol of its control block (static
-allocation; e.g. the RTOS's idle thread), else "thread 0x...", with:
+process (`CSProcess::name()`) with a summary of its roles, taken from the
+trace (e.g. "Merger — ALT in: a_to_merger, b_to_merger, sensor_samples; out:
+merger_to_consumer": channels it read through an ALT, read directly, wrote).
+Threads that are not CSP4CMSIS processes (no ProcessName) are named after the
+symbol of their control block (static allocation; e.g. the RTOS's idle
+thread), else "thread 0x...". Each group has:
 
 - **running**: when the thread runs, from the RTOS's switch events (RTX5
   ThreadSwitched; FreeRTOS TaskSwitchedIn/Out). Without switch events
@@ -79,6 +83,12 @@ Selection: `--window T0:T1` (seconds; either side may be empty), `--threads
 name,name`. Test windows: if the application records a marker (a data record
 with the test's name, component COMP, message MSG) at the end of each test,
 `--marker COMP:MSG --test NAME` selects from the previous marker to NAME's.
+
+`tests/trace/demo_network.cpp` is a small network with named processes
+(ProducerA, ProducerB, Merger with a fair ALT and a timeout, Consumer) and an
+interrupt-fed KeepNewest channel, for trying the view: the application runs
+`csp4cmsis_trace_demo_network()` from a thread and calls
+`csp4cmsis_trace_demo_sensor_isr()` from a periodic interrupt.
 
 `tools/trace/check_perfetto.py trace.json` (Python package `perfetto`) loads
 a trace with Perfetto's trace_processor and checks it with SQL: one flow per
