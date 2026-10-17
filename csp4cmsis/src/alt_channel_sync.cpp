@@ -10,8 +10,11 @@
 //
 // RV_DONE: trace event RendezvousDone (csp4cmsis_trace.h), recorded once per
 // communication by the second arriver, in the critical section in which it
-// takes the pending partner or claims the partner ALT.
-#define RV_DONE() CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RENDEZVOUS_DONE, osThreadGetId(), this)
+// takes the pending partner or claims the partner ALT. The value is the
+// channel (RendezvousChannel, whose only data member follows the vtable
+// pointer: checked in rendezvous_channel.h), as for the buffered channel events.
+#define RV_DONE() CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RENDEZVOUS_DONE, osThreadGetId(), \
+                                        reinterpret_cast<const char*>(this) - sizeof(void*))
 
 namespace csp::internal {
 

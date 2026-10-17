@@ -19,11 +19,13 @@
 //   0x00  ProcessStart     Op     thread                    process object
 //   0x01  ProcessEnd       Op     thread                    process object
 //   0x02  ProcessName      Op     (data record: the process's name(), after ProcessStart)
-//   0x10  RendezvousDone   Op     second arriver's thread   rendezvous core (channel + 4)
+//   0x10  RendezvousDone   Op     second arriver's thread   channel
 //   0x20  AltSelected      Op     thread                    guard-list index
 //   0x30  BufferedPut      Op     thread                    channel
 //   0x31  BufferedGet      Op     thread                    channel
-//   0x32  PutFromISR       Op     0 (interrupt)             channel
+//   0x32  PutFromISR       Op     0 (handler mode)          channel
+//   0x33  DroppedNew       Op     thread, 0 in handler mode channel (KeepOldest, full: put rejected)
+//   0x34  OverwroteOldest  Op     thread, 0 in handler mode channel (KeepNewest, full: oldest replaced)
 //   0x40  SpawnFailed      Error  spawning thread           process object
 //
 // Not traced: blocking and unblocking. They would go before and after the
@@ -42,6 +44,8 @@
 #define CSP4CMSIS_EVT_BUFFERED_PUT       0x30U
 #define CSP4CMSIS_EVT_BUFFERED_GET       0x31U
 #define CSP4CMSIS_EVT_PUT_FROM_ISR       0x32U
+#define CSP4CMSIS_EVT_DROPPED_NEW        0x33U
+#define CSP4CMSIS_EVT_OVERWROTE_OLDEST   0x34U
 #define CSP4CMSIS_EVT_SPAWN_FAILED       0x40U
 
 #if defined(CSP4CMSIS_TRACE)
@@ -62,7 +66,7 @@
   #define CSP4CMSIS_TRACE_STRING(msg, s) \
       ((void)EventRecordData(CSP4CMSIS_TRACE_ID(msg), (s), (uint32_t)strlen(s)))
 
-  /// The calling thread, or 0 in an interrupt handler. Needs the device
+  /// The calling thread, or 0 in handler mode. Needs the device
   /// header (csp_critical.h) for __get_IPSR().
   #define CSP4CMSIS_TRACE_SELF() \
       ((__get_IPSR() != 0U) ? 0U : (uint32_t)(uintptr_t)osThreadGetId())

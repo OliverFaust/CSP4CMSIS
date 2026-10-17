@@ -177,10 +177,11 @@ namespace csp::internal {
                     // (count_ and the tokens are unchanged).
                     std::memcpy(at(head_), src, sizeof(T));
                     head_ = (head_ + 1) % SIZE;
-                    CSP4CMSIS_TRACE_EVENT(__get_IPSR() != 0U ? CSP4CMSIS_EVT_PUT_FROM_ISR : CSP4CMSIS_EVT_BUFFERED_PUT,
-                                          CSP4CMSIS_TRACE_SELF(), this);
+                    CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_OVERWROTE_OLDEST, CSP4CMSIS_TRACE_SELF(), this);
+                } else {
+                    // KeepOldest and full: drop.
+                    CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_DROPPED_NEW, CSP4CMSIS_TRACE_SELF(), this);
                 }
-                // KeepOldest and full: drop.
                 csp_exit_critical(s);
             }
             if (pushed) {

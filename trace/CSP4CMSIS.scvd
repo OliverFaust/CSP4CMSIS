@@ -14,11 +14,13 @@
     <event id="0x5000 + 0x00" level="Op"    property="ProcessStart"   value="thread=%x[val1], process=%S[val2]" info="A process started: its thread entered run()."/>
     <event id="0x5000 + 0x01" level="Op"    property="ProcessEnd"     value="thread=%x[val1], process=%S[val2]" info="A process returned from run()."/>
     <event id="0x5000 + 0x02" level="Op"    property="ProcessName"    value="name=%t[val1]"                     info="Name of the process that just started (CSProcess::name())."/>
-    <event id="0x5000 + 0x10" level="Op"    property="RendezvousDone" value="thread=%x[val1], channel=%S[val2]" info="A rendezvous paired its two ends; recorded once, by the second arriver. The value is the channel's rendezvous core (channel object + 4)."/>
+    <event id="0x5000 + 0x10" level="Op"    property="RendezvousDone" value="thread=%x[val1], channel=%S[val2]" info="A rendezvous paired its two ends; recorded once, by the second arriver."/>
     <event id="0x5000 + 0x20" level="Op"    property="AltSelected"    value="thread=%x[val1], guard=%d[val2]"   info="An Alternative selected the guard with this index in its guard list."/>
     <event id="0x5000 + 0x30" level="Op"    property="BufferedPut"    value="thread=%x[val1], channel=%S[val2]" info="A thread stored an element in a buffered channel."/>
     <event id="0x5000 + 0x31" level="Op"    property="BufferedGet"    value="thread=%x[val1], channel=%S[val2]" info="A thread took an element from a buffered channel."/>
-    <event id="0x5000 + 0x32" level="Op"    property="PutFromISR"     value="thread=%x[val1], channel=%S[val2]" info="An interrupt handler stored an element in a buffered channel."/>
+    <event id="0x5000 + 0x32" level="Op"    property="PutFromISR"     value="thread=%x[val1], channel=%S[val2]" info="Put executed in handler mode: an element was stored in a buffered channel."/>
+    <event id="0x5000 + 0x33" level="Op"    property="DroppedNew"     value="thread=%x[val1], channel=%S[val2]" info="A put to a full KeepOldest channel was rejected (thread 0: handler mode)."/>
+    <event id="0x5000 + 0x34" level="Op"    property="OverwroteOldest" value="thread=%x[val1], channel=%S[val2]" info="A put to a full KeepNewest channel replaced the oldest element (thread 0: handler mode)."/>
     <event id="0x5000 + 0x40" level="Error" property="SpawnFailed"    value="thread=%x[val1], process=%S[val2]" info="Run() could not create the thread of this process (osThreadNew() failed)."/>
   </events>
 </component_viewer>
