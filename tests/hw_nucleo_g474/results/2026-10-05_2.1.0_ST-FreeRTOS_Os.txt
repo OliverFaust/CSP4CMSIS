@@ -1,5 +1,5 @@
-# elf: /home/of6/STM32CubeIDE/workspace_csp4cmsis/csp4cmsis_g474_tests_210/Release/csp4cmsis_g474_tests_210.elf sha256=7db6c270777600c70d8144a7b1dbb3d1346ee1a41fd5f1a9e4209bc4c0a60434
-# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# elf: csp4cmsis_g474_tests_210/Release/csp4cmsis_g474_tests_210.elf sha256=7db6c270777600c70d8144a7b1dbb3d1346ee1a41fd5f1a9e4209bc4c0a60434
+# port: ST-LINK V3 VCP
 # start: 2026-10-05 22:42:36
 
 === CSP4CMSIS BufferedChannel regression suite ===
