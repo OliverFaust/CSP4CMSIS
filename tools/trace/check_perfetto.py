@@ -20,6 +20,9 @@ and compares with the counts decode.py wrote into its otherData:
   the replayed depth equals the library's element count after every put and
   get.
 
+- library state: decode.py's ring-slot and ALT-offer checks found no error,
+  and (whole log) one "stable: ..." slice per stable point.
+
 These compare the trace with counts decode.py took from the same log, so an
 event the application never recorded is not missed by them. --expect adds
 counts known from the application itself, a JSON object
@@ -141,6 +144,17 @@ def check(path, exp=None):
            % (n, meta['occupancy_mismatches'], ('; ' + '; '.join(bad)) if bad else ''))
     if 'expected_buffered_flows_per_channel' in meta:
         ok &= check_buffered(tp, meta, report)
+    if 'library_state' in meta:
+        st = meta['library_state']
+        n = rows(tp, "SELECT COUNT(*) AS n FROM slice WHERE name LIKE 'stable: %'")[0].n
+        whole = meta['window_us'] == [None, None]
+        good = (not st['ring'].get('errors') and not st['alt'].get('errors') and not st['alt'].get('unresolved_bits')
+                and (n == st['stable_points'] or not whole))
+        report('state', good, 'ring-slot errors %d, ALT-offer errors %d, unresolved guard bits %d; '
+               '%d stable slices for %d stable points %s' % (
+                   st['ring'].get('errors', 0), st['alt'].get('errors', 0), st['alt'].get('unresolved_bits', 0),
+                   n, st['stable_points'], json.dumps(st['stable_classes'])))
+        ok &= good
     if exp:
         ok &= check_expected(tp, meta, exp, report)
     tp.close()

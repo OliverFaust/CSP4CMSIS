@@ -12,12 +12,9 @@
 // reader_first, writer and reader the pair's two threads.
 // check_rendezvous_order.py checks them in the CSV of tools/trace/decode.py.
 //
-// csp4cmsis_trace_rendezvous_order(then) is called once after
-// osKernelInitialize() and before osKernelStart(). It creates a thread that
-// runs the two pairs as a TerminatingNetwork, then calls then() (if not null)
-// and exits.
+// csp4cmsis_trace_rendezvous_order() runs the two pairs as a
+// TerminatingNetwork; call it from a thread (trace_tests.cpp).
 #if defined(CSP4CMSIS_TRACE)
-#include "cmsis_os2.h"
 #include "csp/csp4cmsis.h"
 
 namespace {
@@ -25,7 +22,7 @@ namespace {
 constexpr uint32_t ROUNDS = 10u;
 constexpr uint32_t PAUSE_TICKS = 2u;
 
-class Writer : public csp::CSProcessStatic<256> {
+class Writer : public csp::CSProcessStatic<160> {
     csp::Chanout<uint32_t> out;
     const char* label;
     uint32_t pause;
@@ -42,7 +39,7 @@ public:
     }
 };
 
-class Reader : public csp::CSProcessStatic<256> {
+class Reader : public csp::CSProcessStatic<160> {
     csp::Chanin<uint32_t> in;
     const char* label;
     uint32_t pause;
@@ -60,9 +57,9 @@ public:
     }
 };
 
-void (*g_then)(void);
+} // namespace
 
-void order_thread(void*) {
+extern "C" void csp4cmsis_trace_rendezvous_order(void) {
     static csp::Channel<uint32_t> writer_first;
     static csp::Channel<uint32_t> reader_first;
     static Writer wf_writer(writer_first.writer(), "WF writer", 0u);
@@ -71,28 +68,5 @@ void order_thread(void*) {
     static Reader rf_reader(reader_first.reader(), "RF reader", 0u);
     csp::Run(csp::InParallel(wf_writer, wf_reader, rf_writer, rf_reader),
              csp::ExecutionMode::TerminatingNetwork);
-    if (g_then) g_then();
-    osThreadExit();
-}
-
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-alignas(8) uint32_t order_stack[256];
-csp::internal::csp_static_thread_storage_t order_tcb;
-#endif
-
-} // namespace
-
-extern "C" void csp4cmsis_trace_rendezvous_order(void (*then)(void)) {
-    g_then = then;
-    osThreadAttr_t a = {};
-    a.name = "rendezvous_order";
-    a.priority = osPriorityHigh;
-    a.stack_size = sizeof(uint32_t) * 256u;
-#if defined(CSP4CMSIS_STATIC_ALLOCATION)
-    a.stack_mem = order_stack;
-    a.cb_mem = &order_tcb;
-    a.cb_size = sizeof(order_tcb);
-#endif
-    (void)osThreadNew(order_thread, nullptr, &a);
 }
 #endif

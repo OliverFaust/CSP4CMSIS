@@ -22,8 +22,41 @@ Every event names its context: the thread (thread mode, kernel running),
 handler mode as 0x80000000 | IPSR (decode.py: "irq N", N the exception
 number) or 0 in thread mode before the kernel runs ("pre-kernel"). Channel
 events name the channel object, process events the process object.
-RendezvousDone names the writer and the reader thread; buffered-channel
-events carry the number of elements after the operation and the capacity.
+RendezvousDone names the writer and the reader thread. No event records any
+part of a channel's element values: only library state.
+
+| msg | event | values (a, b, c, d) |
+|---|---|---|
+| 0x00 | ProcessStart | context, process |
+| 0x01 | ProcessEnd | context, process |
+| 0x02 | ProcessName | data: the process's name() |
+| 0x10 | RendezvousDone | writer thread, reader thread, channel, 1 if the reader recorded it |
+| 0x20 | AltSelected | context, guard-list index |
+| 0x21 | AltGuard | Alternative, guard-list index, target, kind (0 input, 1 output: target the channel; 2 timeout: target the delay in ticks; 3 other) |
+| 0x30 | BufferedPut | context, channel, elements after << 16 \| capacity, ring slot written |
+| 0x31 | BufferedGet | as BufferedPut, ring slot read |
+| 0x32 | PutFromISR | as BufferedPut (handler mode) |
+| 0x33 | DroppedNew | as BufferedPut, 0xFFFFFFFF (no slot) |
+| 0x34 | OverwroteOldest | as BufferedPut, slot evicted << 16 \| slot written |
+| 0x40 | SpawnFailed | context, process |
+| 0x60 | WaitChannel | context, channel \| direction (bit 0: 1 write, 0 read) |
+| 0x61 | WaitBufferedFull | context, channel |
+| 0x62 | WaitBufferedEmpty | context, channel |
+| 0x63 | WaitAlt | context, Alternative, enabled guards (bit i: guard-list index i), number of guards |
+| 0x64 | WaitBarrier | context, barrier |
+| 0x65 | WaitJoin | context, completion semaphore |
+| 0x6E | Resume | context, the wait's object (as the wait recorded it) |
+| 0x6F | ResumeTimeout | as Resume (an ALT wait ended by its timeout) |
+
+Buffered channels: a capacity of at most 65535 when tracing (static_assert).
+OverwroteOldest replaces the oldest element in place, so the slot evicted
+and the slot written are the same slot (both are recorded). AltGuard is
+recorded once per guard, by the thread that calls the Alternative's first
+priSelect()/fairSelect() (again from guard 0 for a new Alternative at the
+same address, and for guards added later); the API has no guard
+preconditions, so a select() that waits has every guard enabled. WaitChannel
+also records the side that waits for an ALT writer to be copied from
+(output guard, direction write).
 
 Wait events (Detail level, 0x60-0x65) are recorded before a call that can
 block: WaitChannel (rendezvous: the end is busy, or waiting for the
@@ -44,11 +77,35 @@ Invariants:
 - every rendezvous communication produces exactly one RendezvousDone,
   recorded by the second of the two partners to arrive.
 
-`tests/trace/drop_policy.cpp` checks the put invariant with exact counts,
-`tests/trace/rendezvous_order.cpp` the rendezvous one for plain ends (a
-Chanout and a Chanin, no ALT) in both arrival orders: 10 communications in
-which the writer arrives first (RendezvousDone recorded by the reader,
-by_reader=1) and 10 in which the reader arrives first (by_reader=0).
+Trace tests (tests/trace; trace builds only, each with a checker that reads
+decode.py's output):
+
+- `drop_policy.cpp` (before the kernel starts): the put invariant with
+  exact counts, and ring slots: BufferedPut slots 0, 1, then DroppedNew x3 /
+  OverwroteOldest evicting slots 0, 1, 0 (`check_drop_policy.py`,
+  `check_ring_slots.py`);
+- `trace_tests.cpp` starts a thread that runs the others, then the
+  application's own start function:
+  - `rendezvous_order.cpp`: the rendezvous invariant for plain ends (a
+    Chanout and a Chanin, no ALT) in both arrival orders: 10 communications
+    in which the writer arrives first (RendezvousDone recorded by the
+    reader, by_reader=1) and 10 in which the reader arrives first
+    (by_reader=0) (`check_rendezvous_order.py`);
+  - `ring_wrap.cpp`: puts and gets interleaved on a Block channel of 3 so
+    that the ring wraps twice, with the exact slot of each
+    (`check_ring_slots.py`);
+  - `alt_offers.cpp`: three Alternatives with a timeout guard, a rendezvous
+    output guard and a buffered (full) output guard; exact AltGuard events,
+    one WaitAlt each with mask 0x3 of 2 guards, the selected guard
+    (`check_alt_offers.py`, which also checks every WaitAlt of the suite's
+    test T12: mask 0x3 of 2);
+  - `stable_env.cpp`: two processes that wait for an interrupt-fed buffered
+    channel between interrupts: stable points "awaiting environment", then
+    the interrupt releases them (`check_stable_env.py`; needs a periodic
+    interrupt from the platform, see the file).
+- `tests/host/trace_decoder/test_conformance.py` (host, Python):
+  tools/trace/conformance.py on synthetic event streams, including the
+  "deadlock" classification (no target test deadlocks).
 
 ## Perfetto
 
@@ -91,7 +148,36 @@ their gets with the source but without an arrow (`source_before_window`).
 
 Group "buffered channels": one occupancy counter per channel. Group
 "interrupts": one track per exception number with the events recorded in
-handler mode.
+handler mode. Group "stable points": one slice per stable point (below),
+named by its classification, with the offers and the reason as args.
+
+## Library state: ring slots, ALT offers, stable points
+
+decode.py feeds every CSP4CMSIS event of the log (whatever the window) to
+tools/trace/conformance.py:
+
+- ring slots: each buffered channel is replayed as a FIFO; every get must
+  read the slot written by the put it takes, that slot must not have been
+  written again in between, every OverwroteOldest must evict the slot of the
+  oldest put, DroppedNew uses no slot, and the replayed depth must equal the
+  library's count;
+- ALT offers: every enabled bit of a WaitAlt must resolve through the
+  Alternative's AltGuard events to (channel, direction) or a timeout;
+- stable points: a moment when every live CSP process (ProcessStart without
+  ProcessEnd) is in an open wait and the RTOS's idle thread runs (its
+  control block's symbol contains "idle", or `--idle NAME`). Its offers are
+  the open waits' offers (channel read/write, timeouts, barrier, join). It
+  is classified when it begins: "awaiting environment" (a wait that only a
+  timeout or an interrupt-fed buffered channel can end: one that PutFromISR
+  writes somewhere in the log), "deadlock" (no two offers match and nothing
+  awaits a timeout or an interrupt) or "other" (matching offers while every
+  process waits, or waits that are not channel offers, with the reason).
+  Without RTOS switch events (ST's FreeRTOS) the same moments are reported
+  as "stability unconfirmed".
+
+`--summary` ends with one line per check, `--checks FILE` writes the
+results as JSON, `--stable FILE` the stable points (CSV if FILE ends in
+.csv, else JSON).
 
 Time: microseconds of the log's time stamps (count / EVENT_TIMESTAMP_FREQ).
 On a simulator with `--model-time` these are model cycles, not real or
@@ -114,7 +200,9 @@ RendezvousDone, one running slice per switch-in, every wait slice ended by
 its Resume, occupancy within 0..capacity; buffered channels: one flow per get
 and no get without a source put, puts (+ elements buffered at the window
 start) = gets + overwritten + dropped + still buffered at the end, and the
-replayed depth equal to the library's element count at every put and get.
+replayed depth equal to the library's element count at every put and get;
+library state: no ring-slot or ALT-offer error and (whole log) one stable
+slice per stable point.
 These counts come from the same log, so they cannot show an event the
 library never recorded. `--expect expected.json` adds the counts known from
 the application (flows per rendezvous channel; puts, gets, overwritten,
@@ -150,22 +238,21 @@ ST's FreeRTOS 10.3.1; -O0/-O2/-Os, heap-free and timer-priority variants.
 Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
 
 - The trace tests run before the suite (tests/trace: drop_policy.cpp before
-  the kernel starts, rendezvous_order.cpp in a thread that then starts the
-  suite's runner). On Corstone-300 the trace builds of the FreeRTOS
-  configurations with a heap use an 8 KB FreeRTOS heap instead of 16 KB, to
-  make room for the threads of rendezvous_order.cpp (the suite uses less
-  than 1.4 KB).
+  the kernel starts, the others in trace_tests.cpp's thread, which then
+  starts the suite's runner). On Corstone-300 the trace builds use a smaller
+  RTOS heap, to make room for the tests' threads: FreeRTOS 4 KB instead of
+  16 KB, RTX5 8 KB instead of 16 KB (the suite uses less than 1.4 KB).
 - Tracing off: in every configuration the loaded image is byte-identical to
   v3.1.0 (and 3.0.1) and the test results are the same (PASS=36, heap-free
   PASS=37; FAIL=0 SKIP=0 REPLACED=4).
-- Tracing on: the same results everywhere. 361,000 to 364,700 CSP4CMSIS
-  events per run, of which about 188,000 are wait/resume events (per run:
-  6,080 to 6,082 RendezvousDone, ~7,150 WaitChannel, ~25,280
-  WaitBufferedFull, ~40,380 WaitBufferedEmpty, 20,800 to 22,600 WaitAlt,
-  40 WaitBarrier, 3 WaitJoin,
-  26 ResumeTimeout); RTOS thread events in the RTX5 and FreeRTOS 11.3
-  configurations (ST's FreeRTOS records none). Logs complete, time stamps
-  monotonic.
+- Tracing on: the same results everywhere. 361,700 to 362,100 CSP4CMSIS
+  events per run (per run: 6,084 to 6,086 RendezvousDone, 7,160 to 7,162
+  WaitChannel, ~25,290 WaitBufferedFull, ~40,390 WaitBufferedEmpty, 21,070
+  to 21,230 WaitAlt, 115 AltGuard, ~55,530 BufferedPut and BufferedGet,
+  ~20,160 OverwroteOldest, 3 DroppedNew, 5 PutFromISR, 40 WaitBarrier,
+  5 WaitJoin, 28 ResumeTimeout); RTOS thread events in the RTX5 and
+  FreeRTOS 11.3 configurations (ST's FreeRTOS records none). Logs complete,
+  time stamps monotonic.
 - Content checks, all 30: 500 RendezvousDone on each of the two channels of
   test T12, naming the channel, with the test's two sender threads as
   writers and its runner as reader; writer and reader differ in every
@@ -181,6 +268,19 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   (context "pre-kernel"); tests/trace/rendezvous_order.cpp gives exactly
   10 RendezvousDone with by_reader=1 (writer first) and 10 with by_reader=0
   (reader first), each naming the pair's writer and reader.
+- Library state, all 30: no ring-slot error (every get read its put's slot,
+  every OverwroteOldest evicted the oldest put's slot, every DroppedNew
+  without slot); tests/trace/ring_wrap.cpp and drop_policy.cpp give exactly
+  the expected slot sequences; every enabled bit of every WaitAlt resolves
+  (none unresolved), tests/trace/alt_offers.cpp's three Alternatives give
+  exactly their guard lists, masks 0x3 of 2 and selections, and every
+  WaitAlt of test T12 has mask 0x3 of 2; tests/trace/stable_env.cpp gives
+  3 PutFromISR and stable points offering env_samples (read) and env_link
+  (read), all "awaiting environment". RTX5 and FreeRTOS 11.3: 4 stable
+  points per run, all "awaiting environment" (the suite's tests do not run
+  CSP processes); ST's FreeRTOS (no switch events): 25, all "stability
+  unconfirmed". No "deadlock" anywhere; that classification is tested on
+  the host (tests/host/trace_decoder).
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.
@@ -199,9 +299,19 @@ Cost (bytes, text = code + read-only data; Corstone-300, RTX5):
 | | GCC -O2 | GCC -O0 | Arm Compiler -O2 | Arm Compiler -O0 |
 |---|---|---|---|---|
 | library objects, off (= v3.1.0) | 3650 | 5830 | 3775 | 5913 |
-| library objects, on | 4790 (+1140) | 6899 (+1069) | 4947 (+1172) | 6945 (+1032) |
+| library objects, on | 4934 (+1284) | 7136 (+1306) | 5333 (+1558) | 7167 (+1254) |
 | Event Recorder object, code | 2394 | 3294 | 6970 | 3896 |
 | Event Recorder RAM (64 records) | 1192 | 1192 | 1192 | 1192 |
+
+Of these, the ring slots, channel directions and ALT offers (WaitAlt with
+the guard mask, AltGuard) add 144 / 237 / 386 / 222 bytes. Their guard list
+costs, with tracing on only: one virtual function per guard class
+(traceDescribe, 10 to 12 bytes each at GCC -O2) and its vtable slot (4
+bytes per class), Alternative::traceGuards() (68 bytes at GCC -O2), 4 bytes
+of RAM per Alternative (the number of guards described), and one AltGuard
+record per guard, recorded once per Alternative object (32 bytes in the
+recorder's buffer). WaitAlt is a 4-word record (32 bytes in the buffer
+instead of 16). With tracing off the layout and code are unchanged.
 
 Library data/bss are unchanged (0/4). Channel templates compiled in
 application files grow as well (each traced put/get: two or three
