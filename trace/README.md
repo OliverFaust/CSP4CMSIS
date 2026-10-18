@@ -67,13 +67,27 @@ thread), else "thread 0x...". Each group has:
   (args: object, timeout); a thread still blocked when the log ends gets
   "(no resume)";
 - **events**: CSP4CMSIS events as instants with their values (channel names
-  resolved, guard index, element count), and a short "rendezvous <channel>"
-  slice on the writer and on the reader, joined by a flow arrow (writer to
-  reader).
+  resolved, guard index), a short "rendezvous <channel>" slice on the writer
+  and on the reader, joined by a flow arrow (writer to reader), and the
+  thread's buffered puts and gets (below).
 
-Group "buffered channels": one counter per channel, elements = puts minus
-gets (drops and overwrites change nothing). Group "interrupts": one track
-per exception number with the events recorded in handler mode.
+Buffered channels: the decoder replays each channel's buffer as a FIFO in
+record order (every put is one record, every get takes the oldest element).
+A put is a short slice "put <channel>" on the track of its context (the
+thread, the "irq N" track in handler mode, "pre-kernel"); a get is a slice
+"get <channel> ← <source>", joined by a flow arrow from the put whose value
+it took. The arrows have category "buffered", the rendezvous ones
+"rendezvous". Puts whose value is never read are named by their fate:
+"(overwritten, never read)" (KeepNewest, replaced by a later put),
+"(dropped)" (KeepOldest, buffer full), "(still buffered at the end)". Args:
+channel, context, outcome or source, the raw event and its values, the
+replayed depth and the library's element count after the event (equal, or
+the log is incomplete). A window that opens with elements in a buffer shows
+their gets with the source but without an arrow (`source_before_window`).
+
+Group "buffered channels": one occupancy counter per channel. Group
+"interrupts": one track per exception number with the events recorded in
+handler mode.
 
 Time: microseconds of the log's time stamps (count / EVENT_TIMESTAMP_FREQ).
 On a simulator with `--model-time` these are model cycles, not real or
@@ -93,7 +107,10 @@ interrupt-fed KeepNewest channel, for trying the view: the application runs
 `tools/trace/check_perfetto.py trace.json` (Python package `perfetto`) loads
 a trace with Perfetto's trace_processor and checks it with SQL: one flow per
 RendezvousDone, one running slice per switch-in, every wait slice ended by
-its Resume, occupancy within 0..capacity.
+its Resume, occupancy within 0..capacity; buffered channels: one flow per get
+and no get without a source put, puts (+ elements buffered at the window
+start) = gets + overwritten + dropped + still buffered at the end, and the
+replayed depth equal to the library's element count at every put and get.
 
 Size: a whole run of the FVP regression suite (about 650,000 events) gives an
 80 MB JSON file, which ui.perfetto.dev loads in seconds; select a window or

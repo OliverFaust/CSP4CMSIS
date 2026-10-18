@@ -25,7 +25,14 @@ Perfetto (--perfetto, open in ui.perfetto.dev): per thread a "running" track
 "events" track (CSP4CMSIS events as instants, rendezvous as short slices with
 a flow arrow from writer to reader); an "interrupts" group with one track per
 exception number; a "buffered channels" group with one occupancy counter per
-channel (puts minus gets). Time in microseconds of the log's time stamps.
+channel. Buffered channels: each buffer is replayed as a FIFO in record order;
+a put is a short slice "put <channel>" on its context's track (thread or irq),
+a get a slice "get <channel> <- <source>" with a flow arrow (category
+"buffered") from the put whose value it took. Puts that are never read are
+named by their outcome: "(overwritten, never read)" (KeepNewest), "(dropped)"
+(KeepOldest), "(still buffered at the end)". Args: the raw event and value,
+the replayed depth and the library's element count after the event. Time in
+microseconds of the log's time stamps.
 Selection: --window T0:T1 (seconds), --threads NAME,... ; --marker COMP:MSG
 with --test NAME: markers are records of component COMP, message MSG whose
 data is a name, each placed at the end of a test; the window is from the
@@ -233,12 +240,15 @@ class Perfetto:
         self.pids = {}                    # thread id -> pid
         self.running = None               # (thread, start us)
         self.waits = {}                   # thread -> (start us, kind, object)
-        self.occ = collections.Counter()  # channel address -> computed occupancy
+        self.fifo = collections.defaultdict(collections.deque)   # channel address -> puts not yet taken
         self.capacity = {}                # channel name -> capacity
+        self.carried_in = {}              # channel name -> elements at the window start
         self.irqs = set()
         self.flow = 0
         self.stats = collections.Counter()
         self.expect_rv = collections.Counter()
+        self.expect_bf = collections.Counter()
+        self.pre_kernel = False
         self.expect_run = collections.Counter()
         self.has_switch = has_switch_events
         self.occ_mismatch = 0
@@ -315,17 +325,17 @@ class Perfetto:
                 if msg == RESUME_TIMEOUT:
                     self.stats['timeout_slices'] += 1
             return
-        buffered = msg in (BUFFERED_PUT, BUFFERED_GET, PUT_FROM_ISR, DROPPED_NEW, OVERWROTE_OLDEST)
         if not self.inside(us):
-            if buffered:
-                self.track_occupancy(msg, vals)
+            if msg in BUFFERED_EVENTS:
+                self.buffered(msg, us, vals, value, False)
             return
         if not self.started:              # counters start at the window with their current value
             self.started = True
-            for chan, k in self.occ.items():
+            for chan, q in self.fifo.items():
                 label = self.syms.short(chan) or '0x%08x' % chan
+                self.carried_in[label] = len(q)
                 self.emit({'ph': 'C', 'name': label, 'pid': 2, 'ts': self.t0 if self.t0 is not None else us,
-                           'args': {'elements': k}})
+                           'args': {'elements': len(q)}})
         name = EVENT_NAME.get(msg, '0x%02X' % msg)
         args = {'value': value}
         if msg == RENDEZVOUS_DONE:
@@ -335,17 +345,15 @@ class Perfetto:
                 self.flow += 1
                 for tid, key in ((writer, 'flow_out'), (reader, 'flow_in')):
                     p = self.pid(tid)
-                    self.emit({'ph': 'X', 'name': 'rendezvous ' + label, 'pid': p, 'tid': p * 10 + self.EVENTS,
-                               'ts': us, 'dur': 0.001, 'bind_id': self.flow, key: True,
+                    self.emit({'ph': 'X', 'cat': 'rendezvous', 'name': 'rendezvous ' + label, 'pid': p,
+                               'tid': p * 10 + self.EVENTS, 'ts': us, 'dur': 0.001, 'bind_id': self.flow, key: True,
                                'args': {'channel': label, 'writer': self.names.get(writer),
                                         'reader': self.names.get(reader)}})
                 self.expect_rv[label] += 1
             return
-        if buffered:
-            label = self.track_occupancy(msg, vals)
-            if msg in (BUFFERED_PUT, BUFFERED_GET, PUT_FROM_ISR):
-                self.emit({'ph': 'C', 'name': label, 'pid': 2, 'ts': us,
-                           'args': {'elements': self.occ[vals[1]]}})
+        if msg in BUFFERED_EVENTS:
+            self.buffered(msg, us, vals, value, True)
+            return
         if handler:
             n = a & 0x1FF
             if n not in self.irqs:
@@ -355,17 +363,101 @@ class Perfetto:
             p = self.pid(a)
             self.instant(p, p * 10 + self.EVENTS, name, us, args)
 
-    def track_occupancy(self, msg, vals):
+    def context_track(self, ctx):
+        """(pid, tid) of the track for events of a context, or None (thread not selected)."""
+        if ctx & 0x80000000:
+            self.irqs.add(ctx & 0x1FF)
+            return 3, 30000 + (ctx & 0x1FF)
+        if ctx == 0:
+            self.pre_kernel = True
+            return 4, 40000
+        if not self.wanted(ctx):
+            return None
+        p = self.pid(ctx)
+        return p, p * 10 + self.EVENTS
+
+    def context_name(self, ctx):
+        return context(ctx) if ctx == 0 or ctx & 0x80000000 else self.names.get(ctx)
+
+    def buffered(self, msg, us, vals, value, inside):
+        """Replays the channel's buffer as a FIFO in record order: every put is
+        one record (BufferedPut, PutFromISR, OverwroteOldest, DroppedNew) and
+        every get takes the oldest put; a get gets a flow arrow from that put."""
         chan = vals[1]
         label = self.syms.short(chan) or '0x%08x' % chan
         self.capacity[label] = vals[3]
+        q = self.fifo[chan]
+        rec = {'us': us, 'ctx': vals[0], 'channel': label, 'event': EVENT_NAME[msg], 'value': value,
+               'elements_after': vals[2], 'inside': inside}
+        source = None
         if msg in (BUFFERED_PUT, PUT_FROM_ISR):
-            self.occ[chan] += 1
+            q.append(rec)
+        elif msg == OVERWROTE_OLDEST:
+            self.put_slice(q.popleft() if q else None, 'overwritten, never read')
+            q.append(rec)
         elif msg == BUFFERED_GET:
-            self.occ[chan] -= 1
-        if self.occ[chan] != vals[2]:
+            source = q.popleft() if q else None
+        rec['depth'] = len(q)
+        if len(q) != vals[2]:
             self.occ_mismatch += 1
-        return label
+        if msg == DROPPED_NEW:
+            self.put_slice(rec, 'dropped')
+        if msg == BUFFERED_GET:
+            self.get_slice(rec, source)
+        if inside:
+            self.emit({'ph': 'C', 'name': label, 'pid': 2, 'ts': us, 'args': {'elements': len(q)}})
+
+    def put_slice(self, rec, outcome, flow=None):
+        """The put's slice, emitted once its outcome is known."""
+        if rec is None or not rec['inside']:
+            return
+        track = self.context_track(rec['ctx'])
+        if track is None:
+            return
+        name = 'put ' + rec['channel'] + ('' if outcome == 'read' else ' (%s)' % outcome)
+        ev = {'ph': 'X', 'cat': 'buffered', 'name': name, 'pid': track[0], 'tid': track[1],
+              'ts': rec['us'], 'dur': 0.001,
+              'args': {'channel': rec['channel'], 'context': self.context_name(rec['ctx']), 'outcome': outcome,
+                       'event': rec['event'], 'value': rec['value'], 'depth': rec['depth'],
+                       'elements_after': rec['elements_after']}}
+        if flow is not None:
+            ev.update({'bind_id': flow, 'flow_out': True})
+        self.emit(ev)
+        self.stats['buffered_put_slices'] += 1
+
+    def get_slice(self, rec, source):
+        if not rec['inside']:
+            if source is not None and source['inside']:
+                self.put_slice(source, 'read after the window')
+            return
+        track = self.context_track(rec['ctx'])
+        if source is None:
+            self.stats['buffered_get_without_source'] += 1
+            src_name = '?'
+        else:
+            src_name = self.context_name(source['ctx'])
+        flow = None
+        if source is not None:
+            src_track = self.context_track(source['ctx']) if source['inside'] else None
+            if track is not None and src_track is not None:
+                self.flow += 1
+                flow = self.flow
+            if not source['inside']:
+                self.stats['buffered_get_source_before_window'] += 1
+            self.put_slice(source, 'read', flow)
+        if track is None:
+            return
+        ev = {'ph': 'X', 'cat': 'buffered', 'name': 'get %s ← %s' % (rec['channel'], src_name),
+              'pid': track[0], 'tid': track[1], 'ts': rec['us'], 'dur': 0.001,
+              'args': {'channel': rec['channel'], 'context': self.context_name(rec['ctx']),
+                       'source': None if source is None else src_name,
+                       'source_before_window': source is not None and not source['inside'],
+                       'event': rec['event'], 'value': rec['value'], 'depth': rec['depth'],
+                       'elements_after': rec['elements_after']}}
+        if flow is not None:
+            ev.update({'bind_id': flow, 'flow_in': True})
+            self.expect_bf[rec['channel']] += 1
+        self.emit(ev)
 
     def close(self, end_us, meta):
         if self.running is not None:
@@ -375,6 +467,9 @@ class Perfetto:
             if self.slice(tid, self.WAIT, 'waiting on %s %s (no resume)' % (kind, label), start, end_us,
                           {'object': label, 'timeout': False}):
                 self.stats['wait_open_at_end'] += 1
+        for q in self.fifo.values():
+            for rec in q:
+                self.put_slice(rec, 'still buffered at the end')
         for tid, p in self.pids.items():
             name = self.names.display(tid)
             self.emit({'ph': 'M', 'name': 'process_name', 'pid': p, 'args': {'name': name}})
@@ -384,10 +479,16 @@ class Perfetto:
         self.emit({'ph': 'M', 'name': 'process_name', 'pid': 3, 'args': {'name': 'interrupts'}})
         for n in sorted(self.irqs):
             self.emit({'ph': 'M', 'name': 'thread_name', 'pid': 3, 'tid': 30000 + n, 'args': {'name': 'irq %d' % n}})
+        if self.pre_kernel:
+            self.emit({'ph': 'M', 'name': 'process_name', 'pid': 4, 'args': {'name': 'pre-kernel'}})
+            self.emit({'ph': 'M', 'name': 'thread_name', 'pid': 4, 'tid': 40000, 'args': {'name': 'pre-kernel'}})
         meta.update({
             'running_slices': self.has_switch,
             'channel_capacity': self.capacity,
+            'buffered_carried_in': self.carried_in,
             'expected_flows_per_channel': dict(self.expect_rv),
+            'expected_buffered_flows_per_channel': dict(self.expect_bf),
+            'thread_selection': sorted(self.threads) if self.threads is not None else None,
             'expected_switch_ins_per_thread': dict(sum((collections.Counter({self.names.display(t): k})
                                                         for t, k in self.expect_run.items()), collections.Counter())),
             'trace_end_us': end_us,
@@ -404,6 +505,7 @@ EVENT_NAME = {PROCESS_START: 'ProcessStart', PROCESS_END: 'ProcessEnd', PROCESS_
               RENDEZVOUS_DONE: 'RendezvousDone', ALT_SELECTED: 'AltSelected', BUFFERED_PUT: 'BufferedPut',
               BUFFERED_GET: 'BufferedGet', PUT_FROM_ISR: 'PutFromISR', DROPPED_NEW: 'DroppedNew',
               OVERWROTE_OLDEST: 'OverwroteOldest', SPAWN_FAILED: 'SpawnFailed'}
+BUFFERED_EVENTS = (BUFFERED_PUT, BUFFERED_GET, PUT_FROM_ISR, DROPPED_NEW, OVERWROTE_OLDEST)
 
 
 def parse_hex(value, key):
