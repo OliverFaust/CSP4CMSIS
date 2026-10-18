@@ -7,6 +7,9 @@
 #include <type_traits>
 #include "csp_time.h"
 #include "csp_fatal.h"
+#if defined(CSP4CMSIS_TRACE)
+#include "csp4cmsis_trace.h"     // AltGuard kinds (traceDescribe)
+#endif
 
 // =============================================================================
 // Thread-flag allocation (CMSIS-RTOS2 thread flags, per thread)
@@ -76,6 +79,12 @@ namespace csp {
             virtual bool disable() = 0;
             virtual bool activate() = 0;
             virtual ~Guard() = default;
+#if defined(CSP4CMSIS_TRACE)
+            /// Trace only (event AltGuard, csp4cmsis_trace.h): the guard's kind
+            /// (CSP4CMSIS_TRACE_GUARD_*) and its object (channel, or the delay
+            /// of a timeout guard). Never a channel element.
+            virtual uint32_t traceDescribe(uint32_t& object) const { object = 0U; return CSP4CMSIS_TRACE_GUARD_OTHER; }
+#endif
         };
 
         class AltScheduler {
@@ -152,6 +161,9 @@ namespace csp {
             }
             bool disable() override { return alt->elapsed() >= delay_ticks; }   // expired?
             bool activate() override { return true; }
+#if defined(CSP4CMSIS_TRACE)
+            uint32_t traceDescribe(uint32_t& object) const override { object = delay_ticks; return CSP4CMSIS_TRACE_GUARD_TIMEOUT; }
+#endif
         };
 
     } // namespace internal
@@ -219,6 +231,11 @@ namespace csp {
         size_t num_guards = 0;
         internal::AltScheduler internal_alt;
         size_t fair_select_start_index = 0;
+#if defined(CSP4CMSIS_TRACE)
+        // Trace: guards already described by AltGuard events (alternative.cpp).
+        size_t trace_described_ = 0;
+        void traceGuards();
+#endif
 
     public:
         Alternative() : num_guards(0) {}

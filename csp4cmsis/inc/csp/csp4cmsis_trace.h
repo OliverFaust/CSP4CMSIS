@@ -22,20 +22,36 @@
 //   0x10  RendezvousDone    Op      a writer thread, b reader thread, c channel,
 //                                   d 1 if the reader recorded it (arrived second), else 0
 //   0x20  AltSelected       Op      a context (its thread), b guard-list index
-//   0x30  BufferedPut       Op      a context, b channel, c elements after, d capacity
-//   0x31  BufferedGet       Op      a context, b channel, c elements after, d capacity
+//   0x21  AltGuard          Op      a Alternative, b guard-list index, c object, d kind:
+//                                   0 input (c channel), 1 output (c channel),
+//                                   2 timeout (c delay in ticks), 3 other guard (c 0).
+//                                   Once per guard, before the Alternative's first
+//                                   select() (again after a guard was added)
+//   0x30  BufferedPut       Op      a context, b channel, c elements after << 16 | capacity,
+//                                   d ring slot written
+//   0x31  BufferedGet       Op      as BufferedPut, d ring slot read
 //   0x32  PutFromISR        Op      as BufferedPut (a put in handler mode)
-//   0x33  DroppedNew        Op      as BufferedPut (KeepOldest, full: put rejected)
-//   0x34  OverwroteOldest   Op      as BufferedPut (KeepNewest, full: oldest replaced)
+//   0x33  DroppedNew        Op      as BufferedPut (KeepOldest, full: put rejected),
+//                                   d CSP4CMSIS_TRACE_NO_SLOT
+//   0x34  OverwroteOldest   Op      as BufferedPut (KeepNewest, full: oldest replaced),
+//                                   d slot evicted << 16 | slot written (the same slot:
+//                                   the oldest element is replaced in place)
 //   0x40  SpawnFailed       Error   a context, b process object
-//   0x60  WaitChannel       Detail  a context, b channel (rendezvous: end busy, or partner)
+//   0x60  WaitChannel       Detail  a context, b channel | direction (bit 0: 1 write,
+//                                   0 read; rendezvous: end busy, or partner)
 //   0x61  WaitBufferedFull  Detail  a context, b channel (Block, put waits for space)
 //   0x62  WaitBufferedEmpty Detail  a context, b channel (get waits for an element)
-//   0x63  WaitAlt           Detail  a context, b Alternative (select() waits for a guard)
+//   0x63  WaitAlt           Detail  a context, b Alternative (select() waits for a guard),
+//                                   c enabled guards (bit i: guard-list index i),
+//                                   d number of guards
 //   0x64  WaitBarrier       Detail  a context, b barrier
 //   0x65  WaitJoin          Detail  a context, b completion semaphore (TerminatingNetwork)
-//   0x6E  Resume            Detail  a context, b the object of the wait
+//   0x6E  Resume            Detail  a context, b the object of the wait (as recorded
+//                                   by the wait, WaitChannel's direction bit included)
 //   0x6F  ResumeTimeout     Detail  as Resume: the ALT wait ended by its timeout
+//
+// No event records any part of a channel's element values: only library state
+// (threads, objects, counts, ring slots, guard sets).
 //
 // Context (a): the thread id (osThreadId_t) in thread mode while the kernel
 // runs; 0x80000000 | IPSR (the exception number) in handler mode; 0 in thread
@@ -61,6 +77,7 @@
 #define CSP4CMSIS_EVT_PROCESS_NAME       0x02U
 #define CSP4CMSIS_EVT_RENDEZVOUS_DONE    0x10U
 #define CSP4CMSIS_EVT_ALT_SELECTED       0x20U
+#define CSP4CMSIS_EVT_ALT_GUARD          0x21U
 #define CSP4CMSIS_EVT_BUFFERED_PUT       0x30U
 #define CSP4CMSIS_EVT_BUFFERED_GET       0x31U
 #define CSP4CMSIS_EVT_PUT_FROM_ISR       0x32U
@@ -75,6 +92,14 @@
 #define CSP4CMSIS_EVT_WAIT_JOIN          0x65U
 #define CSP4CMSIS_EVT_RESUME             0x6EU
 #define CSP4CMSIS_EVT_RESUME_TIMEOUT     0x6FU
+
+// Values of the events above.
+#define CSP4CMSIS_TRACE_NO_SLOT          0xFFFFFFFFUL   // DroppedNew: no ring slot used
+#define CSP4CMSIS_TRACE_DIR_WRITE        1U             // WaitChannel: bit 0 of the channel value
+#define CSP4CMSIS_TRACE_GUARD_INPUT      0U             // AltGuard kinds
+#define CSP4CMSIS_TRACE_GUARD_OUTPUT     1U
+#define CSP4CMSIS_TRACE_GUARD_TIMEOUT    2U
+#define CSP4CMSIS_TRACE_GUARD_OTHER      3U
 
 #if defined(CSP4CMSIS_TRACE)
   #include <stdint.h>

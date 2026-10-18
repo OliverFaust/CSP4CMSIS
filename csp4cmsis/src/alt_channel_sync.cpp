@@ -13,15 +13,27 @@
 // rendezvous_channel.h). RV_DONE_W(reader) / RV_DONE_R(writer): event
 // RendezvousDone, recorded once per communication by the second arriver
 // (writer or reader), naming the partner it takes or claims, in the critical
-// section in which it does so. RV_WAIT / RV_RESUME bracket a call that can
-// block.
+// section in which it does so. RV_WAIT(dir) / RV_RESUME(dir) bracket a call
+// that can block; both record the channel with the direction in bit 0
+// (RV_IN 0: read, RV_OUT CSP4CMSIS_TRACE_DIR_WRITE: write).
 #define RV_CHAN (reinterpret_cast<const char*>(this) - sizeof(void*))
 #define RV_DONE_W(reader) CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_RENDEZVOUS_DONE, osThreadGetId(), (reader), RV_CHAN, 0U)
 #define RV_DONE_R(writer) CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_RENDEZVOUS_DONE, (writer), osThreadGetId(), RV_CHAN, 1U)
-#define RV_WAIT()   CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_CHANNEL, CSP4CMSIS_TRACE_SELF(), RV_CHAN)
-#define RV_RESUME() CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RESUME, CSP4CMSIS_TRACE_SELF(), RV_CHAN)
+#define RV_IN  0U
+#define RV_OUT CSP4CMSIS_TRACE_DIR_WRITE
+#define RV_WAIT(dir)   CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_WAIT_CHANNEL, CSP4CMSIS_TRACE_SELF(), \
+                                             (uint32_t)(uintptr_t)RV_CHAN | (dir))
+#define RV_RESUME(dir) CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_RESUME, CSP4CMSIS_TRACE_SELF(), \
+                                             (uint32_t)(uintptr_t)RV_CHAN | (dir))
 
 namespace csp::internal {
+
+#if defined(CSP4CMSIS_TRACE)
+// The direction bit needs a channel address with bit 0 clear: the channel
+// (RV_CHAN) is aligned like the RendezvousCore it contains.
+static_assert(alignof(RendezvousCore) >= 2 && alignof(void*) >= 2,
+              "WaitChannel packs the direction into bit 0 of the channel address");
+#endif
 
 namespace {
     struct Crit {
@@ -59,9 +71,9 @@ void RendezvousCore::waitDone(volatile bool& done) {
 // Plain operations
 // ---------------------------------------------------------------------------
 void RendezvousCore::output(const void* src) {
-    RV_WAIT();
+    RV_WAIT(RV_OUT);
     if (!out_.serial.acquire(osWaitForever)) fatal("CSP4CMSIS: rendezvous: output() wait failed");
-    RV_RESUME();
+    RV_RESUME(RV_OUT);
     osThreadId_t reader = nullptr; void* dst = nullptr; Wake wake;
     {
         Crit c;
@@ -79,17 +91,17 @@ void RendezvousCore::output(const void* src) {
         (void)osThreadFlagsSet(reader, RENDEZVOUS_FLAG);
     } else {
         wake.signal();
-        RV_WAIT();
+        RV_WAIT(RV_OUT);
         waitDone(out_.pend_done);
-        RV_RESUME();
+        RV_RESUME(RV_OUT);
     }
     out_.serial.release();
 }
 
 void RendezvousCore::input(void* dst) {
-    RV_WAIT();
+    RV_WAIT(RV_IN);
     if (!in_.serial.acquire(osWaitForever)) fatal("CSP4CMSIS: rendezvous: input() wait failed");
-    RV_RESUME();
+    RV_RESUME(RV_IN);
     osThreadId_t writer = nullptr; const void* src = nullptr; Wake wake;
     {
         Crit c;
@@ -107,9 +119,9 @@ void RendezvousCore::input(void* dst) {
         (void)osThreadFlagsSet(writer, RENDEZVOUS_FLAG);
     } else {
         wake.signal();
-        RV_WAIT();
+        RV_WAIT(RV_IN);
         waitDone(in_.pend_done);
-        RV_RESUME();
+        RV_RESUME(RV_IN);
     }
     in_.serial.release();
 }
@@ -232,9 +244,9 @@ bool RendezvousCore::outActivate(AltScheduler* alt, uint32_t flag, const void* s
         return true;
     }
     wake.signal();
-    RV_WAIT();
+    RV_WAIT(RV_OUT);
     waitDone(pair_done_);                                  // the reader copies from `src`
-    RV_RESUME();
+    RV_RESUME(RV_OUT);
     return true;
 }
 
