@@ -44,7 +44,11 @@ Invariants:
 - every rendezvous communication produces exactly one RendezvousDone,
   recorded by the second of the two partners to arrive.
 
-`tests/trace/drop_policy.cpp` checks the put invariant with exact counts.
+`tests/trace/drop_policy.cpp` checks the put invariant with exact counts,
+`tests/trace/rendezvous_order.cpp` the rendezvous one for plain ends (a
+Chanout and a Chanin, no ALT) in both arrival orders: 10 communications in
+which the writer arrives first (RendezvousDone recorded by the reader,
+by_reader=1) and 10 in which the reader arrives first (by_reader=0).
 
 ## Perfetto
 
@@ -111,6 +115,11 @@ its Resume, occupancy within 0..capacity; buffered channels: one flow per get
 and no get without a source put, puts (+ elements buffered at the window
 start) = gets + overwritten + dropped + still buffered at the end, and the
 replayed depth equal to the library's element count at every put and get.
+These counts come from the same log, so they cannot show an event the
+library never recorded. `--expect expected.json` adds the counts known from
+the application (flows per rendezvous channel; puts, gets, overwritten,
+dropped and still buffered per buffered channel) and fails on any difference
+or on a channel not listed.
 
 Size: a whole run of the FVP regression suite (about 650,000 events) gives an
 80 MB JSON file, which ui.perfetto.dev loads in seconds; select a window or
@@ -140,13 +149,20 @@ threads for longer logs.
 ST's FreeRTOS 10.3.1; -O0/-O2/-Os, heap-free and timer-priority variants.
 Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
 
+- The trace tests run before the suite (tests/trace: drop_policy.cpp before
+  the kernel starts, rendezvous_order.cpp in a thread that then starts the
+  suite's runner). On Corstone-300 the trace builds of the FreeRTOS
+  configurations with a heap use an 8 KB FreeRTOS heap instead of 16 KB, to
+  make room for the threads of rendezvous_order.cpp (the suite uses less
+  than 1.4 KB).
 - Tracing off: in every configuration the loaded image is byte-identical to
   v3.1.0 (and 3.0.1) and the test results are the same (PASS=36, heap-free
   PASS=37; FAIL=0 SKIP=0 REPLACED=4).
-- Tracing on: the same results everywhere. About 361,500 CSP4CMSIS events
-  per run, of which about 188,000 are wait/resume events (per run: 6,060 to
-  6,062 RendezvousDone, ~7,090 WaitChannel, ~25,280 WaitBufferedFull,
-  ~40,390 WaitBufferedEmpty, ~21,100 WaitAlt, 40 WaitBarrier, 2 WaitJoin,
+- Tracing on: the same results everywhere. 361,000 to 364,700 CSP4CMSIS
+  events per run, of which about 188,000 are wait/resume events (per run:
+  6,080 to 6,082 RendezvousDone, ~7,150 WaitChannel, ~25,280
+  WaitBufferedFull, ~40,380 WaitBufferedEmpty, 20,800 to 22,600 WaitAlt,
+  40 WaitBarrier, 3 WaitJoin,
   26 ResumeTimeout); RTOS thread events in the RTX5 and FreeRTOS 11.3
   configurations (ST's FreeRTOS records none). Logs complete, time stamps
   monotonic.
@@ -162,7 +178,9 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   the suite ends); the 26 ResumeTimeout fall in the timeout-guard tests;
   two SpawnFailed in T28; tests/trace/drop_policy.cpp gives exactly
   2 BufferedPut + 3 DroppedNew and 2 BufferedPut + 3 OverwroteOldest
-  (context "pre-kernel").
+  (context "pre-kernel"); tests/trace/rendezvous_order.cpp gives exactly
+  10 RendezvousDone with by_reader=1 (writer first) and 10 with by_reader=0
+  (reader first), each naming the pair's writer and reader.
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.

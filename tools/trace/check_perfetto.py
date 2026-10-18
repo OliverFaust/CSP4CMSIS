@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check a decode.py --perfetto trace with Perfetto's trace_processor.
 
-    check_perfetto.py trace.json [...]
+    check_perfetto.py [--expect expected.json] trace.json [...]
 
 Needs the Python package perfetto (pip install perfetto; it fetches the
 trace_processor binary on first use). Loads each file, queries it with SQL
@@ -20,6 +20,17 @@ and compares with the counts decode.py wrote into its otherData:
   the replayed depth equals the library's element count after every put and
   get.
 
+These compare the trace with counts decode.py took from the same log, so an
+event the application never recorded is not missed by them. --expect adds
+counts known from the application itself, a JSON object
+
+    {"rendezvous": {"<channel>": <flows>, ...},
+     "buffered": {"<channel>": {"puts": n, "gets": n, "overwritten": n,
+                                "dropped": n, "end": n}, ...}}
+
+(a key matches a channel name equal to it or ending in "::<key>"): every
+channel of each kind in the trace must be listed, with exactly these numbers.
+
 Exit status 0 if every check passes.
 """
 import collections
@@ -33,7 +44,53 @@ def rows(tp, sql):
     return list(tp.query(sql))
 
 
-def check(path):
+def short(name, keys):
+    for k in keys:
+        if name == k or name.endswith('::' + k):
+            return k
+    return name
+
+
+def check_expected(tp, meta, exp, report):
+    ok = True
+    if 'rendezvous' in exp:
+        want = exp['rendezvous']
+        got = collections.Counter()
+        for r in rows(tp, '''SELECT s.name AS name, COUNT(*) AS n FROM flow f JOIN slice s ON f.slice_out = s.id
+                             WHERE s.category = 'rendezvous' GROUP BY s.name'''):
+            got[short(r.name[len('rendezvous '):], want)] += r.n
+        good = dict(got) == want
+        ok &= good
+        report('xrendv', good, ', '.join('%s %d (expected %s)' % (k, got[k], want.get(k, 0))
+                                         for k in sorted(set(got) | set(want))))
+    if 'buffered' in exp:
+        want = exp['buffered']
+        got = collections.defaultdict(collections.Counter)
+        for r in rows(tp, '''SELECT EXTRACT_ARG(arg_set_id, 'args.channel') AS ch, name, EXTRACT_ARG(arg_set_id, 'args.event') AS ev,
+                                    COUNT(*) AS n FROM slice WHERE category = 'buffered' GROUP BY ch, name, ev'''):
+            c = got[short(r.ch, want)]
+            if r.name.startswith('get '):
+                c['gets'] += r.n
+            else:
+                c['puts'] += r.n
+                c['overwritten'] += r.n if r.ev == 'OverwroteOldest' else 0
+                c['dropped'] += r.n if r.ev == 'DroppedNew' else 0
+        for r in rows(tp, '''SELECT t.name AS name, c.value AS v FROM counter c
+                             JOIN counter_track t ON c.track_id = t.id ORDER BY c.ts, c.id'''):
+            name = r.name[:-len(' elements')] if r.name.endswith(' elements') else r.name
+            got[short(name, want)]['end'] = int(r.v)
+        keys = ('puts', 'gets', 'overwritten', 'dropped', 'end')
+        bad = [ch for ch in set(got) | set(want)
+               if ch not in want or ch not in got or any(got[ch][k] != want[ch].get(k, 0) for k in keys)]
+        ok &= not bad
+        report('xbuf', not bad, '; '.join('%s %s (expected %s)' % (
+            ch, ' '.join('%s=%d' % (k, got[ch][k]) for k in keys),
+            ' '.join('%s=%s' % (k, want[ch].get(k, 0)) for k in keys) if ch in want else 'none')
+            for ch in sorted(set(got) | set(want))))
+    return ok
+
+
+def check(path, exp=None):
     meta = json.load(open(path))['otherData']
     tp = TraceProcessor(trace=path)
     ok = True
@@ -84,6 +141,8 @@ def check(path):
            % (n, meta['occupancy_mismatches'], ('; ' + '; '.join(bad)) if bad else ''))
     if 'expected_buffered_flows_per_channel' in meta:
         ok &= check_buffered(tp, meta, report)
+    if exp:
+        ok &= check_expected(tp, meta, exp, report)
     tp.close()
     return ok
 
@@ -149,9 +208,13 @@ def check_buffered(tp, meta, report):
 
 def main():
     ok = True
-    for path in sys.argv[1:]:
+    args, exp = sys.argv[1:], None
+    if args[:1] == ['--expect']:
+        exp = json.load(open(args[1]))
+        args = args[2:]
+    for path in args:
         print(path)
-        ok &= check(path)
+        ok &= check(path, exp)
     sys.exit(0 if ok else 1)
 
 
