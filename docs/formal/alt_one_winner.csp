@@ -1,6 +1,10 @@
 -- =============================================================================
 -- CSP4CMSIS rendezvous/signal ALT: the classic one-winner protocol (JCSP /
--- occam style, after Welch & Martin). ANALYSIS MODEL -- not implemented.
+-- occam style, after Welch & Martin) and its variant OWRV.
+-- OWRV IS THE 3.x PROTOCOL (alt_channel_sync.cpp, alternative.cpp; since
+-- 2.0.1). OW, OWTRUST and OWSPLIT are analysis variants and mutations, not
+-- implemented. Signal channels: in 3.x a signal is a rendezvous without
+-- data (scenario SC3's SW behaves as PW).
 -- CSP-M (FDR4 dialect). Checked with ProB 1.16.1; results at the end.
 -- Same system, scenarios, observations and SPEC as rendezvous_commit_record.csp
 -- (read that header first).
@@ -33,6 +37,29 @@
 --            ready, returns the fired guard (trust the wakeup)
 --   OWSPLIT  the ALT's claim of an ALT writer is split into two critical
 --            sections (claim the partner, then set its own state)
+--
+-- Trace conformance (not book-facing). Events a CSP4CMSIS trace supplies:
+--   AltSelected (guard g) of A          -> a_sel.g.b.o; b, o computed from the
+--                                          RendezvousDone events since A's previous
+--                                          AltSelected (b: one on c_g with A as
+--                                          reader; o: one on the other channel)
+--   AltSelected of ALT writer i, or the
+--   Resume ending plain writer i's
+--   WaitChannel(write)                  -> w_done.i.b (b: a RendezvousDone names
+--                                          writer i on c_i)
+--   WaitAlt + Resume of A               -> a_towait.true + a_wait (rename a_wait.g:
+--                                          the flag bit is not recorded)
+--   WaitAlt + Resume of ALT writer i    -> w_towait.i.true + w_wait.i
+--   WaitChannel(write) of plain writer i -> p_out.i
+--   RendezvousDone on c_i               -> the pair's decision: a_en.i.2, w_en.i.1/2,
+--                                          or the a_act.i.true that takes the partner
+-- Hidden (H): rounds, a_en results 0/1, a_dis, a_chk/w_chk, signals, p_sig,
+-- p_rel, w_xw (the writer's RENDEZVOUS_FLAG wait), a_self, stale flags,
+-- idle, bound_exceeded.
+-- Gaps: a_act.i.true is the take or the claim only when A was not claimed
+-- before; a trace does not say which, so that part of the mapping needs a
+-- replay of the state word; OW's a_chk (the WAITING check) has no 3.x code
+-- (OWRV re-verifies instead).
 -- =============================================================================
 
 OW = 0
@@ -203,6 +230,10 @@ SYS(v, k0, k1, s) =
   ST(v, IDL, 0, (IDL, IDL), (false, false), (false, false), (false, false), (false, false), (false, false),
      (false, false), (false, false), (false, false), (false, false))
 
+-- Trace conformance: the events a trace supplies and the hidden ones
+SigmaObs = {| a_sel, w_done, a_towait, a_wait, w_towait, w_wait, p_out |}
+H = diff(Events, SigmaObs)
+
 -- Observation and specification: identical to rendezvous_commit_record.csp
 OBS = {| a_sel, w_done, idle |}
 ASPEC = (a_sel.0.true.false -> a_sel.1.true.false -> FIN) |~| (a_sel.1.true.false -> a_sel.0.true.false -> FIN)
@@ -260,8 +291,9 @@ assert STOP [T= SYS(OW, AW, AW, true) \ diff(Events, FREE)
 --                                                                that never comes
 -- 20-21 alphabet audit                           PASS      PASS
 --
--- NOT covered: ISR partners (putFromISR), ALT writers with more than one
--- guard (argument: a claim needs BOTH state words claimable in one critical
--- section, so two ALTs can never claim each other crosswise), more than two
--- channels, KeepNewest/KeepOldest rendezvous.
+-- NOT covered here: ISR partners (putFromISR; alt_owrv_extended.csp Part B
+-- covers an ISR on a buffered guard), ALT writers with more than one guard
+-- (alt_owrv_extended.csp Part A: crossing ALTs with an output and an input
+-- guard each; Part C: an ALT writer with two output guards), more than two
+-- channels, KeepNewest/KeepOldest rendezvous (no such channel in 3.x).
 -- =============================================================================

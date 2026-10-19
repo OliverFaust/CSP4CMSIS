@@ -1,29 +1,48 @@
 -- =============================================================================
--- CSP4CMSIS 2.0.1: ALT timeout guards without an RTOS timer. CSP-M (FDR4
--- dialect), checked with ProB 1.16.1; results at the end. Reproduce with
+-- CSP4CMSIS 3.x: ALT timeout guards (RelTimeoutGuard) without an RTOS timer
+-- (the design since 2.0.1). CSP-M (FDR4 dialect), checked with ProB 1.16.1;
+-- results at the end. Reproduce with
 --   probcli alt_timeout_deadline.csp -csp_assertion '<assertion>'
+-- The 2.0.0 design (an RTOS timer per guard; variants T2L, T2H) is in
+-- historical/alt_timeout_timer_2_0_0.csp.
 --
--- Design (OK): select() fixes a deadline when it starts (t0 = tick count);
--- a timeout guard of duration d is ready iff (now - t0) mod 2^32 >= d. When
--- no guard is ready, the ALT waits for its thread flags with the remaining
--- time (min over its enabled timeout guards of d - elapsed, recomputed from
--- the tick count just before the wait; no wait if it is <= 0). After every
--- wakeup all guards are re-verified, as in the OWRV protocol
--- (alt_owrv_extended.csp, which covers channel guards and claims; here a
--- channel guard is reduced to "partner offered / not yet taken").
+-- Design (OK) = the 3.x implementation, AltScheduler::select() in
+-- alternative.cpp and internal::TimeoutGuard in alt.h:
+--   * select() reads the tick count once when it starts (start_tick_, t0
+--     here); a timeout guard of d ticks is ready iff elapsed() =
+--     (now - t0) mod 2^32 >= d (TimeoutGuard::enable and ::disable). The
+--     deadline tick t0 + d therefore counts as expired.
+--   * Every round starts with the ALT's thread flags cleared (a_clr) and
+--     wait_limit_ reset; enable() stops at the first ready guard; each
+--     enabled, not yet expired timeout guard lowers wait_limit_ to d
+--     (limitWait), i.e. the earliest deadline of the guards enabled in
+--     this round.
+--   * Before waiting, the time left is wait_limit_ - elapsed(), read again
+--     (a_now); if it is <= 0 the ALT does not wait (expired), else it waits
+--     for its flags with that timeout (a_block.r). A partner claim during
+--     enabling also skips the wait (alt_owrv_extended.csp; abstracted here).
+--   * After every wakeup (flag or timeout) all enabled guards are disabled
+--     and re-verified; a claimed guard wins, else the first ready guard in
+--     priority order, else a new round with the same t0.
+-- Abstractions: a channel guard is reduced to "partner offered / not yet
+-- taken" (claims and the transfer are in alt_owrv_extended.csp); the tick
+-- counter wraps modulo N = 8 instead of 2^32; delays 0..3. Not modelled:
+-- the delay clamp to 0xFFFFFFFE ticks (TimeoutGuard's constructor) and
+-- fairSelect() (a rotated guard order; the deadline logic is the same).
+--
+-- Ties: a flag and the timeout in the same tick. ST offers both a_wake.false
+-- (flag) and a_wake.true (timeout) when the flag is set and no ticks are
+-- left; either way the round re-verifies every guard, and a channel that is
+-- ready then wins over an expired timeout only if it comes first in the
+-- priority order (or claimed the ALT). The RTOS (RTX5, FreeRTOS) ends a
+-- timed wait no earlier than the deadline tick, and a flag can wake the
+-- ALT no later than the tick before it; a tick may pass between the wakeup
+-- and the re-verification (ST: one tick per run segment).
 --
 -- Mutations:
 --   M2   the deadline is restarted at every round (t0 = now per round).
 --   M3   elapsed time as now - t0 without the modular difference (fails
 --        when the tick count wraps during the select()).
---   T2L  the 2.0.0 design: a timeout guard is an RTOS timer, (re)started at
---        enable, stopped at disable, deleted after select() returns; the
---        callback, stop and delete are run later by a LOW-priority timer
---        service (FreeRTOS with configTIMER_TASK_PRIORITY below the ALT's
---        thread) -- m1 of the review.
---   T2H  the 2.0.0 design with the timer service STRICTLY above the ALT's
---        thread (the 2.0.0 workaround): callback, stop and delete take effect
---        immediately.
 --
 -- Time and fairness. The tick count wraps (modulo N here, 2^32 in the code;
 -- the start value is arbitrary, so selects across the wrap are covered).
@@ -33,6 +52,24 @@
 -- any bit) may be set at most once per tick. Under these assumptions time
 -- advances whenever the ALT is not making progress itself, which is what
 -- makes a liveness property meaningful in a finite model.
+--
+-- Trace conformance (not book-facing). Events a CSP4CMSIS trace
+-- (csp4cmsis_trace.h, tools/trace/decode.py) supplies, per ALT thread:
+--   AltDeadline (now, deadline) + WaitAlt  -> a_block.r, r = deadline - now
+--   ResumeTimeout (tick, deadline)         -> a_wake.true
+--   Resume (tick, deadline)                -> a_wake.false
+--   AltSelected (guard g)                  -> a_sel.g (renamed from a_sel.g.e.b:
+--                                             e and b are not recorded)
+--   tick counts of AltDeadline/Resume      -> tick (one per increment between
+--                                             two recorded tick counts)
+--   RendezvousDone/BufferedGet by the ALT  -> a_take (channel guard selected)
+-- Hidden for conformance (H): a_begin, a_now, a_clr, a_enc, a_disc, stale,
+-- p_off (the partner's offer is not recorded as an event of its own: its
+-- WaitChannel comes from another thread), bound, late, idle.
+-- Gaps: the select()'s start tick t0 is not recorded (only the time left
+-- per wait), so e in a_sel.g.e.b and "late" cannot be checked from a trace;
+-- an ALT that does not wait (a ready or expired guard, zero timeout)
+-- records only AltGuard and AltSelected.
 -- =============================================================================
 
 N = 8                     -- tick counter modulo (code: 2^32)
@@ -160,71 +197,11 @@ OBS = {| a_sel, idle, late |}
 SPEC(gl) = |~| x : {a_sel.g.e.true | g <- set(gl), e <- TT} @ x -> IDLE
 IDLE = idle -> IDLE
 
--- -----------------------------------------------------------------------------
--- 2.0.0 timer design (T2L, T2H): one channel guard and one timeout guard
--- (duration d); one select(), then the guard is destroyed and its storage
--- reused (a_free). run: timer running; left: ticks to expiry; fired: the
--- guard's flag (in guard storage); cbp: callback queued (T2L);
--- qs/qd: stop/delete queued (T2L); fr: storage freed (and reused).
--- corrupt: the timer service touches the guard's storage after a_free.
--- -----------------------------------------------------------------------------
-channel b_begin
-channel b_tstart, b_free, b_del, corrupt
-channel b_tstop : Bool                 -- returns fired
-channel b_enc, b_disc : Bool
-channel b_block, b_wake
-channel b_sel : {0, 1}                 -- 0 channel, 1 timeout
-channel ts_cb, ts_stop, ts_del
 
-TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr) =
-     (act and ((aw and not flg) or not tk)) & tick ->
-        (if run and left == 1
-         then (if hi then TS(hi, act, aw, true, true, true, off, reg, cons, false, 0, true, cbp, qs, qd, fr)
-               else TS(hi, act, aw, true, true, flg, off, reg, cons, false, 0, fired, true, qs, qd, fr))
-         else TS(hi, act, aw, true, true, flg, off, reg, cons, run, if run then left - 1 else left, fired, cbp, qs, qd, fr))
-  [] (act and sk) & stale -> TS(hi, act, aw, tk, false, true, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] (not off) & p_off -> TS(hi, act, aw, tk, sk, flg or reg, true, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] b_begin -> TS(hi, true, aw, false, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] a_clr -> TS(hi, act, aw, false, sk, false, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] b_enc!(off and not cons) -> TS(hi, act, aw, tk, sk, flg, off, true, cons, run, left, fired, cbp, qs, qd, fr)
-  [] b_disc!(off and not cons) -> TS(hi, act, aw, tk, sk, flg, off, false, cons, run, left, fired, cbp, qs, qd, fr)
-  [] a_take -> TS(hi, act, aw, tk, sk, flg, off, reg, true, run, left, fired, cbp, qs, qd, fr)
-  [] b_tstart -> TS(hi, act, aw, tk, sk, flg, off, reg, cons, true, TD, false, cbp, qs, qd, fr)   -- osTimerStart restarts
-  [] b_tstop!fired -> (if hi then TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, qs, qd, fr)
-                       else TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, true, qd, fr))
-  [] b_block -> TS(hi, act, true, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] (aw and flg) & b_wake -> TS(hi, act, false, false, sk, false, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] b_sel?_ -> TS(hi, false, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
-  [] b_del -> (if hi then TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, false, false, false, fr)
-               else TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, true, fr))
-  [] b_free -> TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, true)
-  -- low-priority timer service: runs whenever it likes
-  [] cbp & ts_cb -> (if fr then corrupt -> STOP
-                     else TS(hi, act, aw, tk, sk, true, off, reg, cons, run, left, true, false, qs, qd, fr))
-  [] qs & ts_stop -> (if fr then corrupt -> STOP
-                      else TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, false, qd, fr))
-  [] qd & ts_del -> (if fr then corrupt -> STOP
-                     else TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, qs, false, fr))
-TD = 2
-
--- one select over (channel, timeout): enable restarts the timer every round
-BALT(maxr) = b_begin -> BR(maxr, 0)
-BR(maxr, n) = if maxr > 0 and n >= maxr then bound -> STOP else
-  a_clr -> b_enc?r -> (if r then BDIS(maxr, n, false) else b_tstart -> b_block -> b_wake -> BDIS(maxr, n, true))
-BDIS(maxr, n, te) = b_disc?rc -> (if te then b_tstop?f -> BPICK(maxr, n, rc, f) else BPICK(maxr, n, rc, false))
-BPICK(maxr, n, rc, f) =
-  if rc then a_take -> b_sel.0 -> BEND
-  else if f then b_sel.1 -> BEND
-  else BR(maxr, nx(maxr, n))
-BEND = b_del -> b_free -> FIN                 -- ~RelTimeoutGuard; storage reused
-
-BSHARED = {| b_begin, a_clr, b_enc, b_disc, a_take, b_tstart, b_tstop, b_block, b_wake, b_sel, b_del, b_free, tick, stale, p_off |}
-BSYS(hi, p, s, maxr) =
-  (BALT(maxr) ||| PARTNER(p) ||| ADV(s) ||| CLOCK) [| BSHARED |]
-  TS(hi, false, false, false, false, false, false, false, false, false, 0, false, false, false, false, false)
-
-RUNV(A) = [] e : A @ e -> RUNV(A)
-BVIS = {| corrupt, b_sel, b_free, ts_cb, ts_stop, ts_del, b_tstart, b_tstop, tick, p_off |}
+-- Trace conformance: the events a trace supplies (renamed as in the header)
+-- and the events hidden for a conformance check.
+SigmaObs = {| a_block, a_wake, a_sel, tick, a_take |}
+H = diff(Events, SigmaObs)
 
 -- =============================================================================
 -- Assertions
@@ -232,7 +209,7 @@ BVIS = {| corrupt, b_sel, b_free, ts_cb, ts_stop, ts_del, b_tstart, b_tstop, tic
 -- Scenarios (guard lists in priority order):
 --   S1 <2>              timeout alone
 --   S2 <GC, 2>          timeout vs a channel that becomes ready at any time (or never)
---   S3 <3, 1>        several timeout guards (the later one listed first)
+--   S3 <3, 1>           several timeout guards (the later one listed first)
 --   S4 <0>              zero timeout
 --   S5 <GC, 0>          zero timeout behind a channel guard
 
@@ -241,23 +218,12 @@ BVIS = {| corrupt, b_sel, b_free, ts_cb, ts_stop, ts_del, b_tstart, b_tstop, tic
 assert SPEC(<2>) [FD= SYS(M2, <2>, 0, STALE, 0) \ diff(Events, OBS)
 -- (c2) the same with a round bound: the bound is reached
 assert STOP [T= SYS(M2, <2>, 0, STALE, 12) \ diff(Events, {bound})
--- (c3) m1: 2.0.0 timer, low-priority timer service: access after the guard is freed
-assert STOP [T= BSYS(false, 1, NOST, 0) \ diff(Events, {corrupt})
--- (c3b) the same, readable: which steps lead to the access after free
-assert RUNV(diff(BVIS, {corrupt})) [T= BSYS(false, 1, NOST, 0) \ diff(Events, BVIS)
--- (c4) 2.0.0 timer with the workaround (service above the ALT): restart at
---      every round -- stale wakeups postpone the timeout without bound
-assert STOP [T= BSYS(true, 0, STALE, 12) \ diff(Events, {bound})
-
 -- (c2b) M3: a select() across the tick-count wrap never times out
 assert SPEC(<2>) [FD= SYS(M3, <2>, 0, NOST, 0) \ diff(Events, OBS)
 
 -- Controls. expected: PASS
 -- (c5) M2 without stale wakeups: fine (the stale wakeups are what breaks it)
 assert SPEC(<2>) [FD= SYS(M2, <2>, 0, NOST, 0) \ diff(Events, OBS)
--- (c6) 2.0.0 timer, workaround, no stale wakeups: no access after free, no bound
-assert STOP [T= BSYS(true, 1, NOST, 0) \ diff(Events, {corrupt})
-assert STOP [T= BSYS(true, 0, NOST, 12) \ diff(Events, {bound})
 
 -- The design (OK). expected: PASS
 assert SPEC(<2>) [FD= SYS(OK, <2>, 0, STALE, 0) \ diff(Events, OBS)
@@ -278,38 +244,47 @@ assert STOP [T= SYS(OK, <GC, 0>, 1, STALE, 0) \ diff(Events, {| a_block |})
 -- (priority order); observed: after an early offer, a_sel.GC only
 assert (p_off -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC, 0>, 1, NOST, 0) [| {| a_begin, p_off |} |] (p_off -> a_begin?_ -> STOP)) \ diff(Events, {| p_off, a_sel |})
 
+-- Trace properties the decoder checks (tools/trace/conformance.py). expected: PASS
+-- (t1) a wait with timeout guards waits 1 .. (shortest enabled timeout) ticks:
+--      a_block.r with r < 1 or r above the shortest timeout never happens
+assert STOP [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, {a_block.r | r <- { -1..N}, r < 1 or r > 2})
+assert STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, {a_block.r | r <- { -1..N}, r < 1 or r > 1})
+-- (t2) the RTOS wakeups against the ticks counted since a_block.r:
+--      TW(false): a timeout wakeup (a_wake.true) only when r ticks have
+--      passed; a flag wakeup (a_wake.false) at any time. expected: PASS
+--      TW(true): in addition, a flag wakeup only while ticks are left (no
+--      tie). expected: FAIL -- the model allows a flag wakeup when the time
+--      left has just run out (the tie in the header), so a trace check may
+--      not require Resume strictly before the deadline tick
+TW(s) = a_block?r -> TWB(s, r, 0) [] tick -> TW(s)
+TWB(s, r, k) = tick -> TWB(s, r, if k < N then k + 1 else N)
+            [] (r >= 0 and k >= r) & a_wake.true -> TW(s)
+            [] (not s or r < 0 or k < r) & a_wake.false -> TW(s)
+assert TW(false) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, {| a_block, a_wake, tick |})
+assert TW(true) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, {| a_block, a_wake, tick |})
+
 -- =============================================================================
--- RESULTS (ProB 1.16.1-final 716929f, 2026-10-01; all as expected; each
--- assertion checked alone with -csp_assertion, 2-41 s)
---  #   assertion                                    expected  ProB  counterexample / note
---  1   c1  M2, stale wakeups [FD=                   FAIL      FAIL  diverges: stale wakeup every tick,
---                                                                     the moving deadline never expires
---  2   c2  M2, stale wakeups, round bound 12        FAIL      FAIL  bound reached
---  3   c3  2.0.0 timer, low-priority service        FAIL      FAIL  corrupt (see 4)
---  4   c3b readable                                 FAIL      FAIL  p_off, tick, tick, b_sel.0, b_free,
---                                                                     ts_del, corrupt: the channel wins,
---                                                                     the guard is freed, then the queued
---                                                                     delete runs (= the FVP HardFault;
---                                                                     no timer start needed)
---  5   c4  2.0.0 timer, workaround, stale wakeups   FAIL      FAIL  bound reached: every round restarts
---                                                                     the timer (a 2.0.0 defect the
---                                                                     workaround does not remove)
---  6   c2b M3 (no modular difference)               FAIL      FAIL  diverges: a select() across the
---                                                                     wrap never times out
---  7   c5  M2 without stale wakeups                 PASS      PASS
---  8-9 c6  2.0.0 timer, workaround, no stale        PASS      PASS  no access after free; no bound
--- 10   OK <2>, stale [FD=                           PASS      PASS
--- 11   OK <GC,2>, channel never ready, stale        PASS      PASS
--- 12   OK <GC,2>, channel at any time, stale        PASS      PASS
--- 13   OK <3,1>, stale                              PASS      PASS
--- 14   OK <0>, stale                                PASS      PASS
--- 15   OK <GC,0>, channel at any time, stale        PASS      PASS
--- 16   OK deadlock free [F]                         PASS      PASS
--- 17   OK divergence free                           PASS      PASS
--- 18   OK <3,1>: guard 3 never before 3 ticks       PASS      PASS
--- 19-20 OK zero timeout never waits                 PASS      PASS
--- 21   OK channel ready at start wins over <GC,0>   PASS      PASS
--- The [FD= checks against SPEC are the liveness checks: the select() can
--- neither diverge nor refuse to return, and returns a valid guard no later
--- than 2 ticks after the earliest deadline.
+-- RESULTS (ProB 1.16.1-final 716929f, 2026-10-19; all as expected; each
+-- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
+--  #  assertion                                            expected  ProB  states  s    note
+--  1  SPEC(<2>) [FD= SYS(M2, <2>, 0, STALE, 0) \ diff(Even FAIL      FAIL    2325    2.8  
+--  2  STOP [T= SYS(M2, <2>, 0, STALE, 12) \ diff(Events, { FAIL      FAIL   17852   29.6  
+--  3  SPEC(<2>) [FD= SYS(M3, <2>, 0, NOST, 0) \ diff(Event FAIL      FAIL     570    0.9  
+--  4  SPEC(<2>) [FD= SYS(M2, <2>, 0, NOST, 0) \ diff(Event PASS      PASS     405    0.5  
+--  5  SPEC(<2>) [FD= SYS(OK, <2>, 0, STALE, 0) \ diff(Even PASS      PASS    1637    2.8  
+--  6  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 0, STALE, 0) \ d PASS      PASS    2133    3.4  
+--  7  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 1, STALE, 0) \ d PASS      PASS    6908   12.1  
+--  8  SPEC(<3, 1>) [FD= SYS(OK, <3, 1>, 0, STALE, 0) \ dif PASS      PASS    1157    1.7  
+--  9  SPEC(<0>) [FD= SYS(OK, <0>, 0, STALE, 0) \ diff(Even PASS      PASS     333    0.5  
+-- 10  SPEC(<GC, 0>) [FD= SYS(OK, <GC, 0>, 1, STALE, 0) \ d PASS      PASS    1540    3.0  
+-- 11  SYS(OK, <GC, 2>, 1, STALE, 0) :[deadlock free [F]]   PASS      PASS    6890   10.7  
+-- 12  SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, OBS) :[ PASS      PASS    6890   11.7  
+-- 13  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS    1140    2.0  
+-- 14  STOP [T= SYS(OK, <0>, 0, STALE, 0) \ diff(Events, {| PASS      PASS     324    0.9  
+-- 15  STOP [T= SYS(OK, <GC, 0>, 1, STALE, 0) \ diff(Events PASS      PASS    1523    3.4  
+-- 16  (p_off -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC, 0> PASS      PASS     230    0.5  
+-- 17  STOP [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events PASS      PASS    6891    9.9  
+-- 18  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS    1140    1.6  
+-- 19  TW(false) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(E PASS      PASS    6907   15.2  
+-- 20  TW(true) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Ev FAIL      FAIL     399    0.4  a_block.1, tick, a_wake.false: the tie
 -- =============================================================================

@@ -1,0 +1,120 @@
+-- =============================================================================
+-- HISTORICAL -- CSP4CMSIS 1.x/2.0 rendezvous and signal channels: "trust the
+-- wakeup". Not the current design: 2.0.1 replaced it by the one-winner ALT
+-- with re-verification (OWRV; alt_one_winner.csp, alt_owrv_extended.csp;
+-- 3.x: the same). Moved unchanged out of buffered_channel_v2.csp (its
+-- Part 4, assertions #20-#25 there). CSP-M (FDR4 dialect), ProB 1.16.1.
+-- =============================================================================
+
+channel idle
+FIN = idle -> FIN
+
+-- -----------------------------------------------------------------------------
+-- Part 4 -- rendezvous and signal channels: "trust the wakeup"
+--   Their guards keep Guard::confirm()'s default (true): after an ALT partner
+--   has transferred the data and cleared the registration, disable()
+--   reports "not ready" although the guard completed. Modelled after
+--   alt_channel_sync.cpp (ChanInGuard/ChanOutGuard, mutex-protected, so each
+--   mutex section is one event) and sync_channel.cpp (SyncChannel).
+-- -----------------------------------------------------------------------------
+
+-- 4a: rendezvous ALT reader vs rendezvous ALT writer (ALT-vs-ALT).
+channel rv_en_r, rv_en_w : Bool       -- enable(): ready? (else registered)
+channel rv_dis_r, rv_dis_w : Bool     -- disable(): hasWriterWaiting() / hasReaderWaiting()
+channel rv_act_r, rv_act_w : Bool     -- activate(): true = partner was an ALT, data moved now
+channel wait_r, wait_w                -- osThreadFlagsWait, per side
+channel clr_r, clr_w
+channel stale_r
+channel rdone : Bool                  -- reader returns; payload: data really received?
+channel wdone2
+
+-- state: ir = reader registered, iw = writer registered, got = data at reader,
+--        fr/fw = thread flags
+RV(ir, iw, got, fr, fw) =
+     rv_en_r!iw        -> RV(if iw then ir else true, iw, got, fr, fw)
+  [] rv_en_w!ir        -> RV(ir, if ir then iw else true, got, fr, fw)
+  [] rv_dis_r!iw       -> RV(false, iw, got, fr, fw)
+  [] rv_dis_w!ir       -> RV(ir, false, got, fr, fw)
+  [] rv_act_r!iw       -> RV(ir, false, if iw then true else got, fr, fw or iw)     -- case 2: copy, clear, wake writer
+  [] rv_act_w!ir       -> RV(false, iw, if ir then true else got, fr or ir, fw)    -- case 2: copy, clear, wake reader
+  [] clr_r -> RV(ir, iw, got, false, fw)   [] clr_w -> RV(ir, iw, got, fr, false)
+  [] fr & wait_r -> RV(ir, iw, got, false, fw)
+  [] fw & wait_w -> RV(ir, iw, got, fr, false)
+  [] stale_r -> RV(ir, iw, got, true, fw)
+  [] rdone!got -> RV(ir, iw, got, fr, fw)
+
+-- trust = true: confirm() default (current code); false: re-verify with disable()
+RV_R(trust) = clr_r -> rv_en_r?ready ->
+                (if ready then rv_dis_r?_ -> rv_act_r?_ -> rdone?_ -> FIN
+                 else wait_r -> rv_dis_r?d -> (if trust or d then rv_act_r?_ -> rdone?_ -> FIN else RV_R(trust)))
+RV_W(trust) = clr_w -> rv_en_w?ready ->
+                (if ready then rv_dis_w?_ -> rv_act_w?_ -> wdone2 -> SKIP
+                 else wait_w -> rv_dis_w?d -> (if trust or d then rv_act_w?_ -> wdone2 -> SKIP else RV_W(trust)))
+
+SRV = {| rv_en_r, rv_en_w, rv_dis_r, rv_dis_w, rv_act_r, rv_act_w, clr_r, clr_w, wait_r, wait_w,
+         stale_r, rdone |}
+SYS_RV(trust)       = (RV_R(trust) ||| RV_W(trust)) [| SRV |] RV(false, false, false, false, false)
+SYS_RV_STALE(trust) = (RV_R(trust) ||| RV_W(trust) ||| (stale_r -> SKIP [] SKIP)) [| SRV |]
+                      RV(false, false, false, false, false)
+RV_OK = rdone.true -> FIN
+
+-- expected: PASSES -- trust path: ALT-vs-ALT completes, reader gets the data
+assert SYS_RV(true) :[deadlock free [F]]
+assert RV_OK [FD= SYS_RV(true) \ diff(Events, {| rdone, idle |})
+-- expected: FAILS (deadlock) -- re-verifying rendezvous guards would hang:
+--           the woken side sees "not ready" after the partner already moved
+--           the data, re-registers and waits forever (why trust is required)
+assert SYS_RV(false) :[deadlock free [F]]
+-- expected: FAILS -- KNOWN LIMITATION of the trust path: a stale flag lets the
+--           reader's select() return without data (trace ... rdone.false)
+--           Reproduced on the FVP (T15, T15i); a checked fix model is in
+--           rendezvous_commit_record.csp.
+assert RV_OK [T= SYS_RV_STALE(true) \ diff(Events, {| rdone, idle |})
+
+-- 4b: SyncChannel (signal) ALT receiver vs blocking sender.
+--     Simplification: only the interleaving in which the receiver registers
+--     first is modelled (the sender's SENDER_WAITING path is not).
+channel sg_reg : Bool                 -- registerAltIn(): true = sender already waiting
+channel sg_unreg : Bool               -- unregisterAltIn(nullptr): completed? (resets if not)
+channel sg_send                       -- sender output(): sees RECEIVER_WAITING, wakes ALT
+channel sg_sender_wait                -- sender: acquire(sender_sem)
+channel sg_act                        -- receiver activate(): release(sender_sem), reset
+channel sg_rdone, sg_sdone
+
+-- state: st = 0 IDLE, 1 RECEIVER_WAITING (SENDER_WAITING not reached here);
+--        alt = ALT registered; sem = sender_sem; fr = receiver flag
+SG(st, alt, sem, fr) =
+     sg_reg!false                 -> SG(1, true, sem, fr)
+  [] st == 1 and alt & sg_send    -> SG(st, false, sem, true)
+  [] sg_unreg!(st != 1)           -> SG(if st != 1 then st else 0, false, sem, fr)
+  [] sg_act                       -> SG(0, alt, sem + 1, fr)
+  [] sem > 0 & sg_sender_wait     -> SG(st, alt, sem - 1, fr)
+  [] clr_r -> SG(st, alt, sem, false)
+  [] fr & wait_r -> SG(st, alt, sem, false)
+
+SG_R(trust) = clr_r -> sg_reg?_ -> wait_r -> sg_unreg?d ->
+                (if trust or d then sg_act -> sg_rdone -> FIN else SG_R(trust))
+SG_S        = sg_send -> sg_sender_wait -> sg_sdone -> SKIP
+SSG = {| sg_reg, sg_unreg, sg_send, sg_sender_wait, sg_act, clr_r, wait_r |}
+SYS_SG(trust) = (SG_R(trust) ||| SG_S) [| SSG |] SG(0, false, 0, false)
+
+-- expected: PASSES -- trust path completes both sides
+assert SYS_SG(true) :[deadlock free [F]]
+-- expected: FAILS (deadlock) -- a re-verifying signal guard hangs the sender
+assert SYS_SG(false) :[deadlock free [F]]
+
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1, 2026-09-26 in buffered_channel_v2.csp; unchanged after the move)
+--  #  assertion                                   expected  ProB  counterexample
+--  1  SYS_RV(true) deadlock free                  PASS      PASS
+--  2  RV_OK [FD= SYS_RV(true)                     PASS      PASS
+--  3  SYS_RV(false) deadlock free                 FAIL      FAIL  clr_r, rv_en_r.false, clr_w, rv_en_w.true,
+--                                                                 rv_dis_w.true, rv_act_w.true, wait_r,
+--                                                                 rv_dis_r.false, clr_r, rv_en_r.false,
+--                                                                 wdone2, DEADLOCK
+--  4  RV_OK [T= SYS_RV_STALE(true)                FAIL      FAIL  rdone.false (after a stale signal)
+--  5  SYS_SG(true) deadlock free                  PASS      PASS
+--  6  SYS_SG(false) deadlock free                 FAIL      FAIL  clr_r, sg_reg.false, sg_send, wait_r,
+--                                                                 sg_unreg.false, clr_r, sg_reg.false, DEADLOCK
+-- =============================================================================

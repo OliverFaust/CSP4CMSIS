@@ -1,0 +1,126 @@
+-- =============================================================================
+-- HISTORICAL -- CSP4CMSIS 2.0.0 ALT timeout guards (RTOS timer per guard).
+-- Not the current design: 2.0.1 replaced it by the timer-free deadline of
+-- ../alt_timeout_deadline.csp (3.x: the same). Kept because
+-- docs/CHANGES_2.0.1.md cites these counterexamples as the reason for the
+-- change. Moved out of alt_timeout_deadline.csp unchanged (same processes,
+-- same assertions, same results). CSP-M (FDR4 dialect), ProB 1.16.1:
+--   probcli alt_timeout_timer_2_0_0.csp -csp_assertion '<assertion>'
+--
+--   T2L  the 2.0.0 design: a timeout guard is an RTOS timer, (re)started at
+--        enable, stopped at disable, deleted after select() returns; the
+--        callback, stop and delete are run later by a LOW-priority timer
+--        service (FreeRTOS with configTIMER_TASK_PRIORITY below the ALT's
+--        thread) -- m1 of the review.
+--   T2H  the 2.0.0 design with the timer service STRICTLY above the ALT's
+--        thread (the 2.0.0 workaround): callback, stop and delete take effect
+--        immediately.
+-- Time and the adversary as in ../alt_timeout_deadline.csp.
+-- =============================================================================
+
+channel a_clr, a_take, tick, stale, p_off, idle, bound
+NOST = 0
+STALE = 1
+FIN = idle -> FIN
+nx(maxr, n) = if maxr > 0 then n + 1 else 0
+PARTNER(0) = SKIP                       -- channel never ready
+PARTNER(1) = p_off -> SKIP              -- offers once, at any time
+ADV(s) = if s == STALE then ADVS else SKIP
+ADVS = stale -> ADVS
+CLOCK = tick -> CLOCK
+
+-- -----------------------------------------------------------------------------
+-- 2.0.0 timer design (T2L, T2H): one channel guard and one timeout guard
+-- (duration d); one select(), then the guard is destroyed and its storage
+-- reused (a_free). run: timer running; left: ticks to expiry; fired: the
+-- guard's flag (in guard storage); cbp: callback queued (T2L);
+-- qs/qd: stop/delete queued (T2L); fr: storage freed (and reused).
+-- corrupt: the timer service touches the guard's storage after a_free.
+-- -----------------------------------------------------------------------------
+channel b_begin
+channel b_tstart, b_free, b_del, corrupt
+channel b_tstop : Bool                 -- returns fired
+channel b_enc, b_disc : Bool
+channel b_block, b_wake
+channel b_sel : {0, 1}                 -- 0 channel, 1 timeout
+channel ts_cb, ts_stop, ts_del
+
+TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr) =
+     (act and ((aw and not flg) or not tk)) & tick ->
+        (if run and left == 1
+         then (if hi then TS(hi, act, aw, true, true, true, off, reg, cons, false, 0, true, cbp, qs, qd, fr)
+               else TS(hi, act, aw, true, true, flg, off, reg, cons, false, 0, fired, true, qs, qd, fr))
+         else TS(hi, act, aw, true, true, flg, off, reg, cons, run, if run then left - 1 else left, fired, cbp, qs, qd, fr))
+  [] (act and sk) & stale -> TS(hi, act, aw, tk, false, true, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] (not off) & p_off -> TS(hi, act, aw, tk, sk, flg or reg, true, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] b_begin -> TS(hi, true, aw, false, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] a_clr -> TS(hi, act, aw, false, sk, false, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] b_enc!(off and not cons) -> TS(hi, act, aw, tk, sk, flg, off, true, cons, run, left, fired, cbp, qs, qd, fr)
+  [] b_disc!(off and not cons) -> TS(hi, act, aw, tk, sk, flg, off, false, cons, run, left, fired, cbp, qs, qd, fr)
+  [] a_take -> TS(hi, act, aw, tk, sk, flg, off, reg, true, run, left, fired, cbp, qs, qd, fr)
+  [] b_tstart -> TS(hi, act, aw, tk, sk, flg, off, reg, cons, true, TD, false, cbp, qs, qd, fr)   -- osTimerStart restarts
+  [] b_tstop!fired -> (if hi then TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, qs, qd, fr)
+                       else TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, true, qd, fr))
+  [] b_block -> TS(hi, act, true, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] (aw and flg) & b_wake -> TS(hi, act, false, false, sk, false, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] b_sel?_ -> TS(hi, false, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, fr)
+  [] b_del -> (if hi then TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, false, false, false, fr)
+               else TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, true, fr))
+  [] b_free -> TS(hi, act, aw, tk, sk, flg, off, reg, cons, run, left, fired, cbp, qs, qd, true)
+  -- low-priority timer service: runs whenever it likes
+  [] cbp & ts_cb -> (if fr then corrupt -> STOP
+                     else TS(hi, act, aw, tk, sk, true, off, reg, cons, run, left, true, false, qs, qd, fr))
+  [] qs & ts_stop -> (if fr then corrupt -> STOP
+                      else TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, false, qd, fr))
+  [] qd & ts_del -> (if fr then corrupt -> STOP
+                     else TS(hi, act, aw, tk, sk, flg, off, reg, cons, false, left, fired, cbp, qs, false, fr))
+TD = 2
+
+-- one select over (channel, timeout): enable restarts the timer every round
+BALT(maxr) = b_begin -> BR(maxr, 0)
+BR(maxr, n) = if maxr > 0 and n >= maxr then bound -> STOP else
+  a_clr -> b_enc?r -> (if r then BDIS(maxr, n, false) else b_tstart -> b_block -> b_wake -> BDIS(maxr, n, true))
+BDIS(maxr, n, te) = b_disc?rc -> (if te then b_tstop?f -> BPICK(maxr, n, rc, f) else BPICK(maxr, n, rc, false))
+BPICK(maxr, n, rc, f) =
+  if rc then a_take -> b_sel.0 -> BEND
+  else if f then b_sel.1 -> BEND
+  else BR(maxr, nx(maxr, n))
+BEND = b_del -> b_free -> FIN                 -- ~RelTimeoutGuard; storage reused
+
+BSHARED = {| b_begin, a_clr, b_enc, b_disc, a_take, b_tstart, b_tstop, b_block, b_wake, b_sel, b_del, b_free, tick, stale, p_off |}
+BSYS(hi, p, s, maxr) =
+  (BALT(maxr) ||| PARTNER(p) ||| ADV(s) ||| CLOCK) [| BSHARED |]
+  TS(hi, false, false, false, false, false, false, false, false, false, 0, false, false, false, false, false)
+
+RUNV(A) = [] e : A @ e -> RUNV(A)
+BVIS = {| corrupt, b_sel, b_free, ts_cb, ts_stop, ts_del, b_tstart, b_tstop, tick, p_off |}
+
+-- =============================================================================
+-- Assertions (numbers as in alt_timeout_deadline.csp before the move)
+-- =============================================================================
+-- (c3) m1: 2.0.0 timer, low-priority timer service: access after the guard is freed. expected: FAIL
+assert STOP [T= BSYS(false, 1, NOST, 0) \ diff(Events, {corrupt})
+-- (c3b) the same, readable: which steps lead to the access after free. expected: FAIL
+assert RUNV(diff(BVIS, {corrupt})) [T= BSYS(false, 1, NOST, 0) \ diff(Events, BVIS)
+-- (c4) 2.0.0 timer with the workaround (service above the ALT): restart at
+--      every round -- stale wakeups postpone the timeout without bound. expected: FAIL
+assert STOP [T= BSYS(true, 0, STALE, 12) \ diff(Events, {bound})
+-- (c6) 2.0.0 timer, workaround, no stale wakeups: no access after free, no bound. expected: PASS
+assert STOP [T= BSYS(true, 1, NOST, 0) \ diff(Events, {corrupt})
+assert STOP [T= BSYS(true, 0, NOST, 12) \ diff(Events, {bound})
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1-final 716929f, 2026-10-01 in alt_timeout_deadline.csp;
+-- unchanged after the move)
+--  #   assertion                                    expected  ProB  counterexample / note
+--  1   c3  2.0.0 timer, low-priority service        FAIL      FAIL  corrupt (see 2)
+--  2   c3b readable                                 FAIL      FAIL  p_off, tick, tick, b_sel.0, b_free,
+--                                                                     ts_del, corrupt: the channel wins,
+--                                                                     the guard is freed, then the queued
+--                                                                     delete runs (= the FVP HardFault;
+--                                                                     no timer start needed)
+--  3   c4  2.0.0 timer, workaround, stale wakeups   FAIL      FAIL  bound reached: every round restarts
+--                                                                     the timer (a 2.0.0 defect the
+--                                                                     workaround does not remove)
+--  4-5 c6  2.0.0 timer, workaround, no stale        PASS      PASS  no access after free; no bound
+-- =============================================================================

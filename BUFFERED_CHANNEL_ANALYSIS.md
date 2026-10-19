@@ -616,7 +616,8 @@ and `RelTimeoutGuard` use 0 B (T5, T6).
 ## Formal model (`docs/formal/buffered_channel_v2.csp`)
 
 *Status update: the model was later checked with ProB 1.16.1; see "Review round 2", section 2. The text
-below describes the model as first written.*
+below describes the model as first written. It was brought up to date with 3.x, renumbered and split in
+review round 7; see there for the current parts and assertion numbers.*
 
 The model was written for FDR4 and was not run at that point; the "expected" annotations were design
 intent.
@@ -627,9 +628,11 @@ intent.
      adversarial stale signal.
 2. **KeepNewest, capacity 2, task writer and ISR writer.** The v1.0.0 two-step write should fail
    refinement of the serial specification (counterexample ending `rd.2, rd.4`). The 2.0 single atomic
-   update should pass `[T=` and `[FD=`.
+   update should pass `[T=` and `[FD=`. (Since review round 7 the values are put identities, and the
+   counterexample is `rd.1`: the task's write is lost.)
 3. **Block bounded buffer, capacity 1, two blocking writers, items/spaces tokens.** It should refine
-   `BUFF` and keep per-writer FIFO order.
+   `BUFF` and keep per-writer FIFO order. (Since review round 7 `BUFF` is over put identities; the
+   separate per-writer FIFO assertion is removed, because global FIFO order implies it.)
 
 Assumptions:
 - Each CSP critical section is one atomic event.
@@ -748,7 +751,8 @@ was first committed unchecked. It was then checked with ProB (`probcli` 1.16.1-f
 - The unused channels `wflag_r`/`wflag_w` were removed.
 
 **Results: all 25 assertions match their annotations.** The full table with counterexamples is in the
-model header.
+model header. *The numbers below are those of review round 2. Review round 7 renumbered the file and
+moved #20–25 to `docs/formal/historical/rendezvous_trust_wakeup.csp`; see there for the mapping.*
 
 | # | Assertion | Expected / ProB |
 |---|---|---|
@@ -781,7 +785,7 @@ added later):
 | (b) ring-count readiness + back-off | `SYS_NEW` (`a85e17d`) | passes, under the stated fairness assumption |
 | **(c) semaphore-count readiness (`cb10b12`)** | `SYS_C` (stale-signal adversary); `SYS_C2` (competing blocking reader, two messages) | deadlock-free, divergence-free, never takes from an empty buffer, both readers served. No fairness assumption is needed. |
 | KeepNewest, task writer + ISR writer | two-step (v1.0.0) vs. one atomic update (2.0) | v1.0.0 fails the serial specification; 2.0 passes |
-| Block buffer, items/spaces tokens | — | refines `BUFF` and keeps per-writer FIFO order |
+| Block buffer, items/spaces tokens | — | refines `BUFF` and keeps per-writer FIFO order (round 7: `BUFF` over put identities, which implies per-writer order) |
 | **Rendezvous ALT-vs-ALT (trust path)** | `SYS_RV(true)` | completes |
 | Rendezvous, re-verifying variant | `SYS_RV(false)` | deadlocks, which shows why these guards must trust the wakeup |
 | Rendezvous trust path + stale flag | `SYS_RV_STALE` | a stale flag lets `select()` return without data (the documented limitation) |
@@ -1408,3 +1412,77 @@ porting (the software-interrupt source, UART, T2's `--wrap` flags in STM32CubeID
 budget on the G474), and how results are collected. It also defines the pass criteria, including T16a as
 a hardware-only positive control against v1.0.0 with a 1-cycle interrupt sweep (FAIL expected; PASS
 inconclusive).
+
+---
+
+# Review round 7: formal models brought up to date with 3.x (branch `trace/offers`)
+
+Models only; the library is unchanged. Checked with ProB 1.16.1. Every assertion of the previous models
+still has its old verdict, apart from one assertion that was removed (below).
+
+## `docs/formal/buffered_channel_v2.csp`: parts and assertion numbers
+
+| Part | Content | Assertions (round 2 → round 7) |
+|---|---|---|
+| 1 (HISTORICAL) | ALT reader vs. one final message: v1.0.0 (`SYS_OLD`), the 2.0 drafts (`SYS_DRAFT`, `SYS_NEW` with back-off), the final protocol (`SYS_C`, `SYS_C2`), mutations m1, m2 | #1–14 → #1–14 |
+| 2 | KeepNewest, task writer + ISR writer, values are put identities | #15–17 → #15–17 (#15 now fails with `rd.1`) |
+| 2b (new) | KeepOldest/DroppedNew: atomic `kput.w.n` / `kdrop.w.n` (`w`: task 0, ISR 1) | #18–20 (new) |
+| 3 | Block buffer, items/spaces tokens, `BUFF` over put identities, K = 3 | #18 → #21; **#19 (per-writer FIFO, `FIFO1`) removed** |
+| 4 | moved: the 1.x/2.0 rendezvous/signal "trust the wakeup" design | #20–25 → `historical/rendezvous_trust_wakeup.csp` #1–6 |
+| 5 (new) | the 3.x Block channel, capacity 2, K = 4: ALT reader and ALT writer, blocking reader, `putFromISR()` as an environment event, a stale-flag adversary, mutation m1 | #22–31 (new) |
+
+- **Removed per-writer FIFO.** Round 2's #19 checked the order of writer 1's values only. Part 3 now
+  checks `BUFF` over put identities, i.e. global FIFO order of all writes, which implies per-writer order;
+  the separate assertion was dropped.
+- **Put identities.** No model event carries channel data. A write is identified by its index in record
+  order modulo K = capacity + 2. A faulty get could return any of capacity + 2 different writes (the one
+  already taken, the buffered ones, the one in flight), and any capacity + 2 consecutive indices differ
+  modulo K. Capacity 1: K = 3; capacity 2: K = 4.
+- The model header lists the trace-to-model mapping and the sets `SigmaObs` and `H`; the results table
+  with state counts and run times is at the end of the file.
+
+## `putFromISR()` on a Block channel: the token window
+
+Part 5 found that `putFromISR()` on a Block channel can return false while a slot is free:
+`BUF5IF(<>, 0) [T= SYS5R(false)` fails (#23, trace `get5.t` and then `isr_full` with one element
+buffered). The cause, from `buffered_channel.h`:
+
+- a reader takes an `items` token, then `popWithToken()` copies the element out and frees the ring slot
+  (`popLocked()`, one CSP critical section, interrupts masked), and only after that critical section
+  releases the `spaces` token;
+- `putFromISR()` on Block takes a `spaces` token with timeout 0 and returns false if there is none.
+
+The ISR cannot run during the copy (it is masked); it can run after the critical section and before the
+release, when the copy is complete and the slot is free but its token is not yet back.
+
+**Rule (accepted behaviour, not a bug).** On a Block channel, `putFromISR()` returns false when no space
+token is available at that instant. A reader returns its slot's token only after its get has completed,
+so a slot that was just emptied counts as occupied until the reader releases the token. If the reader is
+preempted after its get has completed but before it releases the token, `putFromISR()` on a Block channel
+keeps returning false for that time, although the slot is free.
+
+**Recommendation.** For interrupt producers that must not lose samples to this window, use KeepNewest or
+KeepOldest. Their `putFromISR()` has no such window: `offer()` decides from the ring count inside the same
+critical section that writes the slot, there is no `spaces` token, and a get frees its slot within its
+own critical section. They still lose samples when the buffer is really full (KeepNewest overwrites the
+oldest, KeepOldest drops the new one; `putFromISR()` returns true either way).
+
+The model keeps `BUF5I` as the specification (#22, PASS: `isr_full` is allowed while a slot is free) and
+`BUF5IF` (#23) as the documented expected FAIL. The rule is also stated at `IsrChanout::putFromISR()`
+(`public_channel.h`).
+
+**Open item (possible future improvement; no library change now).** Release the `spaces` token inside
+the same critical section as the pop, if the supported RTOS backends allow a semaphore release there.
+Item 2 of this analysis shows that RTOS calls inside the BASEPRI critical section are unsafe on some
+backends (CMSIS-FreeRTOS `IS_IRQ_MASKED()`), so this needs a per-backend check first, and the ALT-writer
+wakeup order (T before S) must be kept.
+
+## Other models
+
+- `alt_timeout_deadline.csp`: the 3.x `RelTimeoutGuard` (no timer); design OK already matched the 3.x
+  code. The 2.0.0 timer variants T2L/T2H moved, unchanged, to
+  `historical/alt_timeout_timer_2_0_0.csp`.
+- `alt_owrv_extended.csp`: new Part C, an ALT writer with several output guards (`{c1!, c2!}`) against
+  ALT and plain readers, with an RTOCTOU mutation (#16–24).
+- `alt_one_winner.csp`, `rendezvous_commit_record.csp`: headers, trace mapping and `SigmaObs`/`H`;
+  `rendezvous_commit_record.csp` is marked as a historical analysis model.

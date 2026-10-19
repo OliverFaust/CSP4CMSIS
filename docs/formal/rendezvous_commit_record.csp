@@ -1,7 +1,11 @@
 -- =============================================================================
--- CSP4CMSIS rendezvous/signal ALT: current code ("trust the wakeup") vs. the
--- partner-commits design (per-round commit record, optionally a per-ALT
--- claim). ANALYSIS MODEL -- nothing here is implemented.
+-- HISTORICAL ANALYSIS MODEL -- CSP4CMSIS 2.0 rendezvous/signal ALT ("trust
+-- the wakeup", variant CUR = the 2.0 code) vs. the partner-commits design
+-- (per-round commit record, optionally a per-ALT claim). Nothing here is the
+-- 3.x code: 2.0.1 implemented the one-winner protocol with re-verification
+-- instead (OWRV, alt_one_winner.csp and alt_owrv_extended.csp). Kept for
+-- its counterexamples (SILENT, PHANTOM, lost signal; FVP tests T15, T15s)
+-- and its mutation controls (CLAIMNR).
 -- CSP-M (FDR4 dialect). Checked with ProB 1.16.1 (probcli 1.16.1-final,
 -- 716929f); results at the end. Reproduce with
 --   probcli rendezvous_commit_record.csp -csp_assertion '<assertion>'
@@ -226,6 +230,14 @@ SYS(v, k0, k1, s) =
      (false, false), (false, false), (false, false), (false, false))
 
 -- ---------------------------------------------------------------------------
+-- Trace conformance: this model is not a 3.x conformance target (no 3.x
+-- code implements CUR, FIX or CLAIM). Its observations are those of
+-- alt_one_winner.csp (a_sel <- AltSelected of A with the booleans computed
+-- from RendezvousDone, w_done <- the partner's AltSelected / Resume); the
+-- sets are given for completeness.
+SigmaObs = {| a_sel, w_done |}
+H = diff(Events, SigmaObs)
+
 -- Observation and specification (identical in alt_one_winner.csp)
 -- A selects each channel exactly once, WITH that channel's data and WITHOUT
 -- the other channel's (a_sel.g.true.false), in either order; every partner's

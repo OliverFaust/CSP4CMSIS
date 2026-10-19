@@ -2,7 +2,8 @@
 
 Bug-fix release. The public API is unchanged; code that builds with 2.0.0 builds with 2.0.1. Evidence:
 `docs/results_nucleo_g474.md` (FVP runs), `docs/hardware_results_nucleo_g474.md` (NUCLEO-G474RE) and the
-model `docs/formal/alt_timeout_deadline.csp`.
+model `docs/formal/alt_timeout_deadline.csp` (the 2.0.0 timer design, variants T2L and T2H, has since
+moved to `docs/formal/historical/alt_timeout_timer_2_0_0.csp`, unchanged).
 
 ## Fixed: ALT timeouts (`RelTimeoutGuard`)
 

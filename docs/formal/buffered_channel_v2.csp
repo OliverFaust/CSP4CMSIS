@@ -1,86 +1,37 @@
 -- =============================================================================
--- CSP4CMSIS 2.0 BufferedChannel: ALT wakeup protocol and bounded buffer
--- CSP-M model (FDR4 dialect; also accepted by ProB).
+-- CSP4CMSIS 3.x BufferedChannel (csp4cmsis/inc/csp/buffered_channel.h): ALT
+-- wakeup protocol, bounded buffer, the three policies and putFromISR.
+-- CSP-M (FDR4 dialect; also accepted by ProB). Checked with ProB 1.16.1;
+-- results at the end. Reproduce:
+--   probcli buffered_channel_v2.csp -csp_assertion '<assertion>'
+-- (The file name keeps "v2": the 3.x channel is the 2.0 design (c).)
 --
--- STATUS: CHECKED with ProB 1.16.1 (probcli 1.16.1-final, 716929f; SICStus
--- 4.9.0) on 2026-09-26. Not checked with FDR4 (not installed). All 25 results
--- match the "expected" annotations; the ones marked FAILS are intended.
+-- Implementation and history:
+--   Part 1c  design (c) = 3.x: ALT reader, readiness from the semaphore count
+--   Part 1d  mutation controls of (c)
+--   Part 2   KeepNewest (SYS_KN_NEW = 3.x; SYS_KN_OLD = v1.0.0, positive control)
+--   Part 2b  KeepOldest / DroppedNew (3.x)
+--   Part 3   Block bounded buffer with the items/spaces tokens (3.x)
+--   Part 5   the 3.x Block channel with its ALT guards and put identities:
+--            ALT reader against an interrupt (putFromISR as an environment
+--            event), ALT writer against a blocking reader, ALT reader and
+--            ALT writer together
+--   Part 1   HISTORICAL designs, kept as positive controls of the DELIVERED
+--            observation: v1.0.0 (SYS_OLD) and the 2.0 drafts (SYS_DRAFT,
+--            SYS_NEW with back-off). Not the 3.x code.
+--   The former Part 4 (rendezvous/signal channels, "trust the wakeup": the
+--   1.x/2.0 rendezvous design) is in historical/rendezvous_trust_wakeup.csp;
+--   the 3.x rendezvous channel is modelled in alt_one_winner.csp (OWRV) and
+--   alt_owrv_extended.csp.
 --
--- Reproduce (ProB: https://prob.hhu.de, Linux tarball ProB.linux64 1.16.1):
---   probcli buffered_channel_v2.csp -init                  # parse/type-check
---   probcli buffered_channel_v2.csp -csp_assertion 'SYS_OLD :[deadlock free [F]]'
---   grep '^assert ' buffered_channel_v2.csp | sed 's/^assert //' |
---     while IFS= read -r a; do echo "== $a"
---       probcli buffered_channel_v2.csp -csp_assertion "$a" 2>&1 |
---         grep -E '^OK$|FALSE|Counter-?[Ee]xample' -A1; done
--- probcli prints OK when an assertion holds and FALSE plus a counterexample
--- when it does not. Each run takes about 3 s (mostly ProB start-up).
---
--- Order of checking: positive controls (#1, #3) and mutation controls (#13,
--- #14) first; the other results are only meaningful if these fail.
---
---  #  assertion                                   expected  ProB  counterexample
---  1  SYS_OLD deadlock free                       FAIL      FAIL  clear_flag, pending_chk.false, put_old,
---                                                                 notify_old.false, register_old, DEADLOCK
---  2  DELIVERED [FD= SYS_OLD                      FAIL      FAIL  <> then refuses done (lost wakeup)
---  3  DELIVERED [FD= SYS_DRAFT                    FAIL      FAIL  <> DIVERGES (loop clear_flag,
---                                                                 enable_new.true, unregister.true,
---                                                                 act_new.false after push_snap.false)
---  4  SYS_NEW deadlock free                       PASS      PASS
---  5  DELIVERED [FD= SYS_NEW                      PASS      PASS
---  6  STOP [T= SYS_NEW (error)                    PASS      PASS
---  7  SYS_C deadlock free                         PASS      PASS
---  8  DELIVERED_C [FD= SYS_C                      PASS      PASS
---  9  STOP [T= SYS_C (error)                      PASS      PASS
--- 10  SYS_C2 deadlock free                        PASS      PASS
--- 11  BOTH [FD= SYS_C2                            PASS      PASS
--- 12  STOP [T= SYS_C2 (error)                     PASS      PASS
--- 13  SYS_M1 deadlock free (mutation m1)          FAIL      FAIL  clear_flag, stale_flag, c_tokens.false,
---                                                                 c_push, c_register, wait_flag,
---                                                                 c_unregister, c_tokens.false, clear_flag,
---                                                                 c_tokens.false, rel_items, c_snap.false,
---                                                                 c_register, DEADLOCK
--- 14  SYS_M2 deadlock free (mutation m2)          FAIL      FAIL  clear_flag, stale_flag, c_register,
---                                                                 c_tokens.false, wait_flag, c_unregister,
---                                                                 c_tokens.false, clear_flag, c_push,
---                                                                 c_snap.false, c_register, c_tokens.false,
---                                                                 rel_items, DEADLOCK
--- 15  KN_SPEC [T= SYS_KN_OLD                      FAIL      FAIL  rd.2 (spec allows only rd.3, rd.4)
--- 16  KN_SPEC [T= SYS_KN_NEW                      PASS      PASS
--- 17  KN_SPEC [FD= SYS_KN_NEW                     PASS      PASS
--- 18  BUFF(<>) [T= SYS_BUF                        PASS      PASS
--- 19  FIFO1 [T= SYS_BUF                           PASS      PASS
--- 20  SYS_RV(true) deadlock free                  PASS      PASS
--- 21  RV_OK [FD= SYS_RV(true)                     PASS      PASS
--- 22  SYS_RV(false) deadlock free                 FAIL      FAIL  clr_r, rv_en_r.false, clr_w, rv_en_w.true,
---                                                                 rv_dis_w.true, rv_act_w.true, wait_r,
---                                                                 rv_dis_r.false, clr_r, rv_en_r.false,
---                                                                 wdone2, DEADLOCK
--- 23  RV_OK [T= SYS_RV_STALE(true)                FAIL      FAIL  rdone.false (after a stale signal)
--- 24  SYS_SG(true) deadlock free                  PASS      PASS
--- 25  SYS_SG(false) deadlock free                 FAIL      FAIL  clr_r, sg_reg.false, sg_send, wait_r,
---                                                                 sg_unreg.false, clr_r, sg_reg.false, DEADLOCK
---
--- Changes made while checking (2026-09-26):
---  * SYS_OLD synchronised on S1, which lacks backoff_tick; STATE1 could then do
---    backoff_tick forever and SYS_OLD was wrongly deadlock free (positive
---    control #1 failed). It now uses S1B, like the other Part 1 systems.
---  * `st == 1 & alt & sg_send` -> `st == 1 and alt & sg_send` (ProB groups
---    the first form as (st == 1 & alt) & sg_send and rejects it).
---  * Part 1d (mutation controls m1, m2) added.
---  * Unused channels wflag_r/wflag_w removed (all 25 results unchanged).
---  * Alphabet audit: for every SYS_* system, no event outside its
---    synchronisation set occurs other than the intended observables (done,
---    done_alt, done_blk, idle, error, wdone2, sg_rdone, sg_sdone).
---
--- Protocol versions modelled:
---   (a) v1.0.0            : check-then-register (Part 1, SYS_OLD)
---   (b) 2.0 draft/back-off: readiness from the ring count (Part 1,
---                           SYS_DRAFT = d39835b, SYS_NEW = a85e17d)
---   (c) 2.0 final         : readiness from the semaphore count (Part 1c,
---                           commit cb10b12)
---   (d) mutations of (c)  : C before R (m1), S before T (m2) (Part 1d)
---   rendezvous / signal channels, "trust the wakeup" (Part 4)
+-- Values: no model event carries channel data. Where a model must tell
+-- elements apart it uses PUT IDENTITIES: the index of the write in record
+-- order (each BufferedPut, PutFromISR, OverwroteOldest and DroppedNew is one
+-- write), modulo K = capacity + 2. A faulty get could return one of
+-- capacity + 2 different writes: the one taken last (a duplicate), the
+-- capacity elements in the buffer, or the write in flight; any capacity + 2
+-- consecutive indices differ modulo K, so each such error shows as a wrong
+-- identity. Capacity 2: K = 4; capacity 1: K = 3.
 --
 -- Abstraction (see BUFFERED_CHANNEL_ANALYSIS.md and buffered_channel.h):
 --  * A CSP critical section (BASEPRI raised) is atomic w.r.t. every task and
@@ -91,10 +42,38 @@
 --  * An ISR is not preempted by tasks, so an ISR's whole operation is one
 --    atomic step relative to a task; tasks may be preempted between any two
 --    of their events.
+--
+-- Trace conformance (not book-facing). Events a CSP4CMSIS trace supplies
+-- (csp4cmsis_trace.h); identities come from decode.py's slot replay, which
+-- matches each BufferedGet to the write whose slot it reads:
+--   BufferedPut (index n)        -> bin.(n mod K) (Part 3), kput.0.(n mod K) (Part 2b),
+--                                   put5.(n mod K) (Part 5), t_new (Part 2)
+--   PutFromISR (index n)         -> isr_put.(n mod K) (Part 5), kput.1.(n mod K) (Part 2b),
+--                                   isr_new (Part 2)
+--   OverwroteOldest (index n)    -> t_new / isr_new (Part 2; by context)
+--   DroppedNew (index n)         -> kdrop.w.(n mod K) (Part 2b; w: task 0, ISR 1)
+--   BufferedGet (its write's identity t) -> bout.t, rd.t, get5.t
+--   AltSelected (the input guard) and its BufferedGet -> done_alt (Part 1c)
+--   BufferedGet by a blocking reader -> done_blk (Part 1c)
+--   WaitBufferedEmpty/Full + Resume  -> acq_item / acq_space, b_acq (blocking side)
+--   WaitAlt + Resume                 -> wait_flag, wait_r, wait_w (ALT side)
+-- Hidden for conformance (H): the critical sections and RTOS calls that a
+-- trace does not record (registration, token count reads, token acquire
+-- with timeout 0 and releases, snapshots, signals, flag clears), stale
+-- flags, error, err5, idle, drained, isr_full (putFromISR on a full Block
+-- channel records nothing).
+-- Gaps: identities in a trace exist only after the decoder's slot replay
+-- (whose correctness is the decoder's ring-slot check); token counts are
+-- not recorded, so readiness (C) cannot be checked from a trace; the
+-- model's capacities are 1 and 2, traces have any capacity.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Part 1 -- ALT reader vs. one writer that sends ONE final message (no
+-- Part 1 -- HISTORICAL designs (v1.0.0, 2.0 drafts), kept as positive
+--           controls: the DELIVERED observation must find their lost wakeup
+--           (#1, #2) and livelock (#3). Its definitions (STATE1's events,
+--           FIN, STALE) are also used by Part 1c.
+--           ALT reader vs. one writer that sends ONE final message (no
 --           successor). Capacity 1 suffices: the question is only whether the
 --           reader is woken.
 -- -----------------------------------------------------------------------------
@@ -206,7 +185,7 @@ assert DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})
 assert STOP [T= SYS_NEW \ diff(Events, {error})
 
 -- -----------------------------------------------------------------------------
--- Part 1c -- (c) readiness from the SEMAPHORE count (final 2.0, cb10b12).
+-- Part 1c -- (c) readiness from the SEMAPHORE count (final 2.0, cb10b12; = 3.x).
 --   ALT reader  : R register (critical section), then C = token count > 0
 --   writer      : P ring update (critical), T token release, S snapshot of
 --                 the registration (critical), G signal
@@ -306,33 +285,38 @@ assert SYS_M1 :[deadlock free [F]]
 assert SYS_M2 :[deadlock free [F]]
 
 -- -----------------------------------------------------------------------------
--- Part 2 -- KeepNewest, capacity 2, initially full <1,2>.
---           Task writer writes 3, ISR writer writes 4, then a reader drains.
---           Every serial execution ends with {3,4}: <3,4> or <4,3>.
+-- Part 2 -- KeepNewest, capacity 2, initially full with writes 0 and 1.
+--           A task and an ISR write once each (identities 2 and 3, in record
+--           order), then a reader drains. K = 4. Every serial execution ends
+--           with the two newest writes, 2 and 3, in this order.
+--           SYS_KN_OLD = v1.0.0 (HISTORICAL, positive control); SYS_KN_NEW = 3.x
+--           (offer(): one critical section, overwrite in place).
 -- -----------------------------------------------------------------------------
 NB = 2
-Vals = {1..4}
+KB = NB + 2
+Ids = {0..KB-1}
 
+-- s: identities in the buffer; n: next write identity
 knwrite(s, v) = if #s < NB then s ^ <v> else tail(s) ^ <v>
 
 channel t_try : Bool            -- v1.0.0 task: osMessageQueuePut(.., 0) (fails if full)
 channel t_drop                  -- v1.0.0 task: osMessageQueueGet(.., 0) = drop oldest
 channel t_put2 : Bool           -- v1.0.0 task: second osMessageQueuePut(.., 0), result ignored
 channel isr_old                 -- v1.0.0 ISR putFromISR (its 2 steps are atomic vs. the task)
-channel t_new, isr_new          -- 2.0: one critical section each (overwrite in place)
+channel t_new, isr_new          -- 3.x: one critical section each (overwrite in place)
 channel wdone
-channel rd : Vals
+channel rd : Ids
 channel drained
 
-KNSTATE(s) =
-     t_try!(#s < NB)             -> KNSTATE(if #s < NB then s ^ <3> else s)
-  [] t_drop                      -> KNSTATE(if null(s) then s else tail(s))
-  [] t_put2!(#s < NB)            -> KNSTATE(if #s < NB then s ^ <3> else s)
-  [] isr_old                     -> KNSTATE(knwrite(s, 4))
-  [] t_new                       -> KNSTATE(knwrite(s, 3))
-  [] isr_new                     -> KNSTATE(knwrite(s, 4))
-  [] not null(s) & rd!head(s)    -> KNSTATE(tail(s))
-  [] null(s) & drained           -> KNSTATE(s)
+KNSTATE(s, n) =
+     t_try!(#s < NB)             -> KNSTATE(if #s < NB then s ^ <n> else s, if #s < NB then (n + 1) % KB else n)
+  [] t_drop                      -> KNSTATE(if null(s) then s else tail(s), n)
+  [] t_put2!(#s < NB)            -> KNSTATE(if #s < NB then s ^ <n> else s, if #s < NB then (n + 1) % KB else n)
+  [] isr_old                     -> KNSTATE(knwrite(s, n), (n + 1) % KB)
+  [] t_new                       -> KNSTATE(knwrite(s, n), (n + 1) % KB)
+  [] isr_new                     -> KNSTATE(knwrite(s, n), (n + 1) % KB)
+  [] not null(s) & rd!head(s)    -> KNSTATE(tail(s), n)
+  [] null(s) & drained           -> KNSTATE(s, n)
 
 T_OLD = t_try?ok -> (if ok then wdone -> SKIP else t_drop -> t_put2?_ -> wdone -> SKIP)
 I_OLD = isr_old -> wdone -> SKIP
@@ -344,147 +328,267 @@ READER2 = wdone -> wdone -> DRAIN
 
 SK = {| t_try, t_drop, t_put2, isr_old, t_new, isr_new, rd, drained |}
 
-SYS_KN_OLD = ((T_OLD ||| I_OLD) [| {wdone} |] READER2) [| SK |] KNSTATE(<1,2>)
-SYS_KN_NEW = ((T_NEW ||| I_NEW) [| {wdone} |] READER2) [| SK |] KNSTATE(<1,2>)
+SYS_KN_OLD = ((T_OLD ||| I_OLD) [| {wdone} |] READER2) [| SK |] KNSTATE(<0,1>, 2)
+SYS_KN_NEW = ((T_NEW ||| I_NEW) [| {wdone} |] READER2) [| SK |] KNSTATE(<0,1>, 2)
 
-KN_SPEC = (rd.3 -> rd.4 -> drained -> FIN) |~| (rd.4 -> rd.3 -> drained -> FIN)
+KN_SPEC = rd.2 -> rd.3 -> drained -> FIN
 KN_OBS  = {| rd, drained, idle |}
 
--- expected: FAILS -- counterexample trace <rd.2, rd.4, drained>: the task drops 1,
---           the ISR fills the freed slot, the task's second put fails; 3 lost, 2 kept
+-- expected: FAILS -- counterexample trace <rd.1, rd.2, drained>: the task drops
+--           write 0, the ISR's write (2) fills the freed slot, the task's
+--           second put fails; the task's write is lost, 1 kept
 assert KN_SPEC [T= SYS_KN_OLD \ diff(Events, KN_OBS)
--- expected: PASSES (both serial orders, nothing else)
+-- expected: PASSES (the two newest writes, nothing else)
 assert KN_SPEC [T= SYS_KN_NEW \ diff(Events, KN_OBS)
 assert KN_SPEC [FD= SYS_KN_NEW \ diff(Events, KN_OBS)
 
 -- -----------------------------------------------------------------------------
--- Part 3 -- Block bounded buffer, capacity 1, two blocking writers (2 values
---           each) and one blocking reader, with the 2.0 items/spaces tokens.
---           Linearisation points: push (bin.v) and pop (bout.v) critical sections.
+-- Part 2b -- KeepOldest (DroppedNew), capacity 2, K = 4. A task (w = 0) and an
+--           ISR (w = 1) write once each, a reader takes 2 elements at any
+--           time. offer() is one critical section: a write is stored
+--           (kput.w.t, a BufferedPut/PutFromISR record) or, when full,
+--           dropped (kdrop.w.t, DroppedNew: no slot, no token); either way it
+--           takes the next identity. Being atomic, the write is one event, so
+--           this part states KeepOldest's semantics with put identities
+--           rather than checking a protocol.
+-- -----------------------------------------------------------------------------
+channel kput, kdrop : {0, 1}.Ids
+
+KOSTATE(s, n) =
+     ([] w : {0, 1} @ (#s < NB & kput.w!n -> KOSTATE(s ^ <n>, (n + 1) % KB))
+                   [] (#s == NB & kdrop.w!n -> KOSTATE(s, (n + 1) % KB)))
+  [] not null(s) & rd!head(s) -> KOSTATE(tail(s), n)
+
+KOWR(w) = kput.w?_ -> SKIP [] kdrop.w?_ -> SKIP
+KO_W = KOWR(0) ||| KOWR(1)
+KO_R = rd?_ -> rd?_ -> FIN
+SKO = {| kput, kdrop, rd |}
+SYS_KO(s0) = (KO_W ||| KO_R) [| SKO |] KOSTATE(s0, #s0)
+
+-- KeepOldest as a buffer: stores while not full, drops (and numbers) when full
+KOSPEC(s, n, ws, r) =
+     ([] w : ws @ (if #s < NB then kput.w!n -> KOSPEC(s ^ <n>, (n + 1) % KB, diff(ws, {w}), r)
+                   else kdrop.w!n -> KOSPEC(s, (n + 1) % KB, diff(ws, {w}), r)))
+  [] (r > 0 and not null(s) & rd!head(s) -> KOSPEC(tail(s), n, ws, r - 1))
+  [] (r == 0 & idle -> KOSPEC(s, n, ws, r))
+KO_OBS = {| kput, kdrop, rd, idle |}
+-- expected: PASS -- from empty, half full and full: exactly the KeepOldest buffer
+assert KOSPEC(<>, 0, {0, 1}, 2) [FD= SYS_KO(<>) \ diff(Events, KO_OBS)
+assert KOSPEC(<0>, 1, {0, 1}, 2) [FD= SYS_KO(<0>) \ diff(Events, KO_OBS)
+assert KOSPEC(<0,1>, 2, {0, 1}, 2) [FD= SYS_KO(<0,1>) \ diff(Events, KO_OBS)
+
+-- -----------------------------------------------------------------------------
+-- Part 3 -- Block bounded buffer, capacity 1, two blocking writers (2 writes
+--           each) and one blocking reader, with the items/spaces tokens (3.x
+--           pushWithToken/popWithToken). Linearisation points: push (bin.t)
+--           and pop (bout.t) critical sections; t = write identity, K = 3.
 -- -----------------------------------------------------------------------------
 NC = 1
-Data = {10, 11, 20, 21}
+KC = NC + 2
+IdsC = {0..KC-1}
 
-channel bin, bout : Data
+channel bin, bout : IdsC
 channel acq_space, rel_space, acq_item, rel_item
 
--- state: buffer contents s, items tokens it, spaces tokens sp
-BSTATE(s, it, sp) =
-     sp > 0 & acq_space            -> BSTATE(s, it, sp - 1)
-  [] rel_space                     -> BSTATE(s, it, sp + 1)
-  [] it > 0 & acq_item             -> BSTATE(s, it - 1, sp)
-  [] rel_item                      -> BSTATE(s, it + 1, sp)
-  [] #s < NC & bin?v                -> BSTATE(s ^ <v>, it, sp)
-  [] not null(s) & bout!head(s)     -> BSTATE(tail(s), it, sp)
+-- state: buffer contents s (identities), next identity n, items tokens it, spaces tokens sp
+BSTATE(s, n, it, sp) =
+     sp > 0 & acq_space            -> BSTATE(s, n, it, sp - 1)
+  [] rel_space                     -> BSTATE(s, n, it, sp + 1)
+  [] it > 0 & acq_item             -> BSTATE(s, n, it - 1, sp)
+  [] rel_item                      -> BSTATE(s, n, it + 1, sp)
+  [] #s < NC & bin!n               -> BSTATE(s ^ <n>, (n + 1) % KC, it, sp)
+  [] not null(s) & bout!head(s)    -> BSTATE(tail(s), n, it, sp)
 
-WRITER(<>)     = SKIP
-WRITER(<v>^vs) = acq_space -> bin!v -> rel_item -> WRITER(vs)
-READER3        = acq_item -> bout?_ -> rel_space -> READER3
+WRITER(0)  = SKIP
+WRITER(m)  = acq_space -> bin?_ -> rel_item -> WRITER(m - 1)
+READER3    = acq_item -> bout?_ -> rel_space -> READER3
 
 SB = {| acq_space, rel_space, acq_item, rel_item, bin, bout |}
-SYS_BUF = ((WRITER(<10,11>) ||| WRITER(<20,21>)) ||| READER3) [| SB |] BSTATE(<>, 0, NC)
+SYS_BUF = ((WRITER(2) ||| WRITER(2)) ||| READER3) [| SB |] BSTATE(<>, 0, 0, NC)
 
--- classic bounded buffer of capacity NC
-BUFF(s) = (#s < NC & bin?v -> BUFF(s ^ <v>)) [] (not null(s) & bout!head(s) -> BUFF(tail(s)))
+-- classic bounded buffer of capacity NC over write identities
+BUFF(s, n) = (#s < NC & bin!n -> BUFF(s ^ <n>, (n + 1) % KC)) [] (not null(s) & bout!head(s) -> BUFF(tail(s), n))
 
--- expected: PASSES -- the token implementation is a bounded buffer
-assert BUFF(<>) [T= SYS_BUF \ {| acq_space, rel_space, acq_item, rel_item |}
--- expected: PASSES -- per-writer FIFO order is kept (bin/bout restricted to writer 1)
-W1 = {10, 11}
-FIFO1 = bin.10 -> bout.10 -> bin.11 -> bout.11 -> STOP
-assert FIFO1 [T= SYS_BUF \ diff(Events, {bin.v, bout.v | v <- W1})
+-- expected: PASSES -- the token implementation is a bounded FIFO buffer
+assert BUFF(<>, 0) [T= SYS_BUF \ {| acq_space, rel_space, acq_item, rel_item |}
+-- (the former FIFO1, per-writer order of writer 1's values, follows from
+--  this global FIFO order over write identities and is not kept)
 
 -- -----------------------------------------------------------------------------
--- Part 4 -- rendezvous and signal channels: "trust the wakeup"
---   Their guards keep Guard::confirm()'s default (true): after an ALT partner
---   has transferred the data and cleared the registration, disable()
---   reports "not ready" although the guard completed. Modelled after
---   alt_channel_sync.cpp (ChanInGuard/ChanOutGuard, mutex-protected, so each
---   mutex section is one event) and sync_channel.cpp (SyncChannel).
+-- Part 5 -- the 3.x Block channel (capacity 2, K = 4) with its ALT guards,
+--   every operation as in buffered_channel.h:
+--   ALT reader (BufferedInputGuard): R register (critical), C items > 0;
+--     disable = unregister + C again; activate = acquire(items, 0) then
+--     popWithToken: pop (critical), release(spaces), S snapshot of the ALT
+--     writer's registration (critical), G signal it.
+--   ALT writer (BufferedOutputGuard): the same with spaces / items swapped:
+--     acquire(spaces, 0), pushWithToken: push, release(items), S of the ALT
+--     reader's registration, G.
+--   blocking reader: acquire(items, forever), popWithToken.
+--   putFromISR (environment): acquire(spaces, 0); if it fails: no write
+--     (isr_full); else pushWithToken. The ISR is atomic with respect to tasks
+--     (one event), may write at any time and any number of times.
+--   One stale thread flag per ALT thread (adversary), at most once.
+-- Systems: SYS5R ALT reader + ISR; SYS5W ALT writer + blocking reader;
+-- SYS5RW ALT reader + ALT writer. Specification: the bounded FIFO over write
+-- identities, with liveness ([FD=): a write is refused only while full, a
+-- get only while empty, and nothing diverges.
 -- -----------------------------------------------------------------------------
+N5 = 2
+K5 = N5 + 2
+Ids5 = {0..K5-1}
 
--- 4a: rendezvous ALT reader vs rendezvous ALT writer (ALT-vs-ALT).
-channel rv_en_r, rv_en_w : Bool       -- enable(): ready? (else registered)
-channel rv_dis_r, rv_dis_w : Bool     -- disable(): hasWriterWaiting() / hasReaderWaiting()
-channel rv_act_r, rv_act_w : Bool     -- activate(): true = partner was an ALT, data moved now
-channel wait_r, wait_w                -- osThreadFlagsWait, per side
-channel clr_r, clr_w
-channel stale_r
-channel rdone : Bool                  -- reader returns; payload: data really received?
-channel wdone2
+channel put5, get5 : Ids5             -- the push / pop critical section (observable)
+channel isr_put : Ids5                -- putFromISR: acquire(spaces, 0) + push + release(items) + snapshot + signal
+channel isr_full                      -- putFromISR on a full Block channel: returns false, no write
+channel r_reg, r_unreg, w_reg, w_unreg
+channel r_cnt, w_cnt : Bool           -- C: items > 0 / spaces > 0
+channel r_acq, w_acq : Bool           -- acquire(items / spaces, 0)
+channel b_acq                         -- blocking reader: acquire(items, forever)
+channel rel_i, rel_s                  -- release(items) / release(spaces)
+channel snap_r, snap_w : Bool         -- S: snapshot of the ALT reader / ALT writer registration
+channel sig_r, sig_w                  -- G
+channel clr_r, clr_w, wait_r, wait_w, stale_r, stale_w
+channel err5
 
--- state: ir = reader registered, iw = writer registered, got = data at reader,
---        fr/fw = thread flags
-RV(ir, iw, got, fr, fw) =
-     rv_en_r!iw        -> RV(if iw then ir else true, iw, got, fr, fw)
-  [] rv_en_w!ir        -> RV(ir, if ir then iw else true, got, fr, fw)
-  [] rv_dis_r!iw       -> RV(false, iw, got, fr, fw)
-  [] rv_dis_w!ir       -> RV(ir, false, got, fr, fw)
-  [] rv_act_r!iw       -> RV(ir, false, if iw then true else got, fr, fw or iw)     -- case 2: copy, clear, wake writer
-  [] rv_act_w!ir       -> RV(false, iw, if ir then true else got, fr or ir, fw)    -- case 2: copy, clear, wake reader
-  [] clr_r -> RV(ir, iw, got, false, fw)   [] clr_w -> RV(ir, iw, got, fr, false)
-  [] fr & wait_r -> RV(ir, iw, got, false, fw)
-  [] fw & wait_w -> RV(ir, iw, got, fr, false)
-  [] stale_r -> RV(ir, iw, got, true, fw)
-  [] rdone!got -> RV(ir, iw, got, fr, fw)
+-- s identities in the ring; n next identity; it/sp items/spaces tokens;
+-- rg/wg ALT reader/writer registered; fr/fw their thread flags
+ST5(s, n, it, sp, rg, wg, fr, fw) =
+     put5!n                    -> (if #s < N5 then ST5(s ^ <n>, (n + 1) % K5, it, sp, rg, wg, fr, fw) else err5 -> STOP)
+  [] not null(s) & get5!head(s) -> ST5(tail(s), n, it, sp, rg, wg, fr, fw)
+  [] null(s) & get5?_          -> err5 -> STOP                           -- pop from an empty ring
+  [] sp > 0 & isr_put!n        -> (if #s < N5 then ST5(s ^ <n>, (n + 1) % K5, it + 1, sp - 1, rg, wg, fr or rg, fw)
+                                   else err5 -> STOP)
+  [] sp == 0 & isr_full        -> ST5(s, n, it, sp, rg, wg, fr, fw)
+  [] r_reg   -> ST5(s, n, it, sp, true, wg, fr, fw)
+  [] r_unreg -> ST5(s, n, it, sp, false, wg, fr, fw)
+  [] w_reg   -> ST5(s, n, it, sp, rg, true, fr, fw)
+  [] w_unreg -> ST5(s, n, it, sp, rg, false, fr, fw)
+  [] r_cnt!(it > 0) -> ST5(s, n, it, sp, rg, wg, fr, fw)
+  [] w_cnt!(sp > 0) -> ST5(s, n, it, sp, rg, wg, fr, fw)
+  [] r_acq!(it > 0) -> ST5(s, n, if it > 0 then it - 1 else it, sp, rg, wg, fr, fw)
+  [] w_acq!(sp > 0) -> ST5(s, n, it, if sp > 0 then sp - 1 else sp, rg, wg, fr, fw)
+  [] it > 0 & b_acq -> ST5(s, n, it - 1, sp, rg, wg, fr, fw)
+  [] rel_i -> ST5(s, n, it + 1, sp, rg, wg, fr, fw)
+  [] rel_s -> ST5(s, n, it, sp + 1, rg, wg, fr, fw)
+  [] snap_r!rg -> ST5(s, n, it, sp, rg, wg, fr, fw)
+  [] snap_w!wg -> ST5(s, n, it, sp, rg, wg, fr, fw)
+  [] sig_r -> ST5(s, n, it, sp, rg, wg, true, fw)
+  [] sig_w -> ST5(s, n, it, sp, rg, wg, fr, true)
+  [] clr_r -> ST5(s, n, it, sp, rg, wg, false, fw)
+  [] clr_w -> ST5(s, n, it, sp, rg, wg, fr, false)
+  [] fr & wait_r -> ST5(s, n, it, sp, rg, wg, false, fw)
+  [] fw & wait_w -> ST5(s, n, it, sp, rg, wg, fr, false)
+  [] stale_r -> ST5(s, n, it, sp, rg, wg, true, fw)
+  [] stale_w -> ST5(s, n, it, sp, rg, wg, fr, true)
 
--- trust = true: confirm() default (current code); false: re-verify with disable()
-RV_R(trust) = clr_r -> rv_en_r?ready ->
-                (if ready then rv_dis_r?_ -> rv_act_r?_ -> rdone?_ -> FIN
-                 else wait_r -> rv_dis_r?d -> (if trust or d then rv_act_r?_ -> rdone?_ -> FIN else RV_R(trust)))
-RV_W(trust) = clr_w -> rv_en_w?ready ->
-                (if ready then rv_dis_w?_ -> rv_act_w?_ -> wdone2 -> SKIP
-                 else wait_w -> rv_dis_w?d -> (if trust or d then rv_act_w?_ -> wdone2 -> SKIP else RV_W(trust)))
+-- popWithToken / pushWithToken after the token was taken
+POPT  = get5?_ -> rel_s -> snap_w?w -> (if w then sig_w -> SKIP else SKIP)
+PUSHT = put5?_ -> rel_i -> snap_r?r -> (if r then sig_r -> SKIP else SKIP)
 
-SRV = {| rv_en_r, rv_en_w, rv_dis_r, rv_dis_w, rv_act_r, rv_act_w, clr_r, clr_w, wait_r, wait_w,
-         stale_r, rdone |}
-SYS_RV(trust)       = (RV_R(trust) ||| RV_W(trust)) [| SRV |] RV(false, false, false, false, false)
-SYS_RV_STALE(trust) = (RV_R(trust) ||| RV_W(trust) ||| (stale_r -> SKIP [] SKIP)) [| SRV |]
-                      RV(false, false, false, false, false)
-RV_OK = rdone.true -> FIN
+-- ALT reader, one input guard, select() forever. m1 = C before R (mutation)
+AR5(m1) = clr_r -> (if m1 then r_cnt?c -> r_reg -> AR5E(m1, c) else r_reg -> r_cnt?c -> AR5E(m1, c))
+AR5E(m1, c) = if c then r_unreg -> r_cnt?c2 -> AR5A(m1, c2)
+              else wait_r -> r_unreg -> r_cnt?c2 -> AR5A(m1, c2)
+AR5A(m1, c2) = if c2 then r_acq?ok -> (if ok then POPT ; AR5(m1) else AR5(m1))   -- lost race: new round
+               else AR5(m1)                                                      -- stale: new round
+-- ALT writer, one output guard, select() forever
+AW5 = clr_w -> w_reg -> w_cnt?c -> AW5E(c)
+AW5E(c) = if c then w_unreg -> w_cnt?c2 -> AW5A(c2)
+          else wait_w -> w_unreg -> w_cnt?c2 -> AW5A(c2)
+AW5A(c2) = if c2 then w_acq?ok -> (if ok then PUSHT ; AW5 else AW5) else AW5
+-- blocking reader, forever
+BR5 = b_acq -> POPT ; BR5
+-- the interrupt: writes whenever it likes
+ISR5 = isr_put?_ -> ISR5 [] isr_full -> ISR5
+STALE5 = (stale_r -> SKIP) [] (stale_w -> SKIP) [] SKIP
 
--- expected: PASSES -- trust path: ALT-vs-ALT completes, reader gets the data
-assert SYS_RV(true) :[deadlock free [F]]
-assert RV_OK [FD= SYS_RV(true) \ diff(Events, {| rdone, idle |})
--- expected: FAILS (deadlock) -- re-verifying rendezvous guards would hang:
---           the woken side sees "not ready" after the partner already moved
---           the data, re-registers and waits forever (why trust is required)
-assert SYS_RV(false) :[deadlock free [F]]
--- expected: FAILS -- KNOWN LIMITATION of the trust path: a stale flag lets the
---           reader's select() return without data (trace ... rdone.false)
---           Reproduced on the FVP (T15, T15i); a checked fix model is in
---           rendezvous_commit_record.csp.
-assert RV_OK [T= SYS_RV_STALE(true) \ diff(Events, {| rdone, idle |})
+S5 = {| put5, get5, isr_put, isr_full, r_reg, r_unreg, w_reg, w_unreg, r_cnt, w_cnt, r_acq, w_acq, b_acq,
+        rel_i, rel_s, snap_r, snap_w, sig_r, sig_w, clr_r, clr_w, wait_r, wait_w, stale_r, stale_w |}
+INIT5 = ST5(<>, 0, 0, N5, false, false, false, false)
+SYS5R(m1)  = (AR5(m1) ||| ISR5 ||| STALE5) [| S5 |] INIT5
+SYS5W      = (AW5 ||| BR5 ||| STALE5) [| S5 |] INIT5
+SYS5RW(m1) = (AR5(m1) ||| AW5 ||| STALE5) [| S5 |] INIT5
 
--- 4b: SyncChannel (signal) ALT receiver vs blocking sender.
---     Simplification: only the interleaving in which the receiver registers
---     first is modelled (the sender's SENDER_WAITING path is not).
-channel sg_reg : Bool                 -- registerAltIn(): true = sender already waiting
-channel sg_unreg : Bool               -- unregisterAltIn(nullptr): completed? (resets if not)
-channel sg_send                       -- sender output(): sees RECEIVER_WAITING, wakes ALT
-channel sg_sender_wait                -- sender: acquire(sender_sem)
-channel sg_act                        -- receiver activate(): release(sender_sem), reset
-channel sg_rdone, sg_sdone
+-- bounded FIFO over write identities; ISR writes are isr_put, task writes
+-- put5; a full ISR write is isr_full
+BUF5(s, n) = (#s < N5 & put5!n -> BUF5(s ^ <n>, (n + 1) % K5))
+          [] (not null(s) & get5!head(s) -> BUF5(tail(s), n))
+-- ISR writes: putFromISR() takes a spaces token with timeout 0, so it also
+-- fails (isr_full) while a reader has popped but not yet released its
+-- spaces token: BUF5I allows isr_full at any time, BUF5IF only when full
+BUF5I(s, n) = let Q = (#s < N5 & isr_put!n -> BUF5I(s ^ <n>, (n + 1) % K5))
+                   [] (#s == N5 & isr_full -> BUF5I(s, n))
+                   [] (not null(s) & get5!head(s) -> BUF5I(tail(s), n))
+              within if #s < N5 then Q |~| (Q [] isr_full -> BUF5I(s, n)) else Q   -- a free slot: isr_full may happen
+BUF5IF(s, n) = (#s < N5 & isr_put!n -> BUF5IF(s ^ <n>, (n + 1) % K5))
+            [] (#s == N5 & isr_full -> BUF5IF(s, n))
+            [] (not null(s) & get5!head(s) -> BUF5IF(tail(s), n))
+OBS5R = {| isr_put, isr_full, get5 |}
+OBS5  = {| put5, get5 |}
 
--- state: st = 0 IDLE, 1 RECEIVER_WAITING (SENDER_WAITING not reached here);
---        alt = ALT registered; sem = sender_sem; fr = receiver flag
-SG(st, alt, sem, fr) =
-     sg_reg!false                 -> SG(1, true, sem, fr)
-  [] st == 1 and alt & sg_send    -> SG(st, false, sem, true)
-  [] sg_unreg!(st != 1)           -> SG(if st != 1 then st else 0, false, sem, fr)
-  [] sg_act                       -> SG(0, alt, sem + 1, fr)
-  [] sem > 0 & sg_sender_wait     -> SG(st, alt, sem - 1, fr)
-  [] clr_r -> SG(st, alt, sem, false)
-  [] fr & wait_r -> SG(st, alt, sem, false)
+-- expected: PASS -- ALT reader against the interrupt: a FIFO buffer, live
+assert BUF5I(<>, 0) [FD= SYS5R(false) \ diff(Events, OBS5R)
+-- expected: FAIL -- putFromISR() on a Block channel can fail with a free
+--           slot: the reader has popped (get5) but not yet released the
+--           spaces token (trace ... get5.t, isr_full with one element left)
+assert BUF5IF(<>, 0) [T= SYS5R(false) \ diff(Events, OBS5R)
+assert STOP [T= SYS5R(false) \ diff(Events, {err5})
+-- expected: PASS -- ALT writer against a blocking reader
+assert BUF5(<>, 0) [FD= SYS5W \ diff(Events, OBS5)
+assert STOP [T= SYS5W \ diff(Events, {err5})
+-- expected: PASS -- ALT reader and ALT writer on one channel
+assert BUF5(<>, 0) [FD= SYS5RW(false) \ diff(Events, OBS5)
+assert SYS5RW(false) :[deadlock free [F]]
+assert STOP [T= SYS5RW(false) \ diff(Events, {err5})
+-- expected: FAIL -- mutation m1 (C before R) on the ALT reader: a lost
+--           wakeup, the reader waits with elements in the buffer
+assert BUF5I(<>, 0) [FD= SYS5R(true) \ diff(Events, OBS5R)
+assert BUF5(<>, 0) [FD= SYS5RW(true) \ diff(Events, OBS5)
 
-SG_R(trust) = clr_r -> sg_reg?_ -> wait_r -> sg_unreg?d ->
-                (if trust or d then sg_act -> sg_rdone -> FIN else SG_R(trust))
-SG_S        = sg_send -> sg_sender_wait -> sg_sdone -> SKIP
-SSG = {| sg_reg, sg_unreg, sg_send, sg_sender_wait, sg_act, clr_r, wait_r |}
-SYS_SG(trust) = (SG_R(trust) ||| SG_S) [| SSG |] SG(0, false, 0, false)
 
--- expected: PASSES -- trust path completes both sides
-assert SYS_SG(true) :[deadlock free [F]]
--- expected: FAILS (deadlock) -- a re-verifying signal guard hangs the sender
-assert SYS_SG(false) :[deadlock free [F]]
+-- -----------------------------------------------------------------------------
+-- Trace conformance: the events a trace supplies (renamed as in the header)
+-- and the events hidden for a conformance check.
+-- -----------------------------------------------------------------------------
+SigmaObs = {| done, done_alt, done_blk, wait_flag, rd, kput, kdrop, t_new, isr_new,
+              bin, bout, acq_space, acq_item, put5, get5, isr_put, b_acq, wait_r, wait_w |}
+H = diff(Events, SigmaObs)
 
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1-final 716929f, 2026-10-19; all as expected; each
+-- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
+--  #  assertion                                            expected  ProB  states  s    note
+--  1  SYS_OLD :[deadlock free [F]]                         FAIL      FAIL      11    0.2  
+--  2  DELIVERED [FD= SYS_OLD \ diff(Events, {done, idle})  FAIL      FAIL      27    0.2  
+--  3  DELIVERED [FD= SYS_DRAFT \ diff(Events, {done, idle} FAIL      FAIL      71    0.3  
+--  4  SYS_NEW :[deadlock free [F]]                         PASS      PASS      74    0.1  
+--  5  DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})  PASS      PASS      76    0.4  
+--  6  STOP [T= SYS_NEW \ diff(Events, {error})             PASS      PASS      75    0.5  
+--  7  SYS_C :[deadlock free [F]]                           PASS      PASS     124    0.3  
+--  8  DELIVERED_C [FD= SYS_C \ diff(Events, {done_alt, idl PASS      PASS     126    0.3  
+--  9  STOP [T= SYS_C \ diff(Events, {error})               PASS      PASS     125    0.6  
+-- 10  SYS_C2 :[deadlock free [F]]                          PASS      PASS    1025    1.9  
+-- 11  BOTH [FD= SYS_C2 \ diff(Events, {done_alt, done_blk, PASS      PASS    1029    3.2  
+-- 12  STOP [T= SYS_C2 \ diff(Events, {error})              PASS      PASS    1026    2.5  
+-- 13  SYS_M1 :[deadlock free [F]]                          FAIL      FAIL      69    0.2  
+-- 14  SYS_M2 :[deadlock free [F]]                          FAIL      FAIL      54    0.3  
+-- 15  KN_SPEC [T= SYS_KN_OLD \ diff(Events, KN_OBS)        FAIL      FAIL      42    0.2  rd.1 (the task's write lost)
+-- 16  KN_SPEC [T= SYS_KN_NEW \ diff(Events, KN_OBS)        PASS      PASS      25    0.1  
+-- 17  KN_SPEC [FD= SYS_KN_NEW \ diff(Events, KN_OBS)       PASS      PASS      25    0.1  
+-- 18  KOSPEC(<>, 0, {0, 1}, 2) [FD= SYS_KO(<>) \ diff(Even PASS      PASS      17    0.1  
+-- 19  KOSPEC(<0>, 1, {0, 1}, 2) [FD= SYS_KO(<0>) \ diff(Ev PASS      PASS      27    0.2  
+-- 20  KOSPEC(<0,1>, 2, {0, 1}, 2) [FD= SYS_KO(<0,1>) \ dif PASS      PASS      43    0.2  
+-- 21  BUFF(<>, 0) [T= SYS_BUF \ {| acq_space, rel_space, a PASS      PASS      41    0.2  
+-- 22  BUF5I(<>, 0) [FD= SYS5R(false) \ diff(Events, OBS5R) PASS      PASS     720    5.0  
+-- 23  BUF5IF(<>, 0) [T= SYS5R(false) \ diff(Events, OBS5R) FAIL      FAIL     246    1.1  get5.t then isr_full with a free slot
+-- 24  STOP [T= SYS5R(false) \ diff(Events, {err5})         PASS      PASS     692    4.5  
+-- 25  BUF5(<>, 0) [FD= SYS5W \ diff(Events, OBS5)          PASS      PASS    3484   15.3  
+-- 26  STOP [T= SYS5W \ diff(Events, {err5})                PASS      PASS    3472   14.7  
+-- 27  BUF5(<>, 0) [FD= SYS5RW(false) \ diff(Events, OBS5)  PASS      PASS    9740   44.6  
+-- 28  SYS5RW(false) :[deadlock free [F]]                   PASS      PASS    9727   41.8  
+-- 29  STOP [T= SYS5RW(false) \ diff(Events, {err5})        PASS      PASS    9728   51.5  
+-- 30  BUF5I(<>, 0) [FD= SYS5R(true) \ diff(Events, OBS5R)  FAIL      FAIL     189    1.3  full, the reader waits: refuses get5
+-- 31  BUF5(<>, 0) [FD= SYS5RW(true) \ diff(Events, OBS5)   FAIL      FAIL     617    2.2  one element, the reader waits: refuses get5.0
+-- =============================================================================

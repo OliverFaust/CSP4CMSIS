@@ -40,7 +40,9 @@
 //    it can only fail if another reader/writer took that token in between
 //    (i.e. made progress); select() then starts a new round, which reads the
 //    updated count.
-//  * putFromISR(): never blocks; Block policy fails if full. ISR priority
+//  * putFromISR(): never blocks; Block policy fails when no spaces token is
+//    available: also after a reader's pop (P) until its release (T), while
+//    the slot is already free (see IsrChanout::putFromISR()). ISR priority
 //    must be numerically >= CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY
 //    (masked by the critical section).
 //
@@ -254,7 +256,8 @@ namespace csp::internal {
             else return true;
         }
 
-        /// Never blocks. Block: false if full. KeepNewest/KeepOldest: true.
+        /// Never blocks. Block: false if no spaces token is available (see the
+        /// header). KeepNewest/KeepOldest: true.
         bool putFromISR(const T& data) override {
             if constexpr (kBlock) {
                 if (!spaces_.acquire(0)) return false;
