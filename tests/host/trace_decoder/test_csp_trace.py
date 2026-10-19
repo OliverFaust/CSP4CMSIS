@@ -235,6 +235,22 @@ class Buffered(unittest.TestCase):
         self.assertNotIn('isr_put', chk['X'])
 
 
+class Stable(unittest.TestCase):
+    def test_a_point_open_at_the_end_of_the_log(self):
+        # decode.py marks a stable point that lasts to the end of the log
+        with tempfile.NamedTemporaryFile('w', suffix='.csv', delete=False) as f:
+            f.write('start_us,end_us,classification,reason,offers\n'
+                    '484052.500,2001285.750 (end of log),deadlock,no two offers match,M: c !; P: d !\n'
+                    '10.000,20.000,awaiting environment,an interrupt,S: m ?\n')
+        try:
+            pts = T.read_stable(f.name)
+        finally:
+            os.unlink(f.name)
+        self.assertEqual([p['open_at_end'] for p in pts], [True, False])
+        self.assertAlmostEqual(pts[0]['end'], 2.00128575)
+        self.assertEqual(pts[0]['offers'], [('M', 'c !'), ('P', 'd !')])
+
+
 class Construction(unittest.TestCase):
     def test_environment_escapes_until_the_marker(self):
         env = T.envt(['a_block.2', 'tick'], free_tick=False)

@@ -803,7 +803,8 @@ def read_stable(path):
         for o in r['offers'].split('; '):
             who, _, what = o.partition(': ')
             offers.append((who, what))
-        out.append({'start': float(r['start_us']) / 1e6, 'end': float(r['end_us']) / 1e6,
+        end, _, note = r['end_us'].partition(' ')     # "T (end of log)": the point lasts to the end
+        out.append({'start': float(r['start_us']) / 1e6, 'end': float(end) / 1e6, 'open_at_end': bool(note),
                     'classification': r['classification'], 'reason': r['reason'], 'offers': offers})
     return out
 
