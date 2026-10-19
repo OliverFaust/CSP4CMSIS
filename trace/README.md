@@ -33,6 +33,7 @@ part of a channel's element values: only library state.
 | 0x10 | RendezvousDone | writer thread, reader thread, channel, 1 if the reader recorded it |
 | 0x20 | AltSelected | context, guard-list index |
 | 0x21 | AltGuard | Alternative, guard-list index, target, kind (0 input, 1 output: target the channel; 2 timeout: target the delay in ticks; 3 other) |
+| 0x22 | AltDeadline | context, Alternative, tick count the wait's time was computed at, deadline tick (only before a WaitAlt with an enabled timeout guard) |
 | 0x30 | BufferedPut | context, channel, elements after << 16 \| capacity, ring slot written |
 | 0x31 | BufferedGet | as BufferedPut, ring slot read |
 | 0x32 | PutFromISR | as BufferedPut (handler mode) |
@@ -45,8 +46,8 @@ part of a channel's element values: only library state.
 | 0x63 | WaitAlt | context, Alternative, enabled guards (bit i: guard-list index i), number of guards |
 | 0x64 | WaitBarrier | context, barrier |
 | 0x65 | WaitJoin | context, completion semaphore |
-| 0x6E | Resume | context, the wait's object (as the wait recorded it) |
-| 0x6F | ResumeTimeout | as Resume (an ALT wait ended by its timeout) |
+| 0x6E | Resume | context, the wait's object (as the wait recorded it); after an AltDeadline also the tick count after the wait and the deadline tick |
+| 0x6F | ResumeTimeout | context, Alternative, tick count after the wait, deadline tick (an ALT wait ended by its timeout) |
 
 Buffered channels: a capacity of at most 65535 when tracing (static_assert).
 OverwroteOldest replaces the oldest element in place, so the slot evicted
@@ -57,6 +58,17 @@ same address, and for guards added later); the API has no guard
 preconditions, so a select() that waits has every guard enabled. WaitChannel
 also records the side that waits for an ALT writer to be copied from
 (output guard, direction write).
+
+Ticks (osKernelGetTickCount(), modulo 2^32) are recorded only for ALT waits
+with a deadline: a round with an enabled timeout guard records AltDeadline
+(the tick count the remaining time was computed at, and the deadline tick:
+that count plus the timeout passed to the RTOS) just before its WaitAlt,
+and its Resume or ResumeTimeout carries the tick count after the wait and
+the deadline. Every other wait is recorded as before. Cost per wait with a
+deadline: AltDeadline (a 4-value record: 32 bytes in the recorder's
+buffer, 32 bytes in a Semihosting log) and a 4-value instead of a 2-value
+Resume (+16 bytes buffer, +8 bytes log), so +48 bytes in the buffer, +40
+bytes in the log, and one more osKernelGetTickCount() call.
 
 Wait events (Detail level, 0x60-0x65) are recorded before a call that can
 block: WaitChannel (rendezvous: the end is busy, or waiting for the
@@ -103,6 +115,10 @@ decode.py's output):
     channel between interrupts: stable points "awaiting environment", then
     the interrupt releases them (`check_stable_env.py`; needs a periodic
     interrupt from the platform, see the file).
+- `check_alt_deadlines.py`: the ALT deadlines of the suite's timeout tests
+  T20-T24 and of alt_offers.cpp's two Alternatives with a timeout guard
+  (time left, deadline per select(), ResumeTimeout at or after the
+  deadline, Resume before or at it, T23's zero timeouts never wait).
 - `tests/host/trace_decoder/test_conformance.py` (host, Python):
   tools/trace/conformance.py on synthetic event streams, including the
   "deadlock" classification (no target test deadlocks).
@@ -125,8 +141,9 @@ thread), else "thread 0x...". Each group has:
   (e.g. ST's FreeRTOS wrapper) there are none, and the JSON's otherData says
   so;
 - **waiting**: "waiting on <kind> <object>" from a Wait event to its Resume
-  (args: object, timeout); a thread still blocked when the log ends gets
-  "(no resume)";
+  (args: object, timeout; an ALT wait with a deadline also wait_tick,
+  deadline_tick, resume_tick); a thread still blocked when the log ends
+  gets "(no resume)";
 - **events**: CSP4CMSIS events as instants with their values (channel names
   resolved, guard index), a short "rendezvous <channel>" slice on the writer
   and on the reader, joined by a flow arrow (writer to reader), and the
@@ -163,6 +180,14 @@ tools/trace/conformance.py:
   library's count;
 - ALT offers: every enabled bit of a WaitAlt must resolve through the
   Alternative's AltGuard events to (channel, direction) or a timeout;
+- ALT deadlines: a WaitAlt with an enabled timeout guard follows an
+  AltDeadline (and no other WaitAlt does); the time left (deadline - tick)
+  is at least 1 and at most the shortest enabled timeout; all waits of one
+  select() have the same deadline (it is fixed when select() starts); every
+  ResumeTimeout is at or after the deadline tick; every Resume of such a
+  wait before it or at it (a flag in the tick before the deadline, resumed
+  in it: counted apart as "at"); no WaitAlt has a zero-tick timeout guard
+  enabled (it is ready at once, so that select() never waits);
 - stable points: a moment when every live CSP process (ProcessStart without
   ProcessEnd) is in an open wait and the RTOS's idle thread runs (its
   control block's symbol contains "idle", or `--idle NAME`). Its offers are
@@ -201,7 +226,7 @@ its Resume, occupancy within 0..capacity; buffered channels: one flow per get
 and no get without a source put, puts (+ elements buffered at the window
 start) = gets + overwritten + dropped + still buffered at the end, and the
 replayed depth equal to the library's element count at every put and get;
-library state: no ring-slot or ALT-offer error and (whole log) one stable
+library state: no ring-slot, ALT-offer or ALT-deadline error and (whole log) one stable
 slice per stable point.
 These counts come from the same log, so they cannot show an event the
 library never recorded. `--expect expected.json` adds the counts known from
@@ -248,7 +273,8 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
 - Tracing on: the same results everywhere. 361,700 to 362,100 CSP4CMSIS
   events per run (per run: 6,084 to 6,086 RendezvousDone, 7,160 to 7,162
   WaitChannel, ~25,290 WaitBufferedFull, ~40,390 WaitBufferedEmpty, 21,070
-  to 21,230 WaitAlt, 115 AltGuard, ~55,530 BufferedPut and BufferedGet,
+  to 21,570 WaitAlt, 115 AltGuard, 44 AltDeadline, ~55,530 BufferedPut and
+  BufferedGet,
   ~20,160 OverwroteOldest, 3 DroppedNew, 5 PutFromISR, 40 WaitBarrier,
   5 WaitJoin, 28 ResumeTimeout); RTOS thread events in the RTX5 and
   FreeRTOS 11.3 configurations (ST's FreeRTOS records none). Logs complete,
@@ -281,6 +307,15 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   CSP processes); ST's FreeRTOS (no switch events): 25, all "stability
   unconfirmed". No "deadlock" anywhere; that classification is tested on
   the host (tests/host/trace_decoder).
+- ALT deadlines, all 30 (decoder and tests/trace/check_alt_deadlines.py):
+  44 waits with a timeout guard, each after its AltDeadline, time left
+  1..the shortest timeout, one deadline per select(); 28 ResumeTimeout, all
+  at the deadline tick (0 ticks late); 16 Resume, all before the deadline.
+  T20: 5 selects each for timeouts 1, 3 and 10, time left 1, 3 and 10, all
+  by ResumeTimeout; T21: 15 selects, 6 the channel, 9 the timeout; T22: the
+  5-tick guard of three; T23: both zero-timeout Alternatives select without
+  waiting; T24: 10 waits (9 stale wakeups) with one deadline, then
+  ResumeTimeout.
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.
@@ -299,7 +334,7 @@ Cost (bytes, text = code + read-only data; Corstone-300, RTX5):
 | | GCC -O2 | GCC -O0 | Arm Compiler -O2 | Arm Compiler -O0 |
 |---|---|---|---|---|
 | library objects, off (= v3.1.0) | 3650 | 5830 | 3775 | 5913 |
-| library objects, on | 4934 (+1284) | 7136 (+1306) | 5333 (+1558) | 7167 (+1254) |
+| library objects, on | 5090 (+1440) | 7272 (+1442) | 5509 (+1734) | 7343 (+1430) |
 | Event Recorder object, code | 2394 | 3294 | 6970 | 3896 |
 | Event Recorder RAM (64 records) | 1192 | 1192 | 1192 | 1192 |
 
@@ -311,7 +346,9 @@ bytes per class), Alternative::traceGuards() (68 bytes at GCC -O2), 4 bytes
 of RAM per Alternative (the number of guards described), and one AltGuard
 record per guard, recorded once per Alternative object (32 bytes in the
 recorder's buffer). WaitAlt is a 4-word record (32 bytes in the buffer
-instead of 16). With tracing off the layout and code are unchanged.
+instead of 16). The deadline ticks (AltDeadline, 4-value Resume and
+ResumeTimeout) add 156 / 136 / 176 / 176 bytes. With tracing off the layout
+and code are unchanged.
 
 Library data/bss are unchanged (0/4). Channel templates compiled in
 application files grow as well (each traced put/get: two or three

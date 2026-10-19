@@ -27,6 +27,10 @@
 //                                   2 timeout (c delay in ticks), 3 other guard (c 0).
 //                                   Once per guard, before the Alternative's first
 //                                   select() (again after a guard was added)
+//   0x22  AltDeadline       Op      a context, b Alternative, c tick count the wait's
+//                                   time was computed at, d deadline tick (c + the
+//                                   timeout passed to the RTOS). Recorded just before
+//                                   WaitAlt when the round has an enabled timeout guard
 //   0x30  BufferedPut       Op      a context, b channel, c elements after << 16 | capacity,
 //                                   d ring slot written
 //   0x31  BufferedGet       Op      as BufferedPut, d ring slot read
@@ -49,9 +53,12 @@
 //   0x6E  Resume            Detail  a context, b the object of the wait (as recorded
 //                                   by the wait, WaitChannel's direction bit included)
 //   0x6F  ResumeTimeout     Detail  as Resume: the ALT wait ended by its timeout
+//                                   After an AltDeadline (ALT wait with a deadline),
+//                                   Resume and ResumeTimeout have four values:
+//                                   c tick count after the wait, d deadline tick
 //
 // No event records any part of a channel's element values: only library state
-// (threads, objects, counts, ring slots, guard sets).
+// (threads, objects, counts, ring slots, guard sets, tick counts).
 //
 // Context (a): the thread id (osThreadId_t) in thread mode while the kernel
 // runs; 0x80000000 | IPSR (the exception number) in handler mode; 0 in thread
@@ -78,6 +85,7 @@
 #define CSP4CMSIS_EVT_RENDEZVOUS_DONE    0x10U
 #define CSP4CMSIS_EVT_ALT_SELECTED       0x20U
 #define CSP4CMSIS_EVT_ALT_GUARD          0x21U
+#define CSP4CMSIS_EVT_ALT_DEADLINE       0x22U
 #define CSP4CMSIS_EVT_BUFFERED_PUT       0x30U
 #define CSP4CMSIS_EVT_BUFFERED_GET       0x31U
 #define CSP4CMSIS_EVT_PUT_FROM_ISR       0x32U
@@ -93,6 +101,8 @@
 #define CSP4CMSIS_EVT_RESUME             0x6EU
 #define CSP4CMSIS_EVT_RESUME_TIMEOUT     0x6FU
 
+// Ticks are osKernelGetTickCount() values (modulo 2^32).
+//
 // Values of the events above.
 #define CSP4CMSIS_TRACE_NO_SLOT          0xFFFFFFFFUL   // DroppedNew: no ring slot used
 #define CSP4CMSIS_TRACE_DIR_WRITE        1U             // WaitChannel: bit 0 of the channel value

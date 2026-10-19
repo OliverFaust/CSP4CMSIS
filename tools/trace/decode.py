@@ -78,7 +78,7 @@ ADDR_KEYS = ('channel', 'process', 'alt', 'barrier', 'join', 'object')
 
 # CSP4CMSIS message numbers (csp4cmsis_trace.h)
 PROCESS_START, PROCESS_END, PROCESS_NAME = 0x00, 0x01, 0x02
-RENDEZVOUS_DONE, ALT_SELECTED, ALT_GUARD = 0x10, 0x20, 0x21
+RENDEZVOUS_DONE, ALT_SELECTED, ALT_GUARD, ALT_DEADLINE = 0x10, 0x20, 0x21, 0x22
 BUFFERED_PUT, BUFFERED_GET, PUT_FROM_ISR, DROPPED_NEW, OVERWROTE_OLDEST = 0x30, 0x31, 0x32, 0x33, 0x34
 SPAWN_FAILED = 0x40
 WAIT_KIND = {0x60: 'channel', 0x61: 'channel (full)', 0x62: 'channel (empty)', 0x63: 'ALT',
@@ -226,7 +226,7 @@ class Names:
         tid = vals[0]
         if tid == 0 or tid & 0x80000000:
             return
-        if msg in WAIT_KIND or msg in (RESUME, RESUME_TIMEOUT):
+        if msg in WAIT_KIND or msg in (RESUME, RESUME_TIMEOUT, ALT_DEADLINE):
             return                        # the ALT's own waits come between read and AltSelected
         if msg == ALT_SELECTED:
             self.resolve(tid, True)
@@ -257,6 +257,7 @@ class Perfetto:
         self.pids = {}                    # thread id -> pid
         self.running = None               # (thread, start us)
         self.waits = {}                   # thread -> (start us, kind, object)
+        self.deadlines = {}               # thread -> (tick, deadline tick) of its next ALT wait
         self.fifo = collections.defaultdict(collections.deque)   # channel address -> puts not yet taken
         self.capacity = {}                # channel name -> capacity
         self.carried_in = {}              # channel name -> elements at the window start
@@ -326,6 +327,9 @@ class Perfetto:
         handler = vals is not None and (a & 0x80000000) != 0
         if msg == ALT_GUARD:
             return                        # described in the ALT's WaitAlt slices (args)
+        if msg == ALT_DEADLINE:
+            self.deadlines[a] = (vals[2], vals[3])
+            return
         if msg in WAIT_KIND:
             kind = WAIT_KIND[msg]
             if msg == WAIT_CHANNEL:
@@ -341,8 +345,12 @@ class Perfetto:
             if obj != vals[1]:
                 self.stats['resume_other_object'] += 1
             label = self.syms.short(obj & ~1) or '0x%08x' % (obj & ~1)
-            if self.slice(a, self.WAIT, 'waiting on %s %s' % (kind, label), start, us,
-                          {'object': label, 'timeout': msg == RESUME_TIMEOUT}):
+            args = {'object': label, 'timeout': msg == RESUME_TIMEOUT}
+            if len(vals) == 4:            # a wait with a deadline
+                args.update({'wait_tick': self.deadlines.get(a, (None,))[0], 'deadline_tick': vals[3],
+                             'resume_tick': vals[2]})
+            self.deadlines.pop(a, None)
+            if self.slice(a, self.WAIT, 'waiting on %s %s' % (kind, label), start, us, args):
                 self.stats['wait_slices'] += 1
                 if msg == RESUME_TIMEOUT:
                     self.stats['timeout_slices'] += 1
@@ -688,6 +696,8 @@ def main():
                 value = re.sub(r'\bcontext=[^,]*', 'context=' + thread, value)
                 if msg == WAIT_CHANNEL:           # eventlist 1.2.0 prints this %t as empty
                     value = re.sub(r'\bdir=[^,]*', 'dir=' + ('write' if vals[1] & 1 else 'read'), value)
+                elif msg in (RESUME, RESUME_TIMEOUT) and len(vals) == 4:
+                    value = re.sub(r', tick=.*$', '', value) + ', tick=%d, deadline=%d' % (vals[2], vals[3])
         else:
             m = re.search(r'\b(?:%s)=(0x[0-9A-Fa-f]+)' % '|'.join(THREAD_KEYS), value)
             if m:
@@ -777,6 +787,12 @@ def main():
             f.write('ALT offers: %s; %d waits, %d enabled guards, %d unresolved, %d guards described\n'
                     % ('PASS' if not a.get('errors') and not a.get('unresolved_bits') else 'FAIL', a.get('waits', 0),
                        a.get('enabled_bits', 0), a.get('unresolved_bits', 0), a.get('guards_described', 0)))
+            d = results['deadlines']
+            f.write('ALT deadlines: %s; %d timeout waits (%d AltDeadline), %d ResumeTimeout (at most %d ticks after '
+                    'the deadline), %d Resume (%d before the deadline, %d at it, %d after)\n'
+                    % ('PASS' if not d.get('errors') else 'FAIL %d' % d['errors'], d.get('timeout_waits', 0),
+                       d.get('deadlines', 0), d.get('resume_timeout', 0), d.get('timeout_ticks_late_max', 0),
+                       d.get('resume', 0), d.get('resume_before', 0), d.get('resume_at', 0), d.get('resume_after', 0)))
             f.write('stable points: %d %s%s\n' % (results['stable_points'], json.dumps(results['stable_classes']),
                                                  '; ' + results['stable_note'] if results['stable_note'] else ''))
 

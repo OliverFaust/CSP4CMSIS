@@ -9,6 +9,13 @@ the RTOS's switch-ins (Analyser.switch_in), it checks and derives:
   replaces, DroppedNew uses no slot;
 - ALT offers: every enabled bit of a WaitAlt resolves through the
   Alternative's AltGuard events to (channel, direction) or a timeout;
+- ALT deadlines: a WaitAlt with an enabled timeout guard follows an
+  AltDeadline (and no other WaitAlt does); the time left is at least 1 tick
+  and at most the shortest enabled timeout; one select() keeps its deadline
+  in every round; every ResumeTimeout comes at or after the deadline, every
+  Resume of such a wait before it ("at" the deadline is counted apart:
+  the thread can be woken in the tick before and resume in it); a WaitAlt
+  never has a zero-tick timeout guard enabled (it is ready at once);
 - stable points: moments when every live CSP process is in an open wait and
   the idle thread runs, with the offer set of the open waits and a
   classification: "awaiting environment" (an open wait that only a timeout
@@ -23,7 +30,7 @@ import collections
 
 # CSP4CMSIS message numbers (csp4cmsis_trace.h)
 PROCESS_START, PROCESS_END = 0x00, 0x01
-RENDEZVOUS_DONE, ALT_SELECTED, ALT_GUARD = 0x10, 0x20, 0x21
+RENDEZVOUS_DONE, ALT_SELECTED, ALT_GUARD, ALT_DEADLINE = 0x10, 0x20, 0x21, 0x22
 BUFFERED_PUT, BUFFERED_GET, PUT_FROM_ISR, DROPPED_NEW, OVERWROTE_OLDEST = 0x30, 0x31, 0x32, 0x33, 0x34
 WAIT_CHANNEL, WAIT_FULL, WAIT_EMPTY, WAIT_ALT, WAIT_BARRIER, WAIT_JOIN = 0x60, 0x61, 0x62, 0x63, 0x64, 0x65
 RESUME, RESUME_TIMEOUT = 0x6E, 0x6F
@@ -65,6 +72,11 @@ class Analyser:
         self.alt = collections.Counter()
         self.alt_errors = []
         self.masks = collections.Counter()   # (Alternative, its guards, mask, n) -> waits
+        self.dl = collections.Counter()
+        self.dl_errors = []
+        self.dl_pending = {}              # thread -> (Alternative, now, deadline): AltDeadline before its WaitAlt
+        self.dl_wait = {}                 # thread -> (Alternative, deadline): open WaitAlt with a deadline
+        self.dl_select = {}               # thread -> (Alternative, deadline) of the current select()
         self.live = set()                 # threads of running processes
         self.waits = {}                   # thread -> (us, kind, object, offers)
         self.running = None
@@ -83,6 +95,12 @@ class Analyser:
                 self.alt_guards[alt] = {}     # a new Alternative (possibly at a reused address)
             self.alt_guards[alt][idx] = (GUARD_KIND.get(kind, 'other'), target)
             self.alt['guards_described'] += 1
+        elif msg == ALT_DEADLINE:
+            self.alt_deadline(us, vals)
+            return
+        elif msg == ALT_SELECTED:
+            self.dl_select.pop(vals[0], None)
+            return
         elif msg == PROCESS_START:
             self.live.add(vals[0])
         elif msg == PROCESS_END:
@@ -90,8 +108,11 @@ class Analyser:
             self.waits.pop(vals[0], None)
         elif WAIT_CHANNEL <= msg <= WAIT_JOIN:
             self.waits[vals[0]] = (us, msg, vals[1], self.offers(msg, vals))
+            if msg == WAIT_ALT:
+                self.wait_deadline(us, vals)
         elif msg in (RESUME, RESUME_TIMEOUT):
             self.waits.pop(vals[0], None)
+            self.resume_deadline(us, msg, vals)
         else:
             return
         self.update(us)
@@ -228,6 +249,82 @@ class Analyser:
         if len(self.alt_errors) < MAX_ERRORS:
             self.alt_errors.append(text)
 
+    # ------------------------------------------------------------- deadlines
+    def dl_error(self, text):
+        self.dl['errors'] += 1
+        if len(self.dl_errors) < MAX_ERRORS:
+            self.dl_errors.append(text)
+
+    @staticmethod
+    def tick_diff(a, b):
+        """a - b of two tick counts (modulo 2^32), as a signed number."""
+        d = (a - b) & 0xFFFFFFFF
+        return d - 0x100000000 if d & 0x80000000 else d
+
+    def alt_deadline(self, us, vals):
+        ctx, alt, now, deadline = vals
+        self.dl['deadlines'] += 1
+        if ctx in self.dl_pending:
+            self.dl_error('%s: AltDeadline at %.3f us follows another without a WaitAlt' % (self.name(alt), us))
+        self.dl_pending[ctx] = (alt, now, deadline)
+
+    def wait_deadline(self, us, vals):
+        ctx, alt, mask = vals[0], vals[1], vals[2]
+        guards = self.alt_guards.get(alt, {})
+        delays = [guards[i][1] for i in guards if mask >> i & 1 and guards[i][0] == 'timeout']
+        pend = self.dl_pending.pop(ctx, None)
+        label = self.name(alt)
+        if 0 in delays:
+            self.dl_error('%s: WaitAlt at %.3f us with a zero-tick timeout guard enabled' % (label, us))
+        if not delays:
+            if pend is not None:
+                self.dl_error('%s: AltDeadline before a WaitAlt at %.3f us without a timeout guard' % (label, us))
+            return
+        self.dl['timeout_waits'] += 1
+        if pend is None or pend[0] != alt:
+            self.dl_error('%s: WaitAlt at %.3f us with a timeout guard but no AltDeadline' % (label, us))
+            return
+        _, now, deadline = pend
+        left = self.tick_diff(deadline, now)
+        if not 1 <= left <= min(delays):
+            self.dl_error('%s: WaitAlt at %.3f us waits %d ticks, shortest timeout %d' % (label, us, left, min(delays)))
+        sel = self.dl_select.get(ctx)
+        if sel is not None and sel[0] == alt and sel[1] != deadline:
+            self.dl_error('%s: deadline moved from %d to %d within one select() (%.3f us)' % (label, sel[1], deadline, us))
+        self.dl_select[ctx] = (alt, deadline)
+        self.dl_wait[ctx] = (alt, deadline)
+
+    def resume_deadline(self, us, msg, vals):
+        ctx = vals[0]
+        w = self.dl_wait.pop(ctx, None)
+        if w is None:
+            if msg == RESUME_TIMEOUT:
+                self.dl_error('ResumeTimeout at %.3f us without a deadline wait' % us)
+            elif len(vals) == 4:
+                self.dl_error('Resume at %.3f us with ticks after a wait without a deadline' % us)
+            return
+        alt, deadline = w
+        label = self.name(alt)
+        if len(vals) != 4 or vals[1] != alt or vals[3] != deadline:
+            self.dl_error('%s: resume at %.3f us does not carry its wait\'s tick and deadline' % (label, us))
+            return
+        d = self.tick_diff(vals[2], deadline)
+        if msg == RESUME_TIMEOUT:
+            self.dl['resume_timeout'] += 1
+            if d < 0:
+                self.dl_error('%s: ResumeTimeout at %.3f us at tick %d, %d before its deadline' % (label, us, vals[2], -d))
+            else:
+                self.dl['timeout_ticks_late_max'] = max(self.dl['timeout_ticks_late_max'], d)
+        else:
+            self.dl['resume'] += 1
+            if d < 0:
+                self.dl['resume_before'] += 1
+            elif d == 0:
+                self.dl['resume_at'] += 1
+            else:
+                self.dl['resume_after'] += 1
+                self.dl_error('%s: Resume at %.3f us at tick %d, %d after its deadline' % (label, us, vals[2], d))
+
     # ---------------------------------------------------------- stable points
     def condition(self):
         if not self.live or any(t not in self.waits for t in self.live):
@@ -308,9 +405,11 @@ class Analyser:
             'alt': dict(self.alt), 'alt_errors': self.alt_errors,
             'alt_masks': [{'alt': a, 'guard_list': g, 'mask': m, 'guards': n, 'waits': k}
                           for (a, g, m, n), k in sorted(self.masks.items())],
+            'deadlines': dict(self.dl), 'deadline_errors': self.dl_errors,
             'stable_points': len(self.stable),
             'stable_classes': dict(collections.Counter(p['classification'] for p in self.stable)),
         }
 
     def ok(self):
-        return not self.ring['errors'] and not self.alt['errors'] and not self.alt['unresolved_bits']
+        return (not self.ring['errors'] and not self.alt['errors'] and not self.alt['unresolved_bits']
+                and not self.dl['errors'])

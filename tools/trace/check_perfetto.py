@@ -20,7 +20,8 @@ and compares with the counts decode.py wrote into its otherData:
   the replayed depth equals the library's element count after every put and
   get.
 
-- library state: decode.py's ring-slot and ALT-offer checks found no error,
+- library state: decode.py's ring-slot, ALT-offer and ALT-deadline checks
+  found no error,
   and (whole log) one "stable: ..." slice per stable point.
 
 These compare the trace with counts decode.py took from the same log, so an
@@ -148,11 +149,13 @@ def check(path, exp=None):
         st = meta['library_state']
         n = rows(tp, "SELECT COUNT(*) AS n FROM slice WHERE name LIKE 'stable: %'")[0].n
         whole = meta['window_us'] == [None, None]
+        dl = st.get('deadlines', {})
         good = (not st['ring'].get('errors') and not st['alt'].get('errors') and not st['alt'].get('unresolved_bits')
-                and (n == st['stable_points'] or not whole))
-        report('state', good, 'ring-slot errors %d, ALT-offer errors %d, unresolved guard bits %d; '
+                and not dl.get('errors') and (n == st['stable_points'] or not whole))
+        report('state', good, 'ring-slot errors %d, ALT-offer errors %d, unresolved guard bits %d, deadline errors %d; '
                '%d stable slices for %d stable points %s' % (
                    st['ring'].get('errors', 0), st['alt'].get('errors', 0), st['alt'].get('unresolved_bits', 0),
+                   dl.get('errors', 0),
                    n, st['stable_points'], json.dumps(st['stable_classes'])))
         ok &= good
     if exp:

@@ -233,5 +233,83 @@ class AltOffers(unittest.TestCase):
         self.assertEqual(an.alt['errors'], 0)
 
 
+class Deadlines(unittest.TestCase):
+    def alt(self, *delays):
+        """An analyser with ALT: guard 0 reads a, then one timeout guard per delay."""
+        an = analyser()
+        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
+        for i, d in enumerate(delays):
+            an.csp(0, C.ALT_GUARD, (ALT, 1 + i, d, 2))
+        return an
+
+    def wait(self, an, us, now, deadline, n=2):
+        an.csp(us, C.ALT_DEADLINE, (P1, ALT, now, deadline))
+        an.csp(us, C.WAIT_ALT, (P1, ALT, (1 << n) - 1, n))
+
+    def test_timeout_at_and_after_deadline(self):
+        an = self.alt(5)
+        self.wait(an, 1, 100, 105)
+        an.csp(2, C.RESUME_TIMEOUT, (P1, ALT, 105, 105))
+        an.csp(3, C.ALT_SELECTED, (P1, 1))
+        self.wait(an, 4, 200, 205)
+        an.csp(5, C.RESUME_TIMEOUT, (P1, ALT, 207, 205))
+        self.assertEqual((an.dl['errors'], an.dl['resume_timeout'], an.dl['timeout_ticks_late_max']), (0, 2, 2))
+
+    def test_timeout_before_deadline(self):
+        an = self.alt(5)
+        self.wait(an, 1, 100, 105)
+        an.csp(2, C.RESUME_TIMEOUT, (P1, ALT, 104, 105))
+        self.assertEqual(an.dl['errors'], 1)
+
+    def test_resume_before_at_after(self):
+        an = self.alt(5)
+        for tick in (103, 105, 106):
+            self.wait(an, 1, 100, 105)
+            an.csp(2, C.RESUME, (P1, ALT, tick, 105))
+        self.assertEqual((an.dl['resume_before'], an.dl['resume_at'], an.dl['resume_after'], an.dl['errors']),
+                         (1, 1, 1, 1))
+
+    def test_tick_wrap(self):
+        an = self.alt(5)
+        self.wait(an, 1, 0xFFFFFFFE, 3)
+        an.csp(2, C.RESUME_TIMEOUT, (P1, ALT, 4, 3))
+        self.assertEqual(an.dl['errors'], 0)
+
+    def test_missing_deadline(self):
+        an = self.alt(5)
+        an.csp(1, C.WAIT_ALT, (P1, ALT, 0b11, 2))
+        self.assertEqual(an.dl['errors'], 1)
+
+    def test_deadline_without_timeout_guard(self):
+        an = self.alt(5)
+        self.wait(an, 1, 100, 105, n=1)        # only guard 0 (the channel) enabled
+        self.assertEqual(an.dl['errors'], 1)
+
+    def test_time_left_beyond_shortest_timeout(self):
+        an = self.alt(9, 3)
+        self.wait(an, 1, 100, 104, n=3)        # 4 ticks left, shortest timeout 3
+        self.assertEqual(an.dl['errors'], 1)
+
+    def test_deadline_moves_within_select(self):
+        an = self.alt(5)
+        self.wait(an, 1, 100, 105)
+        an.csp(2, C.RESUME, (P1, ALT, 101, 105))   # stale wakeup: a new round
+        self.wait(an, 3, 101, 106)
+        self.assertEqual(an.dl['errors'], 1)
+
+    def test_zero_timeout_never_waits(self):
+        an = self.alt(0)
+        self.wait(an, 1, 100, 101)
+        self.assertGreaterEqual(an.dl['errors'], 1)
+
+    def test_plain_wait_has_no_ticks(self):
+        an = analyser()
+        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
+        an.csp(1, C.WAIT_ALT, (P1, ALT, 0b1, 1))
+        an.csp(2, C.RESUME, (P1, ALT))
+        an.csp(3, C.RESUME_TIMEOUT, (P1, ALT))
+        self.assertEqual(an.dl['errors'], 1)        # a ResumeTimeout without a deadline
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -75,9 +75,25 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
             bool wait;
             { uint32_t s = csp_enter_critical(); wait = (state_ == ENABLING); if (wait) state_ = WAITING; csp_exit_critical(s); }
             if (wait && !expired) {
+#if defined(CSP4CMSIS_TRACE)
+                // A wait with a deadline: AltDeadline before it (tick the
+                // remaining time was computed at, deadline tick), and the
+                // tick at its Resume/ResumeTimeout.
+                const bool trace_dl = (wait_limit_ != NO_LIMIT);
+                const uint32_t trace_deadline = start_tick_ + wait_limit_;
+                if (trace_dl)
+                    CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_ALT_DEADLINE, CSP4CMSIS_TRACE_SELF(), TRACE_ALT,
+                                           trace_deadline - timeout, trace_deadline);
+#endif
                 CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_WAIT_ALT, CSP4CMSIS_TRACE_SELF(), TRACE_ALT,
                                        traceEnabledMask(order, enabled), amount);
                 uint32_t r = osThreadFlagsWait(wait_mask, osFlagsWaitAny, timeout);
+#if defined(CSP4CMSIS_TRACE)
+                if (trace_dl)
+                    CSP4CMSIS_TRACE_EVENT4(r == (uint32_t)osFlagsErrorTimeout ? CSP4CMSIS_EVT_RESUME_TIMEOUT : CSP4CMSIS_EVT_RESUME,
+                                           CSP4CMSIS_TRACE_SELF(), TRACE_ALT, osKernelGetTickCount(), trace_deadline);
+                else
+#endif
                 CSP4CMSIS_TRACE_EVENT(r == (uint32_t)osFlagsErrorTimeout ? CSP4CMSIS_EVT_RESUME_TIMEOUT : CSP4CMSIS_EVT_RESUME,
                                       CSP4CMSIS_TRACE_SELF(), TRACE_ALT);
                 if ((r & osFlagsError) != 0U && r != (uint32_t)osFlagsErrorTimeout) {
