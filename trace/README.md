@@ -31,10 +31,10 @@ part of a channel's element values: only library state.
 | 0x01 | ProcessEnd | context, process |
 | 0x02 | ProcessName | data: the process's name() |
 | 0x10 | RendezvousDone | writer thread, reader thread, channel, 1 if the reader recorded it |
-| 0x20 | AltSelected | context, guard-list index |
-| 0x21 | AltGuard | Alternative, guard-list index, target, kind (0 input, 1 output: target the channel; 2 timeout: target the delay in ticks; 3 other) |
+| 0x20 | AltSelected | context, Alternative, guard-list index, 0 |
+| 0x21 | AltGuard | context, Alternative, target, guard-list index << 8 \| kind (0 input, 1 output: target the channel; 2 timeout: target the delay in ticks; 3 other) |
 | 0x22 | AltDeadline | context, Alternative, tick count the wait's time was computed at, deadline tick (only before a WaitAlt with an enabled timeout guard) |
-| 0x30 | BufferedPut | context, channel, elements after << 16 \| capacity, ring slot written |
+| 0x30 | BufferedPut | context, channel, elements after << 16 \| policy << 14 \| capacity (policy: 0 Block, 1 KeepNewest, 2 KeepOldest), ring slot written |
 | 0x31 | BufferedGet | as BufferedPut, ring slot read |
 | 0x32 | PutFromISR | as BufferedPut (handler mode) |
 | 0x33 | DroppedNew | as BufferedPut, 0xFFFFFFFF (no slot) |
@@ -49,7 +49,13 @@ part of a channel's element values: only library state.
 | 0x6E | Resume | context, the wait's object (as the wait recorded it); after an AltDeadline also the tick count after the wait and the deadline tick |
 | 0x6F | ResumeTimeout | context, Alternative, tick count after the wait, deadline tick (an ALT wait ended by its timeout) |
 
-Buffered channels: a capacity of at most 65535 when tracing (static_assert).
+Buffered channels: a capacity of at most 16383 when tracing (static_assert:
+14 bits next to the 2-bit policy). AltSelected and AltGuard name the
+Alternative object and the thread, so every select() is attributed from the
+trace itself (no RTOS switch events needed). Cost: AltSelected is a 4-value
+record (32 bytes in the recorder's buffer instead of 16, +8 bytes in a
+Semihosting log, per select()); AltGuard and the buffered events keep their
+size.
 OverwroteOldest replaces the oldest element in place, so the slot evicted
 and the slot written are the same slot (both are recorded). AltGuard is
 recorded once per guard, by the thread that calls the Alternative's first

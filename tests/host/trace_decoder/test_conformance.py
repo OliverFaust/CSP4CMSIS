@@ -109,8 +109,8 @@ class StablePoints(unittest.TestCase):
     def test_awaiting_environment_timeout(self):
         an = analyser()
         start(an, P1)
-        an.csp(1, C.ALT_GUARD, (ALT, 0, A, 0))
-        an.csp(1, C.ALT_GUARD, (ALT, 1, 5, 2))
+        an.csp(1, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
+        an.csp(1, C.ALT_GUARD, (P1, ALT, 5, (1) << 8 | 2))
         an.csp(2, C.WAIT_ALT, (P1, ALT, 0x3, 2))
         an.switch_in(3, IDLE)
         an.finish(9)
@@ -211,24 +211,24 @@ class RingSlots(unittest.TestCase):
 class AltOffers(unittest.TestCase):
     def test_mask_resolves_in_guard_list_order(self):
         an = analyser()
-        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
-        an.csp(0, C.ALT_GUARD, (ALT, 1, B, 1))
-        an.csp(0, C.ALT_GUARD, (ALT, 2, 7, 2))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, B, (1) << 8 | 1))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, 7, (2) << 8 | 2))
         self.assertEqual(an.offers(C.WAIT_ALT, (P1, ALT, 0b101, 3)), [('read', A), ('timeout', 7)])
         self.assertEqual(an.alt['unresolved_bits'], 0)
 
     def test_unresolved_bit(self):
         an = analyser()
-        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
         an.offers(C.WAIT_ALT, (P1, ALT, 0b11, 2))
         self.assertEqual(an.alt['unresolved_bits'], 1)
         self.assertFalse(an.ok())
 
     def test_new_alternative_at_same_address(self):
         an = analyser()
-        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
-        an.csp(0, C.ALT_GUARD, (ALT, 1, B, 0))
-        an.csp(5, C.ALT_GUARD, (ALT, 0, B, 1))     # a new Alternative, one guard
+        an.csp(0, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, B, (1) << 8 | 0))
+        an.csp(5, C.ALT_GUARD, (P1, ALT, B, (0) << 8 | 1))     # a new Alternative, one guard
         self.assertEqual(an.offers(C.WAIT_ALT, (P1, ALT, 0b1, 1)), [('write', B)])
         self.assertEqual(an.alt['errors'], 0)
 
@@ -237,9 +237,9 @@ class Deadlines(unittest.TestCase):
     def alt(self, *delays):
         """An analyser with ALT: guard 0 reads a, then one timeout guard per delay."""
         an = analyser()
-        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
         for i, d in enumerate(delays):
-            an.csp(0, C.ALT_GUARD, (ALT, 1 + i, d, 2))
+            an.csp(0, C.ALT_GUARD, (P1, ALT, d, (1 + i) << 8 | 2))
         return an
 
     def wait(self, an, us, now, deadline, n=2):
@@ -250,7 +250,7 @@ class Deadlines(unittest.TestCase):
         an = self.alt(5)
         self.wait(an, 1, 100, 105)
         an.csp(2, C.RESUME_TIMEOUT, (P1, ALT, 105, 105))
-        an.csp(3, C.ALT_SELECTED, (P1, 1))
+        an.csp(3, C.ALT_SELECTED, (P1, ALT, 1, 0))
         self.wait(an, 4, 200, 205)
         an.csp(5, C.RESUME_TIMEOUT, (P1, ALT, 207, 205))
         self.assertEqual((an.dl['errors'], an.dl['resume_timeout'], an.dl['timeout_ticks_late_max']), (0, 2, 2))
@@ -304,7 +304,7 @@ class Deadlines(unittest.TestCase):
 
     def test_plain_wait_has_no_ticks(self):
         an = analyser()
-        an.csp(0, C.ALT_GUARD, (ALT, 0, A, 0))
+        an.csp(0, C.ALT_GUARD, (P1, ALT, A, (0) << 8 | 0))
         an.csp(1, C.WAIT_ALT, (P1, ALT, 0b1, 1))
         an.csp(2, C.RESUME, (P1, ALT))
         an.csp(3, C.RESUME_TIMEOUT, (P1, ALT))

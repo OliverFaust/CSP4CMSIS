@@ -134,7 +134,7 @@ unsigned int AltScheduler::select(Guard** guardArray, size_t amount, size_t offs
         // took the item or space (it made progress): new round.
         if (!guardArray[selected]->activate()) continue;
         { uint32_t s = csp_enter_critical(); state_ = IDLE; csp_exit_critical(s); }
-        CSP4CMSIS_TRACE_EVENT(CSP4CMSIS_EVT_ALT_SELECTED, owner, selected);
+        CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_ALT_SELECTED, owner, TRACE_ALT, selected, 0U);
         return (unsigned int)selected;
     }
 }
@@ -159,7 +159,8 @@ void Alternative::traceGuards() {
     for (; trace_described_ < num_guards; ++trace_described_) {
         uint32_t object = 0;
         uint32_t kind = internal_guards[trace_described_]->traceDescribe(object);
-        CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_ALT_GUARD, this, trace_described_, object, kind);
+        CSP4CMSIS_TRACE_EVENT4(CSP4CMSIS_EVT_ALT_GUARD, CSP4CMSIS_TRACE_SELF(), this, object,
+                               ((uint32_t)trace_described_ << 8) | kind);
     }
 }
 #endif

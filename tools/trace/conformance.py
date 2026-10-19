@@ -39,9 +39,23 @@ GUARD_KIND = {0: 'input', 1: 'output', 2: 'timeout', 3: 'other'}
 MAX_ERRORS = 20
 
 
+POLICY = {0: 'Block', 1: 'KeepNewest', 2: 'KeepOldest'}
+
+
 def unpack_count(c):
-    """(elements after, capacity) of a buffered event's third value."""
-    return c >> 16, c & 0xFFFF
+    """(elements after, capacity) of a buffered event's third value
+    (count << 16 | policy << 14 | capacity)."""
+    return c >> 16, c & 0x3FFF
+
+
+def unpack_policy(c):
+    """The channel's policy from a buffered event's third value."""
+    return POLICY.get((c >> 14) & 3, 'unknown')
+
+
+def unpack_guard(d):
+    """(guard-list index, kind) of an AltGuard's fourth value (index << 8 | kind)."""
+    return d >> 8, GUARD_KIND.get(d & 0xFF, 'other')
 
 
 class Ring:
@@ -52,6 +66,7 @@ class Ring:
         self.writer = {}                  # slot -> put id
         self.count = 0
         self.capacity = None
+        self.policy = None
         self.isr_puts = 0
 
 
@@ -80,6 +95,7 @@ class Analyser:
         self.live = set()                 # threads of running processes
         self.waits = {}                   # thread -> (us, kind, object, offers)
         self.running = None
+        self.thread_name = None           # tid -> process name now (thread ids are reused: named when a point opens)
         self.stable = []                  # finished stable points
         self.current = None               # open stable point
 
@@ -90,10 +106,11 @@ class Analyser:
         if msg in (BUFFERED_PUT, PUT_FROM_ISR, BUFFERED_GET, DROPPED_NEW, OVERWROTE_OLDEST):
             self.buffered(us, msg, vals)
         elif msg == ALT_GUARD:
-            alt, idx, target, kind = vals
+            _, alt, target, packed = vals
+            idx, kind = unpack_guard(packed)
             if idx == 0 or alt not in self.alt_guards:
                 self.alt_guards[alt] = {}     # a new Alternative (possibly at a reused address)
-            self.alt_guards[alt][idx] = (GUARD_KIND.get(kind, 'other'), target)
+            self.alt_guards[alt][idx] = (kind, target)
             self.alt['guards_described'] += 1
         elif msg == ALT_DEADLINE:
             self.alt_deadline(us, vals)
@@ -135,6 +152,7 @@ class Analyser:
         ctx, chan, packed, slot = vals
         r = self.rings[chan]
         r.count, r.capacity = unpack_count(packed)
+        r.policy = unpack_policy(packed)
         label = self.name(chan)
         if msg in (BUFFERED_PUT, PUT_FROM_ISR):
             self.ring['puts'] += 1
@@ -371,7 +389,8 @@ class Analyser:
         by_chan = collections.defaultdict(lambda: collections.defaultdict(set))
         for tid, (_, _, _, offs) in sorted(waits.items()):
             for o in offs:
-                offers.append({'thread': tid, 'offer': self.offer_text(o), 'kind': o[0]})
+                offers.append({'thread': tid, 'offer': self.offer_text(o), 'kind': o[0],
+                               'name': self.thread_name(tid) if self.thread_name else None})
                 if o[0] in ('read', 'write'):
                     by_chan[o[1]][o[0]].add(tid)
                     if o[0] == 'read' and o[1] in self.isr_fed:
@@ -401,7 +420,8 @@ class Analyser:
     def results(self):
         return {
             'ring': dict(self.ring), 'ring_errors': self.ring_errors,
-            'ring_channels': {self.name(c): {'capacity': r.capacity, 'isr_puts': r.isr_puts} for c, r in self.rings.items()},
+            'ring_channels': {self.name(c): {'capacity': r.capacity, 'policy': r.policy, 'isr_puts': r.isr_puts}
+                              for c, r in self.rings.items()},
             'alt': dict(self.alt), 'alt_errors': self.alt_errors,
             'alt_masks': [{'alt': a, 'guard_list': g, 'mask': m, 'guards': n, 'waits': k}
                           for (a, g, m, n), k in sorted(self.masks.items())],

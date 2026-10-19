@@ -21,18 +21,21 @@
 //   0x02  ProcessName       Op      (data record: the process's name(), after ProcessStart)
 //   0x10  RendezvousDone    Op      a writer thread, b reader thread, c channel,
 //                                   d 1 if the reader recorded it (arrived second), else 0
-//   0x20  AltSelected       Op      a context (its thread), b guard-list index
-//   0x21  AltGuard          Op      a Alternative, b guard-list index, c object, d kind:
-//                                   0 input (c channel), 1 output (c channel),
-//                                   2 timeout (c delay in ticks), 3 other guard (c 0).
-//                                   Once per guard, before the Alternative's first
-//                                   select() (again after a guard was added)
+//   0x20  AltSelected       Op      a context (its thread), b Alternative, c guard-list
+//                                   index, d 0
+//   0x21  AltGuard          Op      a context, b Alternative, c object, d guard-list
+//                                   index << 8 | kind: 0 input (c channel), 1 output
+//                                   (c channel), 2 timeout (c delay in ticks), 3 other
+//                                   guard (c 0). Once per guard, before the
+//                                   Alternative's first select() (again after a guard
+//                                   was added)
 //   0x22  AltDeadline       Op      a context, b Alternative, c tick count the wait's
 //                                   time was computed at, d deadline tick (c + the
 //                                   timeout passed to the RTOS). Recorded just before
 //                                   WaitAlt when the round has an enabled timeout guard
-//   0x30  BufferedPut       Op      a context, b channel, c elements after << 16 | capacity,
-//                                   d ring slot written
+//   0x30  BufferedPut       Op      a context, b channel, c elements after << 16 |
+//                                   policy << 14 | capacity (policy: 0 Block,
+//                                   1 KeepNewest, 2 KeepOldest), d ring slot written
 //   0x31  BufferedGet       Op      as BufferedPut, d ring slot read
 //   0x32  PutFromISR        Op      as BufferedPut (a put in handler mode)
 //   0x33  DroppedNew        Op      as BufferedPut (KeepOldest, full: put rejected),
@@ -110,6 +113,8 @@
 #define CSP4CMSIS_TRACE_GUARD_OUTPUT     1U
 #define CSP4CMSIS_TRACE_GUARD_TIMEOUT    2U
 #define CSP4CMSIS_TRACE_GUARD_OTHER      3U
+#define CSP4CMSIS_TRACE_POLICY_SHIFT     14U            // buffered events: c = count << 16 | policy << 14 | capacity
+#define CSP4CMSIS_TRACE_CAPACITY_MASK    0x3FFFU
 
 #if defined(CSP4CMSIS_TRACE)
   #include <stdint.h>

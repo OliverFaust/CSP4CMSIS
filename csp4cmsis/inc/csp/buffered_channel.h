@@ -111,8 +111,10 @@ namespace csp::internal {
 
         static constexpr bool kBlock = (P == csp::BufferPolicy::Block);
 #if defined(CSP4CMSIS_TRACE)
-        // Trace values: elements after << 16 | capacity, ring slots in 16 bits.
-        static_assert(SIZE <= 0xFFFFU, "BufferedChannel: tracing records the capacity in 16 bits (SIZE <= 65535)");
+        // Trace values: elements after << 16 | policy << 14 | capacity, ring
+        // slots in 16 bits.
+        static_assert(SIZE <= CSP4CMSIS_TRACE_CAPACITY_MASK,
+                      "BufferedChannel: tracing records the capacity in 14 bits (SIZE <= 16383)");
 #endif
 
         friend class BufferedInputGuard<T, SIZE, P>;
@@ -134,12 +136,14 @@ namespace csp::internal {
         unsigned char* at(size_t i) { return storage_ + (i % SIZE) * sizeof(T); }
 
         // Trace (csp4cmsis_trace.h), inside the critical section of the
-        // operation, after it: c = elements after << 16 | capacity; d = the
+        // operation, after it: c = elements after << 16 | policy << 14 |
+        // capacity (policy: 0 Block, 1 KeepNewest, 2 KeepOldest); d = the
         // ring slot used. Slot arithmetic only in the macro arguments, which a
         // build without CSP4CMSIS_TRACE never evaluates.
 #define CSP4CMSIS_BUF_TRACE(msg, slot) \
         CSP4CMSIS_TRACE_EVENT4((msg), CSP4CMSIS_TRACE_SELF(), this, \
-                               ((uint32_t)count_ << 16) | (uint32_t)SIZE, (slot))
+                               ((uint32_t)count_ << 16) | ((uint32_t)P << CSP4CMSIS_TRACE_POLICY_SHIFT) | \
+                               (uint32_t)SIZE, (slot))
 
         // Inside a critical section: append / remove one element.
         void pushLocked(const T* src) {

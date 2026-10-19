@@ -215,7 +215,7 @@ class Names:
         if vals is None:
             return
         if msg == ALT_GUARD:
-            return                        # a: the Alternative, not a context
+            return                        # describes the Alternative's guards: no role
         if msg == RENDEZVOUS_DONE:
             writer, reader, chan = vals[0], vals[1], vals[2]
             self.resolve(writer, False)
@@ -571,9 +571,9 @@ def write_stable(path, points, names):
             for p in points:
                 w.writerow(['%.3f' % p['start_us'], '%.3f' % p['end_us'] + (' (end of log)' if p['open_at_end'] else ''),
                             p['classification'], p['reason'],
-                            '; '.join('%s: %s' % (names.get(o['thread']), o['offer']) for o in p['offers'])])
+                            '; '.join('%s: %s' % (o.get('name') or names.get(o['thread']), o['offer']) for o in p['offers'])])
     else:
-        json.dump([dict(p, offers=[{'thread': names.get(o['thread']), 'offer': o['offer']} for o in p['offers']])
+        json.dump([dict(p, offers=[{'thread': o.get('name') or names.get(o['thread']), 'offer': o['offer']} for o in p['offers']])
                    for p in points], open(path, 'w'), indent=1)
 
 
@@ -650,6 +650,7 @@ def main():
             return 'idle' in (syms.short(tid) or '').lower()
     has_switch = any(f for f in args.scvd if 'RTX' in os.path.basename(f) or 'FreeRTOS' in os.path.basename(f))
     state = conformance.Analyser(lambda a: syms.short(a) or '0x%08x' % a, isr_fed, Idle(), has_switch)
+    state.thread_name = names.get         # the name a thread has when a stable point opens
 
     tail = [0]
     records = read_log(args.log, tail)
@@ -683,10 +684,11 @@ def main():
         thread = ''
         if comp_no == CSP_COMPONENT and vals is not None:
             if msg == ALT_GUARD and len(vals) == 4:
-                kind = conformance.GUARD_KIND.get(vals[3], 'other')
+                thread = context(vals[0])
+                idx, kind = conformance.unpack_guard(vals[3])
                 target = ('ticks=%d' % vals[2] if kind == 'timeout' else
                           'channel=0x%08x' % vals[2] if kind in ('input', 'output') else 'target=0x%x' % vals[2])
-                value = 'alt=0x%08x, guard=%d, kind=%s, %s' % (vals[0], vals[1], kind, target)
+                value = 'context=%s, alt=0x%08x, guard=%d, kind=%s, %s' % (thread, vals[1], idx, kind, target)
             elif msg == RENDEZVOUS_DONE and len(vals) == 4:
                 thread = context(vals[1] if vals[3] else vals[0])
                 value = re.sub(r'\bwriter=[^,]*', 'writer=0x%08x (%s)' % (vals[0], names.get(vals[0])), value)
@@ -696,6 +698,8 @@ def main():
                 value = re.sub(r'\bcontext=[^,]*', 'context=' + thread, value)
                 if msg == WAIT_CHANNEL:           # eventlist 1.2.0 prints this %t as empty
                     value = re.sub(r'\bdir=[^,]*', 'dir=' + ('write' if vals[1] & 1 else 'read'), value)
+                elif msg in BUFFERED_EVENTS and len(vals) == 4:   # the same for the policy
+                    value = re.sub(r'\bpolicy=[^,]*', 'policy=' + conformance.unpack_policy(vals[2]), value)
                 elif msg in (RESUME, RESUME_TIMEOUT) and len(vals) == 4:
                     value = re.sub(r', tick=.*$', '', value) + ', tick=%d, deadline=%d' % (vals[2], vals[3])
         else:
