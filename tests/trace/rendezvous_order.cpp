@@ -16,6 +16,7 @@
 // TerminatingNetwork; call it from a thread (trace_tests.cpp).
 #if defined(CSP4CMSIS_TRACE)
 #include "csp/csp4cmsis.h"
+#include "trace_pool.h"
 
 namespace {
 
@@ -62,11 +63,13 @@ public:
 extern "C" void csp4cmsis_trace_rendezvous_order(void) {
     static csp::Channel<uint32_t> writer_first;
     static csp::Channel<uint32_t> reader_first;
-    static Writer wf_writer(writer_first.writer(), "WF writer", 0u);
-    static Reader wf_reader(writer_first.reader(), "WF reader", PAUSE_TICKS);
-    static Writer rf_writer(reader_first.writer(), "RF writer", PAUSE_TICKS);
-    static Reader rf_reader(reader_first.reader(), "RF reader", 0u);
+    size_t off = 0;
+    Writer& wf_writer = trace_pool_new<Writer>(off, writer_first.writer(), "WF writer", 0u);
+    Reader& wf_reader = trace_pool_new<Reader>(off, writer_first.reader(), "WF reader", PAUSE_TICKS);
+    Writer& rf_writer = trace_pool_new<Writer>(off, reader_first.writer(), "RF writer", PAUSE_TICKS);
+    Reader& rf_reader = trace_pool_new<Reader>(off, reader_first.reader(), "RF reader", 0u);
     csp::Run(csp::InParallel(wf_writer, wf_reader, rf_writer, rf_reader),
              csp::ExecutionMode::TerminatingNetwork);
+    csp4cmsis_trace_pool_release();
 }
 #endif

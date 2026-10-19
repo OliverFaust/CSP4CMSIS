@@ -10,13 +10,15 @@
 //   csp4cmsis_trace_env_timer(1)  start a periodic interrupt whose handler
 //                                 calls csp4cmsis_trace_stable_env_isr();
 //   csp4cmsis_trace_env_timer(0)  stop it.
-// The test never deadlocks: every wait ends with the next interrupt.
+// The test never deadlocks: every wait ends with the next interrupt. The
+// handler also serves stable_multi.cpp (which runs after this test).
 // Expected (trace/README.md): SAMPLES PutFromISR on env_samples; stable
 // points whose offers are env_samples (read) and env_link (read), classified
 // "awaiting environment" (env_samples is interrupt-fed); none of them
 // "deadlock". check_stable_env.py checks them in decode.py's --stable output.
 #if defined(CSP4CMSIS_TRACE)
 #include "csp/csp4cmsis.h"
+#include "trace_pool.h"
 
 extern "C" void csp4cmsis_trace_env_timer(int on);
 
@@ -58,15 +60,20 @@ public:
 
 } // namespace
 
+extern "C" void csp4cmsis_trace_stable_multi_isr(void);   // stable_multi.cpp (same interrupt)
+
 extern "C" void csp4cmsis_trace_stable_env_isr(void) {
     if (env_puts < SAMPLES && env_samples.isrWriter().putFromISR(env_puts + 1u)) env_puts = env_puts + 1u;
+    csp4cmsis_trace_stable_multi_isr();
 }
 
 extern "C" void csp4cmsis_trace_stable_env(void) {
-    static EnvSampler sampler(env_samples.reader(), env_link.writer());
-    static EnvSink sink(env_link.reader());
+    size_t off = 0;
+    EnvSampler& sampler = trace_pool_new<EnvSampler>(off, env_samples.reader(), env_link.writer());
+    EnvSink& sink = trace_pool_new<EnvSink>(off, env_link.reader());
     csp4cmsis_trace_env_timer(1);
     csp::Run(csp::InParallel(sampler, sink), csp::ExecutionMode::TerminatingNetwork);
     csp4cmsis_trace_env_timer(0);
+    csp4cmsis_trace_pool_release();
 }
 #endif

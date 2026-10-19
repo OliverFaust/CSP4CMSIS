@@ -103,7 +103,10 @@ decode.py's output):
   OverwroteOldest evicting slots 0, 1, 0 (`check_drop_policy.py`,
   `check_ring_slots.py`);
 - `trace_tests.cpp` starts a thread that runs the others, then the
-  application's own start function:
+  application's own start function. The tests run one after the other and
+  build their processes in one static pool (`trace_pool.h`, 3.5 KB) instead
+  of static objects each: the Corstone-300 trace builds have little RAM to
+  spare.
   - `rendezvous_order.cpp`: the rendezvous invariant for plain ends (a
     Chanout and a Chanin, no ALT) in both arrival orders: 10 communications
     in which the writer arrives first (RendezvousDone recorded by the
@@ -120,7 +123,17 @@ decode.py's output):
   - `stable_env.cpp`: two processes that wait for an interrupt-fed buffered
     channel between interrupts: stable points "awaiting environment", then
     the interrupt releases them (`check_stable_env.py`; needs a periodic
-    interrupt from the platform, see the file).
+    interrupt from the platform, see the file);
+  - `stable_multi.cpp`: three processes -- an ALT with a timeout guard, a
+    one-guard ALT on an interrupt-fed Block channel, a plain rendezvous
+    reader -- waiting together: stable points awaiting a timeout and an
+    interrupt, released by the timeout and by the interrupt in either order
+    (`check_stable_multi.py`; the same periodic interrupt);
+  - `fair_select.cpp`: two plain writers with offers pending before every
+    fairSelect() of their reader (it sleeps a tick, then marks the select's
+    start with a put and get on its own buffered channel), so both guards
+    are ready throughout every select (`tools/trace/check_fair_select.py
+    --evidence fair_a`).
 - `check_alt_deadlines.py`: the ALT deadlines of the suite's timeout tests
   T20-T24 and of alt_offers.cpp's two Alternatives with a timeout guard
   (time left, deadline per select(), ResumeTimeout at or after the
@@ -129,9 +142,11 @@ decode.py's output):
   tools/trace/conformance.py on synthetic event streams, including the
   "deadlock" classification (no target test deadlocks).
 - `tests/host/trace_decoder/test_csp_trace.py` (host, Python, no ProB):
-  tools/trace/csp_trace.py on synthetic rows: tick placement, matching
-  reasons, put identities, policy evidence, AltGuard thread inference, the
-  stable-failure environment and the mutations.
+  tools/trace/csp_trace.py and check_fair_select.py on synthetic rows: tick
+  placement, channel guards and takes, per-select attribution, matching
+  reasons, the plain-rendezvous mapping, put identities, the policy field,
+  ALT ends per thread, the stable-failure environment, chunked traces, the
+  mutations and the fairness rule.
 
 ## Perfetto
 
@@ -250,64 +265,83 @@ threads for longer logs.
 
 ## Conformance against the formal models (csp_trace.py)
 
-    tools/trace/csp_trace.py events.csv --stable stable.csv --out DIR --run [--mutate] [--cache DIR]
+    tools/trace/csp_trace.py events.csv --stable stable.csv --out DIR [--mutate] [--models DIR]
+    tools/trace/csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR]
 
-(`probcli` of ProB 1.16.1 on the PATH or `PROBCLI=`.) From a decoded trace
-it builds projections, matches them against the models of `docs/formal`,
-writes one CSPm file per check (it includes the model) and, with `--run`,
-checks every distinct assertion once (`--cache`: also across runs).
+The first form builds projections of a decoded trace, matches them against
+the models of `docs/formal` (or `--models`), and writes DIR/report.json
+(projections, matching, checks, coverage) and DIR/match.txt; the second
+checks the assertions of one or more such directories with `probcli` of
+ProB 1.16.1 (PATH or `PROBCLI=`) and writes the verdicts back. Identical
+assertions are checked once; the trace checks of one model configuration
+form one assertion (the recorded traces as one external choice, so the
+model is normalised once), split when it fails.
 
 - **Projections.** One Alternative object (an AltGuard with index 0 starts
-  a new one, also at a reused address), one buffered channel, or one
+  a new one, also at a reused address), one buffered channel, one
   rendezvous channel, with the events of the threads that use it. AltGuard
-  has no context value: its thread is the running thread from the RTOS
-  switch events; without them (ST's FreeRTOS) it is inferred from the next
-  record naming the Alternative or the next AltSelected of a thread that is
-  not blocked.
+  and AltSelected name the Alternative and the thread, buffered events the
+  policy: nothing is inferred.
 - **Mappings.** `tools/trace/mappings/<model>.json`, from each model's
   header (Trace conformance, `SigmaObs`, `H`): the events a trace supplies
   and their model events, the configurations and what an instance needs to
   match them, the stable-failure rules and the gaps. Buffered elements are
   put identities: the write index mod K, K = capacity + 2 of the model
   configuration; a get carries the index of the write that last wrote the
-  slot it read. Ticks: alt_timeout_deadline.json.
-- **Instance matching.** The models are fixed configurations (one or two
-  select()s, capacities 1 and 2, given partners). Every projection is
-  matched against each configuration; the others are listed with the
-  reason (e.g. "timeout 10 ticks (the model's delays are 0..3)", "5040
-  select()s (the model is one select())", "capacity 4 (Part 3: 1)").
-  Projections are checked whole; none is cut.
-- **Trace check.** `MODEL \ H [T= RECORDED` for every matched projection
-  (`a_sel.g.e.b` renamed to `asel.g`: e and b are not recorded).
+  slot it read.
+- **Instance matching.** Every projection is matched against each model
+  configuration; the others are listed with the reason. The models'
+  parameters (docs/formal: SYSN, SYSM, SYS_BUFN, SYS5G, SYS_KNE, SYS_KOE)
+  take capacity, roles, tick modulus, timeouts and channel guards from the
+  instance.
+- **Per-select cut.** An Alternative with several select()s is checked one
+  select() at a time (alt_timeout_deadline; two plain rendezvous inputs also
+  alt_one_winner's SYSM with one select). Each select() is checked from the
+  model's initial state: its window opens after the Alternative's previous
+  AltSelected and closes with its AltSelected. Scope: this checks each
+  select() on its own; it does not check properties across selects (order,
+  fairness, delivery of every message), and it inherits the model's partner
+  abstraction: each channel guard's partner offers at most once per
+  select(). The report counts the selects outside it (a partner with more
+  than one put, get or plain operation on the guard's channel inside the
+  window).
+- **Fairness across selects** (`tools/trace/check_fair_select.py`, no
+  ProB), on the uncut sequence of selects. fairSelect(): select() enables
+  the guards in the order (i + offset) % n and stops at the first ready one,
+  re-verifies in that order after a wakeup, a claimed guard wins, else the
+  first ready one; offset starts at 0 and becomes (selected + 1) % n after
+  each select(); priSelect() always uses 0. Checked consequence: a guard
+  ready during the whole select() that precedes the selected guard in that
+  order is a violation. Ready throughout: a plain writer's offer recorded
+  (pair WaitChannel) before the select's window opens and taken after it
+  closes, or a buffered channel with elements and no get in the window;
+  the window opens at the ALT thread's last record before the select.
+- **Trace check.** `MODEL \ H [T= RECORDED` for every matched projection or
+  select.
 - **Stable failures.** At a stable point t (decode.py `--stable`) of a
-  matched projection, X = its observable events except the environment
+  checked projection, X = its observable events except the environment
   events the point awaits (`tick` when an enabled timeout guard waits;
-  `isr_put` when an interrupt-fed read waits). `MODEL \ H` is composed with
-  an environment that performs t, then a marker `mark_t`, then offers only
-  X; before the marker it can always take an escape event to a loop, so the
-  composition cannot deadlock before the marker. It deadlocks iff the model
-  can be stable after t refusing X: `:[deadlock free [F]]` must fail with a
-  counterexample ending in `mark_t`. Environment events a projection does
-  not observe (ticks of a select without timeout guards) may occur freely
-  during t and are blocked after the marker, not refused. The model's
-  channel partner is then the one that never offers (PARTNER(0)) when t has
-  no transfer: PARTNER(1)'s pending offer is a hidden event, so that
-  configuration is never stable. Points with stability unconfirmed (no
-  switch events) are not checked.
-- **Mutations** (`--mutate`): per model, one fault on a copy of the decoded
-  rows of a matched projection: two of its events swapped, a
-  RendezvousDone dropped, an AltSelected guard index changed, a
-  ResumeTimeout turned into a Resume one tick before its deadline, a
-  BufferedGet given the next put identity (after the slot replay: a
-  capacity-1 channel has one slot), and the timeout offer removed at a
-  stable point. Each must fail.
-- **Gaps.** AltSelected does not name its Alternative: a select() that
-  neither waits nor is the object's first is attributed to the thread's
-  current Alternative. The buffered policy is known only from evidence
-  (WaitBufferedFull: Block; OverwroteOldest: KeepNewest; DroppedNew:
-  KeepOldest). The rendezvous models (alt_one_winner, alt_owrv_extended)
-  are matched only: their activate events need a replay of the state words
-  (model headers, Gaps), and no recorded instance matches them yet.
+  `isr_put` when a read waits on an interrupt-fed channel). `MODEL \ H` is
+  composed with an environment that performs t, then a marker `mark_t`,
+  then offers only X; before the marker it can always take an escape event
+  to a loop, so the composition cannot deadlock before the marker. It
+  deadlocks iff the model can be stable after t refusing X:
+  `:[deadlock free [F]]` must fail with a counterexample ending in
+  `mark_t`. Ticks of a select without timeout guards may occur freely
+  during t and are blocked after the marker, not refused; the timeout
+  model's channel partner is the one that never offers when t has no take;
+  the plain rendezvous model's sides may stop after any operation (lazy).
+  A buffered projection is checked only where every user of the channel
+  waits on it. Points with stability unconfirmed are not checked.
+- **Mutations** (`--mutate`): per model configuration family, one fault on
+  a copy of the decoded rows of a checked projection or select: two of its
+  events swapped, a RendezvousDone dropped, an AltSelected guard index
+  changed, a ResumeTimeout turned into a Resume one tick before its
+  deadline, a BufferedGet given the next put identity (after the slot
+  replay); and at every stable point one offer removed (the first whose
+  removal changes a refusal set). Each must fail.
+- **Coverage.** The share of the recorded CSP events (RTOS events
+  excluded) inside a checked projection or select, per kind.
 
 ## Known limitations
 
@@ -341,13 +375,13 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
 - Tracing off: in every configuration the loaded image is byte-identical to
   v3.1.0 (and 3.0.1) and the test results are the same (PASS=36, heap-free
   PASS=37; FAIL=0 SKIP=0 REPLACED=4).
-- Tracing on: the same results everywhere. 361,700 to 362,100 CSP4CMSIS
-  events per run (per run: 6,084 to 6,086 RendezvousDone, 7,160 to 7,162
-  WaitChannel, ~25,290 WaitBufferedFull, ~40,390 WaitBufferedEmpty, 21,070
-  to 21,570 WaitAlt, 115 AltGuard, 44 AltDeadline, ~55,530 BufferedPut and
-  BufferedGet,
-  ~20,160 OverwroteOldest, 3 DroppedNew, 5 PutFromISR, 40 WaitBarrier,
-  5 WaitJoin, 28 ResumeTimeout); RTOS thread events in the RTX5 and
+- Tracing on: the same results everywhere. 361,900 to 362,400 CSP4CMSIS
+  events per run (per run: 6,102 to 6,104 RendezvousDone, 7,198 to 7,200
+  WaitChannel, ~25,300 WaitBufferedFull, ~40,410 WaitBufferedEmpty, 21,045
+  to 21,219 WaitAlt, 36,356 to 36,370 AltSelected, 123 AltGuard,
+  46 AltDeadline, ~55,540 BufferedPut and BufferedGet, ~20,160
+  OverwroteOldest, 3 DroppedNew, 7 PutFromISR, 40 WaitBarrier, 7 WaitJoin,
+  30 ResumeTimeout); RTOS thread events in the RTX5 and
   FreeRTOS 11.3 configurations (ST's FreeRTOS records none). Logs complete,
   time stamps monotonic.
 - Content checks, all 30: 500 RendezvousDone on each of the two channels of
@@ -373,32 +407,49 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   exactly their guard lists, masks 0x3 of 2 and selections, and every
   WaitAlt of test T12 has mask 0x3 of 2; tests/trace/stable_env.cpp gives
   3 PutFromISR and stable points offering env_samples (read) and env_link
-  (read), all "awaiting environment". RTX5 and FreeRTOS 11.3: 4 stable
-  points per run, all "awaiting environment" (the suite's tests do not run
-  CSP processes); ST's FreeRTOS (no switch events): 25, all "stability
-  unconfirmed". No "deadlock" anywhere; that classification is tested on
+  (read), all "awaiting environment"; tests/trace/stable_multi.cpp gives
+  2 PutFromISR and 2 stable points with the offers of all three of its
+  processes, its 4 points all "awaiting environment". RTX5 and FreeRTOS
+  11.3: 8 stable points per run, all "awaiting environment" (the suite's
+  tests do not run CSP processes); ST's FreeRTOS (no switch events): 74,
+  all "stability unconfirmed". No "deadlock" anywhere; that classification is tested on
   the host (tests/host/trace_decoder).
 - ALT deadlines, all 30 (decoder and tests/trace/check_alt_deadlines.py):
-  44 waits with a timeout guard, each after its AltDeadline, time left
-  1..the shortest timeout, one deadline per select(); 28 ResumeTimeout, all
+  46 waits with a timeout guard, each after its AltDeadline, time left
+  1..the shortest timeout, one deadline per select(); 30 ResumeTimeout, all
   at the deadline tick (0 ticks late); 16 Resume, all before the deadline.
   T20: 5 selects each for timeouts 1, 3 and 10, time left 1, 3 and 10, all
   by ResumeTimeout; T21: 15 selects, 6 the channel, 9 the timeout; T22: the
   5-tick guard of three; T23: both zero-timeout Alternatives select without
   waiting; T24: 10 waits (9 stale wakeups) with one deadline, then
   ResumeTimeout.
-- Conformance (tools/trace/csp_trace.py, ProB 1.16.1), all 30: 31
-  projections per run match a model configuration (29 select()s of
-  alt_timeout_deadline: T20 with timeouts 1 and 3, T23, the single-guard
-  ALTs of T2, T4, T7, T9, T10 and alt_offers.cpp's alt_timeout and alt_full;
-  Part 3 of buffered_channel_v2 for alt_full_buf; Part 1c for T9's channel);
-  all 930 trace checks pass (6 events at most, up to 9,041 ProB states,
-  20 distinct assertions, 50 s of ProB CPU in all). The stable point of
-  alt_full (RTX5 and FreeRTOS 11.3: 26 runs) passes its stable-failure
-  check. All 266 mutants fail as they must. Not matched (reasons in the
-  report): selects with timeouts above 3 ticks, Alternatives with several
-  select()s or channel guards (T1, T12, T13, T15), channels of other
-  capacities or roles, and every rendezvous-model configuration.
+- Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the models with
+  their parameters), all 30 and the demo (two runs): per run 67 of 73
+  Alternatives match (36,356 select()s, each checked on its own: T1, T12,
+  T13, T15 and the rest; 10,077 of them, the ALT writers of T1b and T13b
+  and one select of T2, are outside the partner abstraction), 21 of 26
+  buffered channels and the 4 plain rendezvous channels; the demo's merger
+  (62/63 selects), sensor_samples and merger_to_consumer. Not matched:
+  timeouts above 15 ticks (T11, T15s, T22), two selects that record only
+  AltGuard, and channels with two ALT ends or a multi-guard ALT end (T4a,
+  T4b, T10, T15, T15s). All 1,122,223 trace checks run pass (37,393 to
+  37,408 per run; the whole-channel check of T13b, about 15 min of ProB
+  CPU, was run on 4 configurations); all 514 stable-failure checks pass
+  (19 to 21 per run with switch events, at 8 stable points). Mutants:
+  per run 21 trace mutants (10 swaps, 3 dropped RendezvousDone, 2 changed
+  guards, 5 changed get identities, 1 early Resume) and, with switch
+  events, 8 removed offers (one per stable point): all fail as they must
+  except 3 swaps, which swap events the model allows in either order
+  (alt_one_winner: AltSelected and the writer's Resume; Part 5G: a blocking
+  writer's Resume and another writer's BufferedPut; Part 5: a PutFromISR
+  and a stale Resume). The demo's 6 mutants fail. Coverage: 91.8 % of the
+  CSP4CMSIS events per run lie in a checked projection or select (0.04 %
+  before the per-select cut and the parameterised models): RendezvousDone
+  99.8 %, AltSelected 100 %, buffered 96.2 %, waits and resumes 87.0 %; the largest unchecked groups are T15's channels and
+  T12's waits. Fairness (check_fair_select.py): fair_select.cpp 16
+  fairSelect()s, 15 with both guards ready throughout, 0 violations, all
+  30; T12 0 violations (no select with another guard ready throughout),
+  the demo's merger 0 (1 such select). ProB CPU: about 3.4 h in all (8 jobs).
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.
@@ -417,7 +468,7 @@ Cost (bytes, text = code + read-only data; Corstone-300, RTX5):
 | | GCC -O2 | GCC -O0 | Arm Compiler -O2 | Arm Compiler -O0 |
 |---|---|---|---|---|
 | library objects, off (= v3.1.0) | 3650 | 5830 | 3775 | 5913 |
-| library objects, on | 5090 (+1440) | 7272 (+1442) | 5509 (+1734) | 7343 (+1430) |
+| library objects, on | 5150 (+1500) | 7296 (+1466) | 5347 (+1572) | 7367 (+1454) |
 | Event Recorder object, code | 2394 | 3294 | 6970 | 3896 |
 | Event Recorder RAM (64 records) | 1192 | 1192 | 1192 | 1192 |
 
@@ -430,8 +481,12 @@ of RAM per Alternative (the number of guards described), and one AltGuard
 record per guard, recorded once per Alternative object (32 bytes in the
 recorder's buffer). WaitAlt is a 4-word record (32 bytes in the buffer
 instead of 16). The deadline ticks (AltDeadline, 4-value Resume and
-ResumeTimeout) add 156 / 136 / 176 / 176 bytes. With tracing off the layout
-and code are unchanged.
+ResumeTimeout) add 156 / 136 / 176 / 176 bytes. AltSelected and AltGuard
+naming the Alternative and the thread, and the buffered events' policy field,
+add 60 / 24 / -162 / 24 bytes (Arm Compiler -O2 inlines differently); the
+policy is a template constant, folded with the capacity into one constant
+at compile time, and AltSelected becomes a 4-word record (32 bytes in the buffer instead of
+16). With tracing off the layout and code are unchanged.
 
 Library data/bss are unchanged (0/4). Channel templates compiled in
 application files grow as well (each traced put/get: two or three

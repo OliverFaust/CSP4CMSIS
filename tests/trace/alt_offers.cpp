@@ -17,6 +17,7 @@
 // tools/trace/decode.py.
 #if defined(CSP4CMSIS_TRACE)
 #include "csp/csp4cmsis.h"
+#include "trace_pool.h"
 
 namespace {
 
@@ -68,9 +69,11 @@ public:
 } // namespace
 
 extern "C" void csp4cmsis_trace_alt_offers(void) {
-    static AltOffers offers(alt_idle.reader(), alt_idle.reader(), alt_out.writer(), alt_full_buf.writer(),
+    size_t off = 0;
+    AltOffers& offers = trace_pool_new<AltOffers>(off, alt_idle.reader(), alt_idle.reader(), alt_out.writer(), alt_full_buf.writer(),
                             alt_full_buf.reader());
-    static AltPartner partner(alt_out.reader());
+    AltPartner& partner = trace_pool_new<AltPartner>(off, alt_out.reader());
     csp::Run(csp::InParallel(offers, partner), csp::ExecutionMode::TerminatingNetwork);
+    csp4cmsis_trace_pool_release();
 }
 #endif
