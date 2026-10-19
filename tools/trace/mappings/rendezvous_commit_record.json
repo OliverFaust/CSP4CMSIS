@@ -1,0 +1,9 @@
+{
+  "model": "docs/formal/rendezvous_commit_record.csp",
+  "source": "the model header (Trace conformance)",
+  "sigma_obs": ["a_sel", "w_done"],
+  "hidden": "H = diff(Events, SigmaObs)",
+  "conformance_target": false,
+  "why": "a historical analysis model: no 3.x code implements CUR, FIX or CLAIM; the 3.x rendezvous ALT (OWRV) is alt_one_winner.csp and alt_owrv_extended.csp, whose observations this model shares",
+  "configurations": []
+}

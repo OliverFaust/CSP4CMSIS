@@ -122,6 +122,10 @@ decode.py's output):
 - `tests/host/trace_decoder/test_conformance.py` (host, Python):
   tools/trace/conformance.py on synthetic event streams, including the
   "deadlock" classification (no target test deadlocks).
+- `tests/host/trace_decoder/test_csp_trace.py` (host, Python, no ProB):
+  tools/trace/csp_trace.py on synthetic rows: tick placement, matching
+  reasons, put identities, policy evidence, AltGuard thread inference, the
+  stable-failure environment and the mutations.
 
 ## Perfetto
 
@@ -238,6 +242,67 @@ Size: a whole run of the FVP regression suite (about 650,000 events) gives an
 80 MB JSON file, which ui.perfetto.dev loads in seconds; select a window or
 threads for longer logs.
 
+## Conformance against the formal models (csp_trace.py)
+
+    tools/trace/csp_trace.py events.csv --stable stable.csv --out DIR --run [--mutate] [--cache DIR]
+
+(`probcli` of ProB 1.16.1 on the PATH or `PROBCLI=`.) From a decoded trace
+it builds projections, matches them against the models of `docs/formal`,
+writes one CSPm file per check (it includes the model) and, with `--run`,
+checks every distinct assertion once (`--cache`: also across runs).
+
+- **Projections.** One Alternative object (an AltGuard with index 0 starts
+  a new one, also at a reused address), one buffered channel, or one
+  rendezvous channel, with the events of the threads that use it. AltGuard
+  has no context value: its thread is the running thread from the RTOS
+  switch events; without them (ST's FreeRTOS) it is inferred from the next
+  record naming the Alternative or the next AltSelected of a thread that is
+  not blocked.
+- **Mappings.** `tools/trace/mappings/<model>.json`, from each model's
+  header (Trace conformance, `SigmaObs`, `H`): the events a trace supplies
+  and their model events, the configurations and what an instance needs to
+  match them, the stable-failure rules and the gaps. Buffered elements are
+  put identities: the write index mod K, K = capacity + 2 of the model
+  configuration; a get carries the index of the write that last wrote the
+  slot it read. Ticks: alt_timeout_deadline.json.
+- **Instance matching.** The models are fixed configurations (one or two
+  select()s, capacities 1 and 2, given partners). Every projection is
+  matched against each configuration; the others are listed with the
+  reason (e.g. "timeout 10 ticks (the model's delays are 0..3)", "5040
+  select()s (the model is one select())", "capacity 4 (Part 3: 1)").
+  Projections are checked whole; none is cut.
+- **Trace check.** `MODEL \ H [T= RECORDED` for every matched projection
+  (`a_sel.g.e.b` renamed to `asel.g`: e and b are not recorded).
+- **Stable failures.** At a stable point t (decode.py `--stable`) of a
+  matched projection, X = its observable events except the environment
+  events the point awaits (`tick` when an enabled timeout guard waits;
+  `isr_put` when an interrupt-fed read waits). `MODEL \ H` is composed with
+  an environment that performs t, then a marker `mark_t`, then offers only
+  X; before the marker it can always take an escape event to a loop, so the
+  composition cannot deadlock before the marker. It deadlocks iff the model
+  can be stable after t refusing X: `:[deadlock free [F]]` must fail with a
+  counterexample ending in `mark_t`. Environment events a projection does
+  not observe (ticks of a select without timeout guards) may occur freely
+  during t and are blocked after the marker, not refused. The model's
+  channel partner is then the one that never offers (PARTNER(0)) when t has
+  no transfer: PARTNER(1)'s pending offer is a hidden event, so that
+  configuration is never stable. Points with stability unconfirmed (no
+  switch events) are not checked.
+- **Mutations** (`--mutate`): per model, one fault on a copy of the decoded
+  rows of a matched projection: two of its events swapped, a
+  RendezvousDone dropped, an AltSelected guard index changed, a
+  ResumeTimeout turned into a Resume one tick before its deadline, a
+  BufferedGet given the next put identity (after the slot replay: a
+  capacity-1 channel has one slot), and the timeout offer removed at a
+  stable point. Each must fail.
+- **Gaps.** AltSelected does not name its Alternative: a select() that
+  neither waits nor is the object's first is attributed to the thread's
+  current Alternative. The buffered policy is known only from evidence
+  (WaitBufferedFull: Block; OverwroteOldest: KeepNewest; DroppedNew:
+  KeepOldest). The rendezvous models (alt_one_winner, alt_owrv_extended)
+  are matched only: their activate events need a replay of the state words
+  (model headers, Gaps), and no recorded instance matches them yet.
+
 ## Known limitations
 
 - Event Recorder's Semihosting variant reads the time stamp and then writes
@@ -316,6 +381,18 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   5-tick guard of three; T23: both zero-timeout Alternatives select without
   waiting; T24: 10 waits (9 stale wakeups) with one deadline, then
   ResumeTimeout.
+- Conformance (tools/trace/csp_trace.py, ProB 1.16.1), all 30: 31
+  projections per run match a model configuration (29 select()s of
+  alt_timeout_deadline: T20 with timeouts 1 and 3, T23, the single-guard
+  ALTs of T2, T4, T7, T9, T10 and alt_offers.cpp's alt_timeout and alt_full;
+  Part 3 of buffered_channel_v2 for alt_full_buf; Part 1c for T9's channel);
+  all 930 trace checks pass (6 events at most, up to 9,041 ProB states,
+  20 distinct assertions, 50 s of ProB CPU in all). The stable point of
+  alt_full (RTX5 and FreeRTOS 11.3: 26 runs) passes its stable-failure
+  check. All 266 mutants fail as they must. Not matched (reasons in the
+  report): selects with timeouts above 3 ticks, Alternatives with several
+  select()s or channel guards (T1, T12, T13, T15), channels of other
+  capacities or roles, and every rendezvous-model configuration.
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.

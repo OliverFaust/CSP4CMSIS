@@ -1,0 +1,38 @@
+{
+  "model": "docs/formal/alt_owrv_extended.csp",
+  "source": "the model header (Trace conformance) and its SigmaObs/H definitions",
+  "sigma_obs": ["x_sel", "x_towait", "x_wait", "a_sel", "a_towait", "a_wait", "w_done", "w_towait", "w_wait", "isr_put", "b_act",
+                "p_out", "m_wsel", "m_done", "m_wtowait", "m_wwait", "m_rtowait", "m_rwait", "m_pin"],
+  "hidden": "H = diff(Events, SigmaObs): rounds, enable results 0/1, disables, signals, the claims' second word, stale flags, x_xw/w_xw/m_wxw, idle, bounds",
+  "projection": "one Alternative object with its channels, their partners and, for Part A, the partner Alternative",
+  "configurations": [
+    {
+      "name": "Part A SYSA",
+      "system": "SYSA(OK, b1, true)",
+      "requires": ["two Alternatives A {c1!, c2?} and B {c1?, c2!} (B's guard order b1), on rendezvous channels c1, c2", "one select() each", "no other users of c1, c2"]
+    },
+    {
+      "name": "Part B SYSB",
+      "system": "SYSB(kd, true)",
+      "requires": ["A's Alternative is {c0 rendezvous input, c1 buffered input}", "two select()s", "c0: one message from a plain writer (PW) or a single-guard ALT writer (AW)", "c1: one PutFromISR, no task writer", "no other readers"]
+    },
+    {
+      "name": "Part C SYSC",
+      "system": "SYSC(OK, k1, k2, true)",
+      "requires": ["W's Alternative is {c1!, c2!}, both rendezvous output guards", "two select()s", "on each channel one reader that reads once: a single-guard ALT reader (AR) or a plain reader (PR)"]
+    }
+  ],
+  "events": [
+    {"trace": "AltSelected (guard g) of A / B / W", "model": "x_sel.x.c, a_sel.g, m_wsel.c (the Bool from the RendezvousDone events since the thread's previous AltSelected)"},
+    {"trace": "AltSelected / Resume of a partner", "model": "w_done, m_done (b: a RendezvousDone names it on its channel)"},
+    {"trace": "WaitAlt + Resume / ResumeTimeout", "model": "x_towait.x.true + x_wait.x, a_towait.true + a_wait, w_towait.true + w_wait, m_wtowait.true + m_wwait, m_rtowait.c.true + m_rwait.c"},
+    {"trace": "PutFromISR", "model": "isr_put"},
+    {"trace": "BufferedGet by A", "model": "b_act.true"},
+    {"trace": "WaitChannel(write) of a plain writer / WaitChannel(read) of a plain reader", "model": "p_out / m_pin"}
+  ],
+  "generator": "matching only: the activate events carry the decision but a RendezvousDone does not say whether the pair was claimed earlier or now (model header, Gaps); not generated until a recorded instance matches",
+  "gaps": [
+    "the mapping of the activate events needs a replay of the state words",
+    "enable/disable results and state words are not recorded"
+  ]
+}

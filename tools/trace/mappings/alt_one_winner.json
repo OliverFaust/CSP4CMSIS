@@ -1,0 +1,31 @@
+{
+  "model": "docs/formal/alt_one_winner.csp",
+  "source": "the model header (Trace conformance) and its SigmaObs/H definitions",
+  "sigma_obs": ["a_sel", "w_done", "a_towait", "a_wait", "w_towait", "w_wait", "p_out"],
+  "hidden": "H = diff(Events, SigmaObs): rounds, a_en results 0/1, a_dis, a_chk/w_chk, signals, p_sig, p_rel, w_xw, a_self, stale flags, idle, bound_exceeded",
+  "projection": "one Alternative object with its two rendezvous channels and their partners",
+  "configurations": [
+    {
+      "name": "SYS",
+      "system": "SYS(OWRV, k0, k1, true)",
+      "requires": [
+        "the Alternative has exactly two guards, both rendezvous input guards (c0 = guard 0, c1 = guard 1)",
+        "exactly two select()s",
+        "each channel carries exactly one message, from one partner: a plain writer (PW), a signal sender (SW) or an ALT writer with this one output guard (AW)",
+        "no other reader on either channel"
+      ]
+    }
+  ],
+  "events": [
+    {"trace": "AltSelected (guard g) of A", "model": "a_sel.g.b.o; b: a RendezvousDone on c_g with A as reader since A's previous AltSelected; o: one on the other channel"},
+    {"trace": "AltSelected of ALT writer i, or the Resume ending plain writer i's WaitChannel(write)", "model": "w_done.i.b (b: a RendezvousDone names writer i on c_i)"},
+    {"trace": "WaitAlt + Resume of A", "model": "a_towait.true + a_wait (renamed from a_wait.g)"},
+    {"trace": "WaitAlt + Resume of ALT writer i", "model": "w_towait.i.true + w_wait.i"},
+    {"trace": "WaitChannel(write) of plain writer i", "model": "p_out.i"}
+  ],
+  "generator": "matching only: the mapping of a_act/a_en needs a replay of the state word (model header, Gaps); not generated until a recorded instance matches",
+  "gaps": [
+    "a_act.i.true is the take or the claim only when A was not claimed before; a trace does not say which",
+    "enable/disable results and state words are not recorded"
+  ]
+}
