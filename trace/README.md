@@ -133,7 +133,21 @@ decode.py's output):
     fairSelect() of their reader (it sleeps a tick, then marks the select's
     start with a put and get on its own buffered channel), so both guards
     are ready throughout every select (`tools/trace/check_fair_select.py
-    --evidence fair_a`).
+    --evidence fair_a`);
+  - `throttled_drop.cpp`: an interrupt puts into a KeepOldest channel of 2
+    elements faster than the network drains it: a sampler takes each sample
+    with a one-guard ALT and forwards it on a plain rendezvous channel to a
+    consumer that sleeps a tick after each read. The sampler waits to write
+    (backpressure), the channel fills and the interrupt's puts are dropped
+    during operation, not only after the sampler's last select. The counts
+    depend on when the interrupts fall, so `check_throttled_drop.py` checks
+    invariants: a DroppedNew before the sampler's last select, every
+    DroppedNew at count == capacity, puts = gets + dropped + still buffered,
+    the occupancy never above the capacity, a DroppedNew while the sampler
+    waits to write. It uses the periodic interrupt of stable_env.cpp at a
+    higher rate: the platform also provides
+    `csp4cmsis_trace_env_timer_rate(hz)`, the rate of the next start (in
+    the timer's clock; stopping restores the default).
 - `check_alt_deadlines.py`: the ALT deadlines of the suite's timeout tests
   T20-T24 and of alt_offers.cpp's two Alternatives with a timeout guard
   (time left, deadline per select(), ResumeTimeout at or after the
@@ -145,8 +159,9 @@ decode.py's output):
   tools/trace/csp_trace.py and check_fair_select.py on synthetic rows: tick
   placement, channel guards and takes, per-select attribution, matching
   reasons, the plain-rendezvous mapping, put identities, the policy field,
-  ALT ends per thread, the stable-failure environment, chunked traces, the
-  mutations and the fairness rule.
+  ALT ends per thread, the stable-failure environment (an interrupt-fed
+  channel's puts are awaited, not refused), chunked traces, the mutations
+  and the fairness rule.
 
 ## Perfetto
 
@@ -423,6 +438,20 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   5-tick guard of three; T23: both zero-timeout Alternatives select without
   waiting; T24: 10 waits (9 stale wakeups) with one deadline, then
   ResumeTimeout.
+- Throttled drop, all 30 (tests/trace/check_throttled_drop.py; the totals
+  above and below are without this test): the sampler's 20 selects, 20 gets,
+  maximum occupancy 2, 2 samples still buffered at the end. The interrupt
+  rate depends on the platform's timer clock: Corstone-300, 30 to 31 puts,
+  8 or 9 dropped, 6 or 7 of them during operation, 6 or 7 while the sampler
+  waits to write (38 waits); MPS2 Cortex-M4, 97 to 100 puts, 75 to 78
+  dropped, 66 to 69 during operation, 64 to 73 while the sampler waits to
+  write (39 waits). Conformance, checked separately against the models with
+  their parameters: the sampler's Alternative (20 selects),
+  throttled_samples (Part 2bN, SYS_KOE(2, 0, -1)) and throttled_forward
+  (plain rendezvous) match; all trace and stable-failure checks pass (2 per
+  projection on Corstone-300, 1 on MPS2, none on ST's FreeRTOS) and the
+  mutants fail (a swap, a dropped RendezvousDone, a changed get identity,
+  the removed offers).
 - Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the models with
   their parameters), all 30 and the demo (two runs): per run 67 of 73
   Alternatives match (36,356 select()s, each checked on its own: T1, T12,

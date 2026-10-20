@@ -11,7 +11,8 @@
 //                                 calls csp4cmsis_trace_stable_env_isr();
 //   csp4cmsis_trace_env_timer(0)  stop it.
 // The test never deadlocks: every wait ends with the next interrupt. The
-// handler also serves stable_multi.cpp (which runs after this test).
+// handler also serves stable_multi.cpp and throttled_drop.cpp (which run
+// after this test).
 // Expected (trace/README.md): SAMPLES PutFromISR on env_samples; stable
 // points whose offers are env_samples (read) and env_link (read), classified
 // "awaiting environment" (env_samples is interrupt-fed); none of them
@@ -61,10 +62,12 @@ public:
 } // namespace
 
 extern "C" void csp4cmsis_trace_stable_multi_isr(void);   // stable_multi.cpp (same interrupt)
+extern "C" void csp4cmsis_trace_throttled_drop_isr(void); // throttled_drop.cpp (same interrupt)
 
 extern "C" void csp4cmsis_trace_stable_env_isr(void) {
     if (env_puts < SAMPLES && env_samples.isrWriter().putFromISR(env_puts + 1u)) env_puts = env_puts + 1u;
     csp4cmsis_trace_stable_multi_isr();
+    csp4cmsis_trace_throttled_drop_isr();
 }
 
 extern "C" void csp4cmsis_trace_stable_env(void) {

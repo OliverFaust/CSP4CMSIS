@@ -11,9 +11,11 @@
 //   stable_multi.cpp      stable points of several processes awaiting a
 //                         timeout and an interrupt
 //   fair_select.cpp       fairSelect() with both guards ready
-// then calls then() (if not null) and exits. stable_env.cpp and
-// stable_multi.cpp need a periodic interrupt from the platform: see
-// stable_env.cpp.
+//   throttled_drop.cpp    a slow consumer makes an interrupt-fed KeepOldest
+//                         channel drop samples during operation
+// then calls then() (if not null) and exits. stable_env.cpp,
+// stable_multi.cpp and throttled_drop.cpp need a periodic interrupt from the
+// platform: see stable_env.cpp and throttled_drop.cpp.
 #if defined(CSP4CMSIS_TRACE)
 #include "cmsis_os2.h"
 #include "csp/csp4cmsis.h"
@@ -25,6 +27,7 @@ extern "C" void csp4cmsis_trace_alt_offers(void);
 extern "C" void csp4cmsis_trace_stable_env(void);
 extern "C" void csp4cmsis_trace_stable_multi(void);
 extern "C" void csp4cmsis_trace_fair_select(void);
+extern "C" void csp4cmsis_trace_throttled_drop(void);
 
 namespace {
 
@@ -44,6 +47,7 @@ void tests_thread(void*) {
     csp4cmsis_trace_stable_env();
     csp4cmsis_trace_stable_multi();
     csp4cmsis_trace_fair_select();
+    csp4cmsis_trace_throttled_drop();
     if (g_then) g_then();
     osThreadExit();
 }
