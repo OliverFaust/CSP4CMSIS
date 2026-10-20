@@ -234,6 +234,25 @@ class Buffered(unittest.TestCase):
         self.assertIsNotNone(chk)
         self.assertNotIn('isr_put', chk['X'])
 
+    def test_failure_check_of_an_interrupt_fed_keepoldest_channel(self):
+        # Part 2bN: the interrupt's puts and drops (kput.1, kdrop.1) are
+        # awaited, the task's (kput.0, kdrop.0) and the reads refused, and
+        # the model has no task writer
+        r = Rows()
+        r.add('ProcessStart', P1, context=P1, process='p').add('ProcessName', '', name='Sampler')
+        r.guards(P1, 'S0', ('input', 'o'))
+        r.add('WaitAlt', P1, context=P1, alt='S0', enabled='0x01', guards=1)
+        r.add('PutFromISR', 'irq 18', context='irq 18', channel='o', count=1, capacity=2, policy='KeepOldest', slot=0)
+        r.add('Resume', P1, context=P1, object='S0')
+        r.add('BufferedGet', P1, context=P1, channel='o', count=0, capacity=2, policy='KeepOldest', slot=0)
+        r.sel(P1, 'S0', 0)
+        tr = r.trace()
+        pt = {'start': tr.rows[3].t + 1e-4, 'offers': [('Sampler', 'o ?')]}
+        chk = T.buf_failures(tr, {'chan': tr.bufs['o'], 'config': 'Part 2bN SYS_KOE(2, -1, -1)', 'pairs': []}, pt, pt)
+        self.assertIsNotNone(chk)
+        self.assertEqual(chk['X'], ['kput.0', 'kdrop.0', 'rd'])
+        self.assertEqual(chk['config'], 'Part 2bN SYS_KOE(2, 0, -1)')
+
 
 class Stable(unittest.TestCase):
     def test_a_point_open_at_the_end_of_the_log(self):

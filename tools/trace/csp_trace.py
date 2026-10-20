@@ -907,10 +907,20 @@ def buf_failures(tr, c, pt, orig):
         if not any(chan_in(o, ch.name) for o in offers_of(orig, n)):
             return None                   # a user of the channel is not waiting on it: outside the model
         waiting[n] = offers_of(pt, n)
+    if cfg.startswith(('Part 2N', 'Part 2bN')):
+        # every task end waits on the channel here, and a task's put to a
+        # KeepNewest/KeepOldest channel never waits: the model gets no task
+        # writer (tw = 0); the interrupt's writes stay unbounded
+        cfg = re.sub(r'\((\d+), -1, -1\)$', r'(\1, 0, -1)', cfg)
     sysx, sigma, cap = buf_cfg(cfg)
     reads = any(o.endswith('?') and chan_in(o, ch.name) for offs in waiting.values() for o in offs)
-    awaited = {'isr_put'} if reads and 'isr_put' in sigma and ch.writers and any(x['isr'] for x in ch.writers.values()) else set()
-    x = [o for o in sigma if o not in awaited]
+    # an interrupt-fed channel that a read waits on: the interrupt's puts are
+    # awaited from the environment, not refused (Part 5 isr_put, Part 2
+    # isr_new, Parts 2b/2bN kput.1 and kdrop.1)
+    isr_fed = reads and ch.writers and any(x['isr'] for x in ch.writers.values())
+    x = [o for o in sigma if not (isr_fed and o in ('isr_put', 'isr_new'))]
+    if isr_fed:
+        x = [o + '.0' if o in ('kput', 'kdrop') else o for o in x]
     prefix = [e for i, e in pairs if i is not None and tr.rows[i].t <= pt['start']]
     return failure_check(BUF, cfg, buf_decls(cfg), sigma, x, prefix, False)
 
