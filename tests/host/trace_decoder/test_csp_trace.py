@@ -308,6 +308,67 @@ class Construction(unittest.TestCase):
         self.assertEqual(T.verdict(f), 'FAIL')
         self.assertEqual(T.verdict({'kind': 'trace', 'prob': {'result': 'PASS'}}), 'PASS')
 
+    # probcli output (ProB 1.16.1) of a check it gave up on: a node timed out
+    PROB_UNKNOWN = ('% 2500\n% time_out_for_node(0,unspecified_operation,time_out)\n\n'
+                    'CSP: SYS may *not* be trace refinement of CSP: RUNX(diff(Events,{bound}))\n'
+                    '% Refinement Check [T=] CPU Time: 449 ms\nRefinement check completed.\n*** UNKNOWN ***\n'
+                    'Runtime for csp_assertion_check: 469 ms\n*** Refinement Check Counter-Example: ***\n'
+                    'no_counter_example_found\n*** Refinement Check Failed ***\n\n! *** error occurred ***\n'
+                    '! refinement_check_fails\n! Total Errors: 1, Warnings:0\n')
+    PROB_OK = 'Refinement check completed.\nOK\nRuntime for csp_assertion_check: 12 ms\n==> Model Check Successful\n'
+    PROB_FALSE = ('Refinement check completed.\n*** FALSE ***\nRuntime for csp_assertion_check: 3 ms\n'
+                  '*** Refinement Check Counter-Example: ***\n[GO:,a_block.2,GO:,mark_t,DEADLOCKS]\n')
+
+    def test_prob_unknown_is_neither_pass_nor_fail(self):
+        r = T.prob_result(self.PROB_UNKNOWN)
+        self.assertEqual(r['result'], 'UNKNOWN')
+        self.assertNotIn('counterexample', r)
+        self.assertEqual(T.prob_result(self.PROB_OK)['result'], 'PASS')
+        self.assertEqual(T.prob_result(self.PROB_FALSE)['result'], 'FAIL')
+        self.assertEqual(T.prob_result('')['result'], 'UNKNOWN')            # no verdict printed
+        for kind in ('trace', 'failures'):
+            self.assertEqual(T.verdict({'kind': kind, 'prob': r}), 'UNKNOWN')
+
+    def test_prob_out_of_memory_is_unknown(self):
+        killed = T.prob_result('', -9, 6.0)                                 # cgroup limit: SIGKILL, no output
+        self.assertEqual(killed['result'], 'UNKNOWN')
+        self.assertIn('memory', killed['why'])
+        self.assertIn('6.0 GB', killed['why'])
+        nomem = T.prob_result('! Std error:  cspmf: failed to create OS thread: Cannot allocate memory\n', 1, 6.0)
+        self.assertEqual(nomem['result'], 'UNKNOWN')                       # RLIMIT_AS: an allocation failed
+        self.assertIn('memory', nomem['why'])
+        silent = T.prob_result('', 1)                                       # RLIMIT_AS: stopped without output
+        self.assertEqual(silent['result'], 'UNKNOWN')
+        self.assertIn('exit status 1', silent['why'])
+        argv, pre = T.prob_command(['probcli', 'x.csp'], 2.0, True)
+        self.assertEqual(argv[:4], ['systemd-run', '--user', '--scope', '-q'])
+        self.assertIn('MemoryMax=%d' % (2 * 1024 ** 3), argv)
+        self.assertEqual(argv[-2:], ['probcli', 'x.csp'])
+        self.assertIsNone(pre)
+        argv, pre = T.prob_command(['probcli', 'x.csp'], 2.0, False)
+        self.assertEqual(argv, ['probcli', 'x.csp'])
+        self.assertIsNotNone(pre)                                           # RLIMIT_AS in the child
+        self.assertEqual(T.prob_command(['probcli'], None, True), (['probcli'], None))
+
+    def test_prove_never_passes_or_catches_on_unknown(self):
+        d, cache = tempfile.mkdtemp(), tempfile.mkdtemp()
+        base = {'model': T.ATD, 'config': 'SYS(OK, <2>, 0, STALE, 0)', 'decls': ['M_P = STOP'],
+                'assert': 'M_P [T= REC_P', 'rec': ['a_block.2'], 'rows': [0], 'length': 1, 'projection': 'alt0'}
+        checks = [dict(base), dict(base, kind='failures', rec=['a_block.1']),
+                  dict(base, mutation='swap', rec=['tick', 'a_block.2'])]
+        checks[0]['kind'] = checks[2]['kind'] = 'trace'
+        T.json.dump({'checks': checks}, open(os.path.join(d, 'report.json'), 'w'))
+        run = T.run_prob
+        T.run_prob = lambda *a: T.prob_result(self.PROB_UNKNOWN)
+        try:
+            T.prove([d], M, 2, cache)
+        finally:
+            T.run_prob = run
+        out = T.json.load(open(os.path.join(d, 'report.json')))['checks']
+        self.assertEqual([c['verdict'] for c in out], ['UNKNOWN'] * 3)
+        self.assertIs(out[2]['caught'], False)                              # a mutant is caught only by FAIL
+        self.assertEqual(os.listdir(cache), [])                              # UNKNOWN is not cached
+
     def test_alt_guard_mutation_wraps(self):
         r = Rows().guards(P1, 'A', ('input', 'c'), ('timeout', 2))
         r.sel(P1, 'A', 1)

@@ -281,7 +281,7 @@ threads for longer logs.
 ## Conformance against the formal models (csp_trace.py)
 
     tools/trace/csp_trace.py events.csv --stable stable.csv --out DIR [--mutate] [--models DIR]
-    tools/trace/csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR]
+    tools/trace/csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR] [--prob-mem GB]
 
 The first form builds projections of a decoded trace, matches them against
 the models of `docs/formal` (or `--models`), and writes DIR/report.json
@@ -369,6 +369,16 @@ model is normalised once), split when it fails.
   deadline, a BufferedGet given the next put identity (after the slot
   replay); and at every stable point one offer removed (the first whose
   removal changes a refusal set). Each must fail.
+- **Verdicts.** Every ProB run gives PASS, FAIL or UNKNOWN. UNKNOWN covers
+  ProB giving up (a node timed out, "may not be"), the run hitting its time
+  limit or its memory limit, or output without a verdict. UNKNOWN is never
+  PASS, a mutant is caught only by FAIL, and UNKNOWN results are not cached.
+- **Memory limit.** Each probcli runs under `--prob-mem` GB (default
+  `PROB_MEM_GB`, else 85 % of the machine's memory divided by `--jobs`; 0:
+  none): in a cgroup of its own (`systemd-run --user --scope`, no swap),
+  where it is killed at the limit, or else with `RLIMIT_AS`, where an
+  allocation fails. Either way the run is UNKNOWN with the reason in the
+  report, never an empty or missing result.
 - **Coverage.** The share of the recorded CSP events (RTOS events
   excluded) inside a checked projection or select, per kind.
 

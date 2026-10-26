@@ -2,7 +2,7 @@
 """Conformance of a recorded CSP4CMSIS trace against docs/formal/*.csp.
 
     csp_trace.py EVENTS.csv[.xz] --out DIR [--stable STABLE.csv] [--mutate] [--models DIR]
-    csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR] [--models DIR]
+    csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR] [--models DIR] [--prob-mem GB]
 
 EVENTS.csv: tools/trace/decode.py -o; STABLE.csv: decode.py --stable. The
 first form writes DIR/report.json (projections, matching, checks, coverage)
@@ -33,12 +33,15 @@ choice), and writes the verdicts back.
    projection's trace accounts for, per event kind.
 No channel element values are involved: the trace has none.
 """
-import argparse, bisect, collections, concurrent.futures, csv, glob, hashlib, json, lzma, os, re, shutil, subprocess, sys, tempfile
+import argparse, bisect, collections, concurrent.futures, csv, glob, hashlib, json, lzma, os, re, resource, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 PROB = os.environ.get('PROBCLI', 'probcli')
 TIMEOUT = 7200
+MEM_GB = None                       # probcli's memory limit (GB), set by main(): --prob-mem
+CGROUP = None                       # systemd-run --scope usable? (checked once, when a limit is set)
+MEMERR = r'Cannot allocate memory|insufficient memory|[Rr]esource error[^\n]*memory|[Oo]ut of (global )?memory|memory exhausted'
 CHUNK = 250                         # events per CSPm definition of a recorded trace
 
 ATD, BUF, OWR, RVP = 'alt_timeout_deadline', 'buffered_channel_v2', 'alt_one_winner', 'rendezvous_plain'
@@ -992,7 +995,8 @@ def mutate_rows(rows, kind, target_rows, trace_rows=()):
 
 def verdict(chk):
     """A trace check holds iff ProB passes it; a stable-failure check holds
-    iff ProB finds a deadlock right after the marker. Mutants: caught iff FAIL."""
+    iff ProB finds a deadlock right after the marker. Mutants: caught iff FAIL.
+    ProB's UNKNOWN (and NOT RUN) stays the verdict: never PASS, never caught."""
     r = chk.get('prob', {})
     if r.get('result') not in ('PASS', 'FAIL'):
         return r.get('result', 'NOT RUN')
@@ -1267,28 +1271,83 @@ def key_of(chk, models):
     return hashlib.sha256((src + '\0' + csp_text(chk)).encode()).hexdigest()[:20]
 
 
+def default_mem_gb(jobs):
+    """85 % of the machine's memory shared by the parallel probcli runs; None
+    (no limit) where /proc/meminfo is missing."""
+    try:
+        kb = int(re.search(r'MemTotal:\s+(\d+)', open('/proc/meminfo').read()).group(1))
+    except (OSError, AttributeError):
+        return None
+    return round(kb / 1024 / 1024 * 0.85 / max(jobs, 1), 1)
+
+
+def cgroup_works():
+    try:
+        return subprocess.run(['systemd-run', '--user', '--scope', '-q', '-p', 'MemoryMax=64M', 'true'],
+                              capture_output=True, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def prob_command(args, mem_gb, cgroup):
+    """(argv, preexec_fn): args under a memory limit of mem_gb, in a cgroup of
+    its own (systemd-run --scope, no swap: probcli is killed at the limit) or
+    with RLIMIT_AS (an allocation fails at the limit)."""
+    if not mem_gb:
+        return args, None
+    b = int(mem_gb * 1024 ** 3)
+    if cgroup:
+        return ['systemd-run', '--user', '--scope', '-q', '-p', 'MemoryMax=%d' % b, '-p', 'MemorySwapMax=0'] + args, None
+    return args, lambda: resource.setrlimit(resource.RLIMIT_AS, (b, b))
+
+
 def run_prob(model, text, assertion, models):
+    global CGROUP
+    if MEM_GB and CGROUP is None:
+        CGROUP = cgroup_works()
     d = tempfile.mkdtemp()
     try:
         shutil.copy(os.path.join(models.dir, model + '.csp'), d)
         open(os.path.join(d, 'check.csp'), 'w').write(text)
+        argv, pre = prob_command([PROB, 'check.csp', '-csp_assertion', assertion, '-c'], MEM_GB, CGROUP)
         try:
-            p = subprocess.run([PROB, 'check.csp', '-csp_assertion', assertion, '-c'], cwd=d,
-                               capture_output=True, text=True, timeout=TIMEOUT)
+            p = subprocess.run(argv, cwd=d, preexec_fn=pre, capture_output=True, text=True, timeout=TIMEOUT)
             txt = p.stdout + p.stderr
         except subprocess.TimeoutExpired:
-            return {'result': 'TIMEOUT'}
+            return {'result': 'UNKNOWN', 'why': 'probcli did not finish within %d s' % TIMEOUT}
     finally:
         shutil.rmtree(d, ignore_errors=True)
+    return prob_result(txt, p.returncode, MEM_GB)
+
+
+def prob_result(txt, status=0, mem_gb=None):
+    """ProB's verdict from probcli's output and exit status: PASS (the
+    assertion holds), FAIL (it does not: a counterexample), or UNKNOWN (ProB
+    gave up -- a node or the check timed out --, probcli ran out of memory or
+    was killed, or it printed no verdict). UNKNOWN is never PASS, and a
+    mutant is caught only by FAIL."""
     lines = txt.splitlines()
-    res = 'PASS' if any(l.strip() == 'OK' for l in lines) else 'FAIL' if '*** FALSE ***' in txt else 'ERROR'
+    lim = ' (limit %s GB)' % mem_gb if mem_gb else ''
+    if status in (-9, 137):
+        res, why = 'UNKNOWN', 'probcli was killed (SIGKILL): out of memory' + lim
+    elif re.search(MEMERR, txt):
+        res, why = 'UNKNOWN', 'probcli ran out of memory%s: %s' % (lim, re.search(MEMERR, txt).group(0))
+    elif re.search(r'\*\*\* UNKNOWN \*\*\*|time_out_for_node|may \*not\* be', txt):
+        res, why = 'UNKNOWN', 'ProB gave up (a node timed out)'
+    elif any(l.strip() == 'OK' for l in lines):
+        res, why = 'PASS', None
+    elif '*** FALSE ***' in txt:
+        res, why = 'FAIL', None
+    else:
+        res, why = 'UNKNOWN', 'no verdict in the output (exit status %d)' % status
     cpu = re.search(r'Runtime for csp_assertion_check: (\d+) ms', txt)
     st = re.search(r'^STATES (\d+)', txt, re.M)
     ce = re.search(r'Result trace for \w+: (.*)', txt) or re.search(r'Refinement Check Counter-Example: \*\*\*\n(.*)', txt)
     out = {'result': res, 'cpu_ms': int(cpu.group(1)) if cpu else None, 'states': int(st.group(1)) if st else None}
-    if ce:
+    if ce and res == 'FAIL':
         out['counterexample'] = ce.group(1)[:400]
-    if res == 'ERROR':
+    if why:
+        out['why'] = why
         out['errors'] = [l for l in lines if l.startswith('!')][:6]
     return out
 
@@ -1340,7 +1399,8 @@ def prove(dirs, models, jobs, cache, skip=None):
         text = csp_text(cs[0], [c['rec'] for c in cs])
         r = run_prob(cs[0]['model'], text, cs[0]['assert'], models)
         runs.append({'model': cs[0]['model'], 'config': cs[0]['config'], 'traces': len(cs),
-                     'events': sum(c['length'] for c in cs), **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')}})
+                     'events': sum(c['length'] for c in cs), **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')},
+                     **({'why': r['why']} if 'why' in r else {})})
         if r['result'] == 'PASS' or len(cs) == 1:
             for c in cs:
                 results[c['key']] = dict(r, batch=len(cs))
@@ -1352,7 +1412,8 @@ def prove(dirs, models, jobs, cache, skip=None):
     def run_single(c):
         r = run_prob(c['model'], csp_text(c), c['assert'], models)
         runs.append({'model': c['model'], 'config': c['config'], 'traces': 1, 'events': c['length'],
-                     'kind': c.get('mutation') or c['kind'], **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')}})
+                     'kind': c.get('mutation') or c['kind'], **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')},
+                     **({'why': r['why']} if 'why' in r else {})})
         results[c['key']] = r
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
@@ -1376,6 +1437,7 @@ def prove(dirs, models, jobs, cache, skip=None):
 
 # ------------------------------------------------------------------- main
 def main():
+    global MEM_GB
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('events', nargs='?')
     ap.add_argument('--out')
@@ -1385,14 +1447,21 @@ def main():
     ap.add_argument('--prove', nargs='+', metavar='DIR')
     ap.add_argument('--jobs', type=int, default=8)
     ap.add_argument('--cache')
+    ap.add_argument('--prob-mem', type=float, metavar='GB',
+                    help='--prove: memory limit of each probcli run (default PROB_MEM_GB, else 85%% of the memory / '
+                         '--jobs; 0: none); a run stopped at the limit is UNKNOWN')
     ap.add_argument('--skip', help='--prove: leave the checks of configurations matching this regex unchecked')
     a = ap.parse_args()
     models = Models(a.models)
     if a.prove:
+        MEM_GB = (a.prob_mem if a.prob_mem is not None else
+                  float(os.environ['PROB_MEM_GB']) if os.environ.get('PROB_MEM_GB') else default_mem_gb(a.jobs))
         runs = prove(a.prove, models, a.jobs, a.cache, a.skip)
         json.dump(runs, open(os.path.join(os.path.dirname(os.path.abspath(a.prove[0])), 'prob_runs.json'), 'w'), indent=1)
         n = collections.Counter(r['result'] for r in runs)
-        print('%d ProB runs (%s), %.1f s CPU' % (len(runs), dict(n), sum((r.get('cpu_ms') or 0) for r in runs) / 1000))
+        print('%d ProB runs (%s), %.1f s CPU; memory limit per run: %s' % (
+            len(runs), dict(n), sum((r.get('cpu_ms') or 0) for r in runs) / 1000,
+            '%s GB (%s)' % (MEM_GB, 'cgroup' if CGROUP else 'RLIMIT_AS') if MEM_GB else 'none'))
         return
     if not (a.events and a.out):
         ap.error('EVENTS and --out are required (or --prove)')
