@@ -7,7 +7,7 @@
      csp4cmsis/inc/csp/csp4cmsis_trace.h. Decode together with the RTOS's
      .scvd file, e.g. with tools/trace/decode.py. -->
 <component_viewer schemaVersion="1.2.0" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="Component_Viewer.xsd">
-  <component name="CSP4CMSIS" shortname="CSP" version="3.1.0"/>
+  <component name="CSP4CMSIS" shortname="CSP" version="3.2.0"/>
 
   <events>
     <group name="CSP4CMSIS">

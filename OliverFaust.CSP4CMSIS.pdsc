@@ -10,6 +10,14 @@
   <license>LICENSE</license>
 
   <releases>
+    <release version="3.2.0" date="2026-10-26">
+      Tracing (opt-in, CSP4CMSIS_TRACE): rendezvous partners, wait/resume
+      events with offers, ring-slot indices, policy bits, AltGuard and
+      AltDeadline records; the trace event format changed from 3.1.0 and is
+      experimental. Tools (in the repository): Perfetto export, stable points,
+      conformance checking against docs/formal with ProB. Library API and
+      behaviour unchanged. docs/CHANGES_3.2.0.md.
+    </release>
     <release version="3.1.0" date="2026-10-17">
       Opt-in event tracing to CMSIS-View Event Recorder (CSP4CMSIS_TRACE):
       processes, rendezvous, ALT selection, buffered puts/gets and drops,
@@ -102,7 +110,7 @@
   </conditions>
 
   <components>
-    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.1.0" condition="CSP4CMSIS Core">
+    <component Cclass="CSP4CMSIS" Cgroup="Core" Cversion="3.2.0" condition="CSP4CMSIS Core">
       <description>CSP4CMSIS core: channels, ALT/select, processes (see Documentation/CSP4CMSIS_Configuration.md)</description>
       <files>
         <!-- Include path: csp4cmsis/inc/ only. Applications include
@@ -155,6 +163,7 @@
         <file category="doc" name="docs/CHANGES_3.0.md"/>
         <file category="doc" name="docs/CHANGES_3.0.1.md"/>
         <file category="doc" name="docs/CHANGES_3.1.0.md"/>
+        <file category="doc" name="docs/CHANGES_3.2.0.md"/>
         <file category="doc" name="trace/README.md"/>
 
         <!-- Event Recorder: event descriptions for CMSIS-View (CSP4CMSIS_TRACE builds) -->
