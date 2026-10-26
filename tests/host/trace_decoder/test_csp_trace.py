@@ -197,6 +197,21 @@ class Buffered(unittest.TestCase):
         res = T.buf_match(tr.bufs['c'], tr, M)
         self.assertIn('Part 3N SYS_BUFN(3, 1)', res)
 
+    def test_capacity_bound(self):
+        # capacity 4 is the largest the parameterised models are checked at; 5 is unmatched, with the reason
+        for cap, pol in ((4, 'Block'), (5, 'Block'), (4, 'KeepNewest'), (5, 'KeepNewest')):
+            r = Rows()
+            self.blocking_pair(r, 'c', cap, 0, pol)
+            tr = r.trace()
+            res = T.buf_match(tr.bufs['c'], tr, M)
+            name, part = ('Part 3N SYS_BUFN(%d, 1)' % cap, 'Part 3') if pol == 'Block' else \
+                         ('Part 2N SYS_KNE(%d, -1, -1)' % cap, 'Part 2N')
+            if cap <= 4:
+                self.assertIn(name, res)
+            else:
+                self.assertNotIn(name, res)
+                self.assertEqual(res[part], 'capacity 5 (the parameterised models are checked up to capacity 4)')
+
     def test_policy_from_the_record(self):
         r = Rows().add('BufferedPut', P1, context=P1, channel='o', count=1, capacity=2, policy='KeepOldest', slot=0)
         tr = r.trace()

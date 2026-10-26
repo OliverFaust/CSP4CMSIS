@@ -309,6 +309,20 @@ model is normalised once), split when it fails.
   parameters (docs/formal: SYSN, SYSM, SYS_BUFN, SYS5G, SYS_KNE, SYS_KOE)
   take capacity, roles, tick modulus, timeouts and channel guards from the
   instance.
+- **Model bounds.** An instance outside the bounds the parameterised models
+  were checked for is not matched; the report lists it with the reason.
+  - Timeout guards up to 15 ticks, at most 3 channel guards
+    (alt_timeout_deadline's SYSN): "timeout N ticks (the model's delays
+    are 0..15)".
+  - Buffered capacities up to 4 (SYS_BUFN, SYS5G, SYS_KNE, SYS_KOE):
+    "capacity N (the parameterised models are checked up to capacity 4)".
+
+  Why: ProB does not type-check channel values, so a value outside a
+  model's checked range is not rejected; the recorded trace would be
+  checked against a model never verified for it. The models' range
+  assertions (each value-carrying observed channel carries only values of
+  its declared type) are checked up to these bounds. Capacity 6 did not
+  finish in ProB.
 - **Per-select cut.** An Alternative with several select()s is checked one
   select() at a time (alt_timeout_deadline; two plain rendezvous inputs also
   alt_one_winner's SYSM with one select). Each select() is checked from the
@@ -374,6 +388,28 @@ model is normalised once), split when it fails.
 - eventlist 1.2.0 prints %t text of a data record (ProcessName) as empty and
   labels every event with the last component it read from the .scvd files.
   decode.py takes the text from the log and the component from the event ID.
+- Liveness of a select() over channel guards (it returns once a partner has
+  offered) is proved only in fixed configurations, by `[FD=`:
+  - two rendezvous input guards: an ALT writer and a plain writer, two ALT
+    writers, a plain writer and a signal (alt_one_winner, OWRV);
+  - crossing ALTs with an output and an input guard each, and an ALT writer
+    with two output guards (alt_owrv_extended Parts A and C);
+  - a rendezvous guard and an interrupt-fed buffered guard
+    (alt_owrv_extended Part B);
+  - a Block channel of capacity 2 with an ALT reader or an ALT writer
+    (buffered_channel_v2 Part 5), and an ALT reader fed by an interrupt
+    (Part 1c).
+
+  The parameterised configurations used by the conformance checks have no
+  liveness assertion:
+  - alt_timeout_deadline's SYSN with channel guards only (safety, `OFFS`,
+    and deadlock freedom);
+  - alt_one_winner's SYSM with several messages per partner (deadlock
+    freedom and the round bound);
+  - buffered_channel_v2's SYS5G (trace refinement and deadlock freedom).
+
+  No model proves liveness for three channel guards without a timeout, or
+  for a buffered guard with several task partners.
 
 ## Results, FVP regression matrix
 

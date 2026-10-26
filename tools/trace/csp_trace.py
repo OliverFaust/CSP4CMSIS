@@ -43,7 +43,10 @@ CHUNK = 250                         # events per CSPm definition of a recorded t
 
 ATD, BUF, OWR, RVP = 'alt_timeout_deadline', 'buffered_channel_v2', 'alt_one_winner', 'rendezvous_plain'
 BUF_EVENTS = ('BufferedPut', 'PutFromISR', 'BufferedGet', 'DroppedNew', 'OverwroteOldest')
-DMAX, CMAX, KMAX, MAXR = 15, 3, 8, 6
+DMAX, CMAX, KMAX, MAXR = 15, 3, 6, 6
+# buffered capacities up to KMAX - 2 = 4 (identities mod capacity + 2 < KMAX): the largest capacity whose
+# range assertions were checked in ProB (capacity 6 does not finish); a larger channel is not matched
+CAP_WHY = 'capacity %d (the parameterised models are checked up to capacity %d)'
 
 
 # ------------------------------------------------------------------ parsing
@@ -671,7 +674,7 @@ def buf_match(c, tr, models):
     elif not why and c.cap <= KMAX - 2 and models.has(BUF, 'SYS_BUFN'):
         res['Part 3N SYS_BUFN(%d, %d)' % (c.cap, wb)] = None
     else:
-        res['Part 3'] = '; '.join(why) or 'capacity %s (Part 3N: up to %d)' % (c.cap, KMAX - 2)
+        res['Part 3'] = '; '.join(why) or CAP_WHY % (c.cap, KMAX - 2)
     # Part 5 (fixed) and 5G
     why = []
     if pol != 'Block':
@@ -694,6 +697,8 @@ def buf_match(c, tr, models):
     elif not why and c.cap <= KMAX - 2 and (ra or wa or wi) and models.has(BUF, 'SYS5G'):
         res['Part 5G SYS5G(%d, %s, %s, %d, %d, %s, false)' % (c.cap, str(ra).lower(), str(wa).lower(), wb, rb,
                                                              str(wi).lower())] = None
+    elif not why and c.cap > KMAX - 2 and (ra or wa or wi):
+        res['Part 5'] = CAP_WHY % (c.cap, KMAX - 2)
     else:
         res['Part 5'] = '; '.join(why) or 'roles (Part 5G: ALT reader, ALT writer, ISR, or blocking ends with one of them)'
     # Parts 2N / 2bN
@@ -701,7 +706,7 @@ def buf_match(c, tr, models):
         if pol != want:
             res[part] = 'policy %s (%s: %s)' % (pol, part, want)
         elif c.cap > KMAX - 2:
-            res[part] = 'capacity %d' % c.cap
+            res[part] = CAP_WHY % (c.cap, KMAX - 2)
         elif not models.has(BUF, name):
             res[part] = 'needs the parameterised model (%s)' % name
         else:
