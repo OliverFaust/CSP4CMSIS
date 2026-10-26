@@ -1,0 +1,44 @@
+{
+  "model": "docs/formal/rendezvous_plain.csp",
+  "source": "the model header (Trace conformance) and its SigmaObs/H definitions",
+  "sigma_obs": [
+    "wait_w",
+    "res_w",
+    "wait_r",
+    "res_r",
+    "done"
+  ],
+  "hidden": "H = diff(Events, SigmaObs): decisions without record, offers, comm, pend_done updates and checks, flag sets and waits, stale flags",
+  "projection": "one rendezvous channel used only by plain operations: its WaitChannel records, their Resume (the same thread's next Resume), its RendezvousDone",
+  "configurations": [
+    {
+      "name": "SYS (lazy)",
+      "system": "SYS(OK, true, true)",
+      "requires": [
+        "one plain writer thread and one plain reader thread, different",
+        "no Alternative guard on the channel"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "trace": "WaitChannel (dir=write) / its Resume",
+      "model": "wait_w / res_w"
+    },
+    {
+      "trace": "WaitChannel (dir=read) / its Resume",
+      "model": "wait_r / res_r"
+    },
+    {
+      "trace": "RendezvousDone (by_reader b)",
+      "model": "done.b"
+    }
+  ],
+  "stable_failures": {
+    "X": "all of SigmaObs (nothing is awaited from the environment); lazy sides may be busy elsewhere"
+  },
+  "gaps": [
+    "serial semaphore waits and pair waits record the same events",
+    "more than one writer or reader: the serial semaphore matters, not modelled"
+  ]
+}

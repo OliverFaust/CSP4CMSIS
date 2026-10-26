@@ -1,0 +1,192 @@
+-- =============================================================================
+-- CSP4CMSIS 3.x rendezvous channel, plain operations: one plain writer and
+-- one plain reader on one channel (RendezvousCore::output/input in
+-- alt_channel_sync.cpp). CSP-M (FDR4 dialect), checked with ProB 1.16.1;
+-- results at the end. Reproduce with
+--   probcli rendezvous_plain.csp -csp_assertion '<assertion>'
+--
+-- Protocol (per operation, writer; the reader is symmetric):
+--   * WaitChannel(write), acquire the writer-side serial semaphore, Resume
+--     (one writer: never blocks; recorded either way);
+--   * one critical section: if a reader is pending, take it and record
+--     RendezvousDone (the second arriver records it, naming its partner);
+--     else offer (pending, pend_done = false);
+--   * second arriver: copy, set the partner's pend_done (critical section),
+--     set the partner's RENDEZVOUS_FLAG; done;
+--   * first arriver: WaitChannel(write), waitDone: check its pend_done in a
+--     critical section, wait for RENDEZVOUS_FLAG while it is false (a stale
+--     flag only causes another check), Resume.
+--   The first arriver's second WaitChannel may be recorded after the
+--   partner's RendezvousDone (the take can happen between its offer and
+--   that record).
+-- Abstraction: each critical section is one event; the copy is not
+-- modelled (no data); the serial semaphores are left out (one writer, one
+-- reader: they never block). A decision event carries whether it records
+-- RendezvousDone: w_tk.true / r_tk.true are renamed to done.false /
+-- done.true, so the record is atomic with the take, as in the code.
+-- Parameters: v (OK or a mutation), lz (lazy: after each operation a side
+-- may stop, i.e. be busy elsewhere -- needed for stable-failure checks: the
+-- recorded partner need not come back), s (one stale RENDEZVOUS_FLAG, at
+-- most once). RENDEZVOUS_FLAG is per thread, so in the code other channels
+-- can leave it set any number of times; SYSF allows stale flags at any time,
+-- any number of times, and #11-#18 show that this bound hides nothing: the
+-- same visible traces and stable failures with unbounded stale flags, with
+-- one and with none.
+-- Mutations (must fail): MBOTH the first arriver also records at its offer;
+-- MFIRST the first arriver records instead of the second; MNONE the writer,
+-- arriving second, does not record.
+--
+-- Trace conformance (not book-facing). Events a CSP4CMSIS trace supplies:
+--   WaitChannel (dir=write)           -> wait_w
+--   Resume (object = channel | write) -> res_w
+--   WaitChannel (dir=read)            -> wait_r
+--   Resume (object = channel | read)  -> res_r
+--   RendezvousDone (by_reader b)      -> done.b
+-- Hidden (H): the decisions w_tk.false / r_tk.false (MFIRST/MNONE takes
+-- without a record), w_of/r_of (offers), comm, pend_done updates and
+-- checks, flag sets and waits, stale flags.
+-- Gaps: the serial semaphore waits and the pair waits record the same
+-- events; with more than one writer or reader the serial semaphore matters
+-- and this model does not apply.
+-- =============================================================================
+
+OK = 0
+MBOTH = 1
+MFIRST = 2
+MNONE = 3
+
+channel wait_w, res_w, wait_r, res_r
+channel done : Bool                 -- RendezvousDone; true = recorded by the reader
+channel w_tk, r_tk : Bool           -- take the pending partner; true = records RendezvousDone
+channel w_of, r_of : Bool           -- offer; true = records RendezvousDone (mutations)
+channel comm                        -- the communication (a take), for the one-record property
+channel w_setd, r_setd              -- set the partner's pend_done
+channel w_chk, r_chk : Bool         -- waitDone: own pend_done
+channel w_sig, r_sig                -- set the partner's RENDEZVOUS_FLAG
+channel w_fw, r_fw                  -- osThreadFlagsWait(RENDEZVOUS_FLAG) returns
+channel w_stale, r_stale            -- a stale RENDEZVOUS_FLAG
+
+rec_take(v, writer) = if v == MFIRST then false else if v == MNONE then not writer else true
+rec_off(v) = v == MBOTH or v == MFIRST
+
+-- wp/rp: writer/reader pending (offered); wd/rd: their pend_done;
+-- wf/rf: their RENDEZVOUS_FLAG
+SH(v, wp, rp, wd, rd, wf, rf) =
+     rp & w_tk!rec_take(v, true) -> comm -> SH(v, wp, false, wd, rd, wf, rf)
+  [] (not rp) & w_of!rec_off(v) -> SH(v, true, rp, false, rd, wf, rf)
+  [] wp & r_tk!rec_take(v, false) -> comm -> SH(v, false, rp, wd, rd, wf, rf)
+  [] (not wp) & r_of!rec_off(v) -> SH(v, wp, true, wd, false, wf, rf)
+  [] w_setd -> SH(v, wp, rp, wd, true, wf, rf)
+  [] r_setd -> SH(v, wp, rp, true, rd, wf, rf)
+  [] w_chk!wd -> SH(v, wp, rp, wd, rd, wf, rf)
+  [] r_chk!rd -> SH(v, wp, rp, wd, rd, wf, rf)
+  [] w_sig -> SH(v, wp, rp, wd, rd, wf, true)
+  [] r_sig -> SH(v, wp, rp, wd, rd, true, rf)
+  [] wf & w_fw -> SH(v, wp, rp, wd, rd, false, rf)
+  [] rf & r_fw -> SH(v, wp, rp, wd, rd, wf, false)
+  [] w_stale -> SH(v, wp, rp, wd, rd, true, rf)
+  [] r_stale -> SH(v, wp, rp, wd, rd, wf, true)
+
+WR(lz) = if lz then (WOP(lz) |~| STOP) else WOP(lz)
+WOP(lz) = wait_w -> res_w -> ((w_tk?_ -> w_setd -> w_sig -> WR(lz))
+                              [] (w_of?_ -> wait_w -> WDN(lz)))
+WDN(lz) = w_chk?d -> (if d then res_w -> WR(lz) else w_fw -> WDN(lz))
+
+RD(lz) = if lz then (ROP(lz) |~| STOP) else ROP(lz)
+ROP(lz) = wait_r -> res_r -> ((r_tk?_ -> r_setd -> r_sig -> RD(lz))
+                              [] (r_of?_ -> wait_r -> RDN(lz)))
+RDN(lz) = r_chk?d -> (if d then res_r -> RD(lz) else r_fw -> RDN(lz))
+
+STALE(s) = if s then ((w_stale -> SKIP) [] (r_stale -> SKIP) [] SKIP) else SKIP
+
+SS = {| w_tk, r_tk, w_of, r_of, w_setd, r_setd, w_chk, r_chk, w_sig, r_sig, w_fw, r_fw, w_stale, r_stale |}
+SYS0(v, lz, s) = (WR(lz) ||| RD(lz) ||| STALE(s)) [| SS |] SH(v, false, false, false, false, false, false)
+SYS(v, lz, s) = SYS0(v, lz, s) [[ w_tk.true <- done.false, r_tk.true <- done.true,
+                                  w_of.true <- done.false, r_of.true <- done.true ]]
+
+-- the same with stale RENDEZVOUS_FLAGs at any time, any number of times
+STALEF = (w_stale -> STALEF) [] (r_stale -> STALEF) [] SKIP
+SYSF0(v, lz) = (WR(lz) ||| RD(lz) ||| STALEF) [| SS |] SH(v, false, false, false, false, false, false)
+SYSF(v, lz) = SYSF0(v, lz) [[ w_tk.true <- done.false, r_tk.true <- done.true,
+                              w_of.true <- done.false, r_of.true <- done.true ]]
+
+-- Trace conformance: the events a trace supplies and the hidden ones
+SigmaObs = {| wait_w, res_w, wait_r, res_r, done |}
+H = diff(Events, SigmaObs)
+
+-- Specifications
+-- every communication is recorded, forever (eager sides): live, no divergence;
+-- which side records depends on the arrival order (internal choice)
+SPECD = |~| b : Bool @ done.b -> SPECD
+-- exactly one record per communication (comm: the take)
+ONE = done?_ -> comm -> ONE
+-- the record names the second arriver: after the reader's offer the writer
+-- records (done.false), after the writer's offer the reader (done.true)
+ARR = (r_of.false -> done.false -> ARR) [] (w_of.false -> done.true -> ARR)
+-- each WaitChannel is followed by its Resume before the side's next wait
+BRW = wait_w -> res_w -> BRW
+BRR = wait_r -> res_r -> BRR
+BR = BRW ||| BRR
+
+-- =============================================================================
+-- Assertions
+-- =============================================================================
+-- the protocol (OK, eager, a stale flag). expected: PASS
+assert SPECD [FD= SYS(OK, false, true) \ diff(Events, {| done |})
+assert SYS(OK, false, true) :[deadlock free [F]]
+assert ONE [T= SYS(OK, false, true) \ diff(Events, {| done, comm |})
+assert ARR [T= SYS(OK, false, true) \ diff(Events, {| done, w_of, r_of |})
+assert BR [T= SYS(OK, false, true) \ diff(Events, {| wait_w, res_w, wait_r, res_r |})
+-- the conformance configuration (lazy) has the same traces. expected: PASS
+assert SYS(OK, false, true) \ H [T= SYS(OK, true, true) \ H
+assert SYS(OK, true, true) \ H [T= SYS(OK, false, true) \ H
+-- mutations. expected: FAIL each
+assert ONE [T= SYS(MBOTH, false, true) \ diff(Events, {| done, comm |})
+assert ARR [T= SYS(MFIRST, false, true) \ diff(Events, {| done, w_of, r_of |})
+assert ONE [T= SYS(MNONE, false, true) \ diff(Events, {| done, comm |})
+-- the stale-flag bound: unbounded stale flags give the same visible traces
+-- and stable failures as one (lazy), and the recording rule still holds;
+-- one stale flag or none give the same stable failures. expected: PASS
+assert SYS(OK, true, true) \ H [T= SYSF(OK, true) \ H
+assert SYSF(OK, true) \ H [T= SYS(OK, true, true) \ H
+assert SYS(OK, true, true) \ H [F= SYSF(OK, true) \ H
+assert SYSF(OK, true) \ H [F= SYS(OK, true, true) \ H
+assert ONE [T= SYSF(OK, false) \ diff(Events, {| done, comm |})
+assert ARR [T= SYSF(OK, false) \ diff(Events, {| done, w_of, r_of |})
+assert SYS(OK, true, true) \ H [F= SYS(OK, true, false) \ H
+assert SYS(OK, true, false) \ H [F= SYS(OK, true, true) \ H
+
+-- Ranges. ProB does not type-check channel values: an expression that
+-- computes a value outside a channel's declared type still produces the
+-- event. Each value-carrying channel of SigmaObs is checked once: the system
+-- produces only values of the declared type ({| c |} holds exactly those; an
+-- out-of-type event is not in Events, so it stays visible and RANGE refuses
+-- it). expected: PASS
+RANGE(A) = [] e : A @ e -> RANGE(A)
+assert RANGE({| done |}) [T= SYS(OK, true, true) \ diff(Events, {| done |})
+
+-- =============================================================================
+-- RESULTS (ProB 1.16.1-final 716929f, 2026-10-21; all as expected; each
+-- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
+--  #  assertion                                            expected  ProB  states      s    note
+--  1  SPECD [FD= SYS(OK, false, true) \ diff(Events, {| do PASS      PASS    1317    2.2
+--  2  SYS(OK, false, true) :[deadlock free [F]]            PASS      PASS    1313    2.1
+--  3  ONE [T= SYS(OK, false, true) \ diff(Events, {| done, PASS      PASS    1316    2.3
+--  4  ARR [T= SYS(OK, false, true) \ diff(Events, {| done, PASS      PASS    1317    2.2
+--  5  BR [T= SYS(OK, false, true) \ diff(Events, {| wait_w PASS      PASS    1318    2.2
+--  6  SYS(OK, false, true) \ H [T= SYS(OK, true, true) \ H PASS      PASS    3336    5.7
+--  7  SYS(OK, true, true) \ H [T= SYS(OK, false, true) \ H PASS      PASS    3336    5.7
+--  8  ONE [T= SYS(MBOTH, false, true) \ diff(Events, {| do FAIL      FAIL      81    0.2  two records for one communication
+--  9  ARR [T= SYS(MFIRST, false, true) \ diff(Events, {| d FAIL      FAIL      64    0.2  the first arriver records
+-- 10  ONE [T= SYS(MNONE, false, true) \ diff(Events, {| do FAIL      FAIL     256    0.4  a communication without a record
+-- 11  SYS(OK, true, true) \ H [T= SYSF(OK, true) \ H       PASS      PASS    4389    7.6
+-- 12  SYSF(OK, true) \ H [T= SYS(OK, true, true) \ H       PASS      PASS    4389    7.3
+-- 13  SYS(OK, true, true) \ H [F= SYSF(OK, true) \ H       PASS      PASS    4389    7.6
+-- 14  SYSF(OK, true) \ H [F= SYS(OK, true, true) \ H       PASS      PASS    4389    7.3
+-- 15  ONE [T= SYSF(OK, false) \ diff(Events, {| done, comm PASS      PASS    1524    2.8
+-- 16  ARR [T= SYSF(OK, false) \ diff(Events, {| done, w_of PASS      PASS    1525    2.7
+-- 17  SYS(OK, true, true) \ H [F= SYS(OK, true, false) \ H PASS      PASS    2028    3.3
+-- 18  SYS(OK, true, false) \ H [F= SYS(OK, true, true) \ H PASS      PASS    2028    3.4
+-- Ranges (2026-10-21: each alone, 6 jobs in parallel, so the times are not comparable):
+-- 19  RANGE({| done |}) [T= SYS(OK, true, true) \ diff(Eve PASS      PASS    2026    3.2
+-- =============================================================================
