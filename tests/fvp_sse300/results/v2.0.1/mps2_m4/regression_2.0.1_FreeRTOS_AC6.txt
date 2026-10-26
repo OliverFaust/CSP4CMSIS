@@ -1,8 +1,8 @@
 # target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
 # config: lib=v2 build type=FreeRTOS toolchain=AC6 image=out/MPS2-Cortex-M4/FreeRTOS/AC6/m4.axf
-# library: /home/of6/src/CSP4CMSIS @ f979e4686aac2f980f2f62ca1e3db11bd4a7ba07 dirty=1
-# library sources compiled from: /home/of6/src/CSP4CMSIS/csp4cmsis/src
-# test source: /home/of6/src/CSP4CMSIS/tests/fvp_sse300/bc_tests.cpp
+# library: <src>/CSP4CMSIS @ f979e4686aac2f980f2f62ca1e3db11bd4a7ba07 dirty=1
+# library sources compiled from: <src>/CSP4CMSIS/csp4cmsis/src
+# test source: <src>/CSP4CMSIS/tests/fvp_sse300/bc_tests.cpp
 
 Info: FVP_MPS2_Cortex_M4: telnetterminal0: Listening for serial connection on port 5000
 

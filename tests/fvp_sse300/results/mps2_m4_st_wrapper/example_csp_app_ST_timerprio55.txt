@@ -1,7 +1,7 @@
 # target: FVP_MPS2_Cortex-M4 (Fast Models 11.28.32), Cortex-M4F, Armv7E-M
 # config: lib=v2 build type=Example-ST toolchain=GCC image=out/MPS2-Cortex-M4/Example-ST/GCC/m4.elf
-# library: /home/of6/src/CSP4CMSIS @ 76194a5946c65c990093ad70977fb2df79603a13 dirty=0
-# library sources compiled from: /home/of6/src/CSP4CMSIS/csp4cmsis/src
+# library: <src>/CSP4CMSIS @ 76194a5946c65c990093ad70977fb2df79603a13 dirty=0
+# library sources compiled from: <src>/CSP4CMSIS/csp4cmsis/src
 # test source: 
 
 
