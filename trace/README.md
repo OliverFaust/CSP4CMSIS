@@ -16,6 +16,112 @@ decodes them. Decode a log (Semihosting variant) to CSV with
 `EVENTLIST=` / `NM=`). On a simulator pass `--model-time`: time stamps then
 count model cycles, not simulated seconds.
 
+## Using the tools in your own project
+
+The library side is in the pack; the tools are in this repository
+(`tools/trace/`, Python 3, standard library only). Nothing below depends
+on the FVP harness used for the results at the end, which is not public.
+The trace format is experimental: use the `.scvd` and the tools of the same
+release as the library (`docs/CHANGES_3.2.0.md`).
+
+**1. Enable tracing and Event Recorder.**
+
+- Define `CSP4CMSIS_TRACE` for the whole project (the channel templates are
+  compiled in your files), e.g. in the `.csolution.yml` or `.cproject.yml`:
+
+      define:
+        - CSP4CMSIS_TRACE
+
+- Add Event Recorder from the CMSIS-View pack (tested: 1.2.0):
+  - on an FVP or a simulator, the Semihosting variant, which writes every
+    record to a file on the host: `- component: ARM::CMSIS-View:Event
+    Recorder&Semihosting`; run the FVP with semihosting enabled
+    (`-C cpu0.semihosting-enable=1` on Corstone-300,
+    `-C armcortexm4ct.semihosting-enable=1` on MPS2 Cortex-M4). The file is
+    `EventRecorder.log` in the FVP's working directory, or the path you
+    define as `EVENT_LOG_FILENAME` (a string literal, with its quotes);
+  - on hardware with a debug probe, the DAP variant: `- component:
+    ARM::CMSIS-View:Event Recorder&DAP`. The records stay in a RAM buffer
+    that the debugger reads (Event Recorder window of µVision or Keil
+    Studio; give it `trace/CSP4CMSIS.scvd` to name the events). decode.py
+    reads the Semihosting variant's log file; it was not tested with logs
+    saved by a debugger.
+- Initialise Event Recorder: RTX5 does it in osKernelInitialize() when
+  `OS_EVR_INIT` is 1 (RTX_Config.h; its default is 0), CMSIS-FreeRTOS before
+  main() (`configEVR_INITIALIZE`, default 1); otherwise call
+  `EventRecorderInitialize(EventRecordError, 1U)` yourself. Then enable
+  CSP4CMSIS's component, after osKernelInitialize():
+
+      EventRecorderEnable(EventRecordAll, 0x50U, 0x50U);
+
+  Time stamps: the source is the DWT cycle counter by default
+  (`EVENT_TIMESTAMP_SOURCE` 0 in EventRecorderConf.h); set
+  `EVENT_TIMESTAMP_FREQ` to its frequency so that decode.py prints seconds.
+  On an FVP the counter runs on model cycles: decode with `--model-time`.
+- RTOS thread events (switches, creation) let the Perfetto view show when
+  each thread runs and let decode.py confirm stable points. RTX5 records
+  them with its default event settings (`OS_EVR_THREAD`), CMSIS-FreeRTOS
+  through `freertos_evr.h`, which its FreeRTOSConfig.h template includes.
+  ST's CMSIS-RTOS2 wrapper records none.
+- Size: a main stack of at least 2 KB for RTX5 with Arm Compiler 6 (Known
+  limitations), and room for the buffer (64 records: 1,192 bytes of RAM).
+
+**2. Decode** the log to CSV, a summary and the stable points:
+
+    tools/trace/decode.py -a app.elf -I <RTOS>.scvd EventRecorder.log \
+        -o events.csv --summary summary.txt --stable stable.csv [--model-time]
+
+`<RTOS>.scvd`: `RTX5.scvd` of the CMSIS-RTX pack, or
+`CMSIS/RTOS2/FreeRTOS/FreeRTOS.scvd` of the CMSIS-FreeRTOS pack, in your
+pack root (omit `-I` without RTOS events). Needs `eventlist` (CMSIS-Toolbox;
+tested 1.2.0) and `arm-none-eabi-nm` on the PATH, or `EVENTLIST=` / `NM=`.
+The summary ends with one line per library-state check (ring slots, ALT
+offers, ALT deadlines, stable points); the CSV has one row per event.
+
+**3. View it in Perfetto:**
+
+    tools/trace/decode.py -a app.elf -I <RTOS>.scvd EventRecorder.log --perfetto trace.json \
+        [--model-time] [--window T0:T1] [--threads A,B]
+
+Open https://ui.perfetto.dev, "Open trace file", and pick trace.json. The
+file is read in the browser and not uploaded. Each thread is a group
+(running, waiting, events); interrupts and buffered channels have groups of
+their own (section Perfetto below). Flow arrows (writer to reader of a
+rendezvous; a buffered put to the get that took its value) are drawn for
+selected slices: click a slice, or **drag-select an area** of the timeline
+to see the arrows of everything in it (also listed in the "Flow events" tab
+below the timeline). **Never use Perfetto's Share button for a private
+trace**: it uploads the trace to Google's servers and makes a link that
+anyone who has it can open. Select a window or
+threads for long logs (a whole run of 650,000 events gives 80 MB).
+
+**4. Check conformance** against the models in `docs/formal`:
+
+    tools/trace/csp_trace.py events.csv --stable stable.csv --out conf --mutate
+    tools/trace/csp_trace.py --prove conf --cache probcache [--jobs N]
+    tools/trace/check_fair_select.py events.csv --fair <regex of your fairSelect() Alternatives>
+
+The first command projects the trace and matches the projections against
+the model configurations (`conf/match.txt`: what matched, and why the rest
+did not); the second runs ProB 1.16.1 (`probcli` on the PATH or
+`PROBCLI=`) and writes the verdicts into `conf/report.json`. A projection
+is checked only if it lies within the models' bounds (timeouts up to 15
+ticks, capacities up to 4; section Conformance below). Read the result:
+
+- every trace and stable-failure check PASS (`report.json`: `verdicts`);
+  any FAIL is a recorded behaviour the model does not allow (the check's
+  file is in `conf/checks/`); UNKNOWN means ProB did not decide (time,
+  memory) and is not a pass;
+- with `--mutate`, every mutant FAIL (caught), except the three swaps of
+  Known limitations if your trace has those situations;
+- the coverage in `report.json` (`coverage`): the share of your CSP events
+  that lie in a checked projection;
+- check_fair_select.py: 0 violations.
+
+The `--prove` step needs memory: `--jobs` ProB runs at once, each limited to
+85 % of the machine's memory divided by `--jobs`; a run stopped at the
+limit is retried once with 3 x the limit.
+
 ## What is recorded
 
 Every event names its context: the thread (thread mode, kernel running),
@@ -503,33 +609,34 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   projection on Corstone-300, 1 on MPS2, none on ST's FreeRTOS) and the
   mutants fail (a swap, a dropped RendezvousDone, a changed get identity,
   the removed offers).
-- Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the models with
-  their parameters), all 30 and the demo (two runs): per run 67 of 73
-  Alternatives match (36,356 select()s, each checked on its own: T1, T12,
-  T13, T15 and the rest; 10,077 of them, the ALT writers of T1b and T13b
-  and one select of T2, are outside the partner abstraction), 21 of 26
-  buffered channels and the 4 plain rendezvous channels; the demo's merger
-  (62/63 selects), sensor_samples and merger_to_consumer. Not matched:
-  timeouts above 15 ticks (T11, T15s, T22), two selects that record only
-  AltGuard, and channels with two ALT ends or a multi-guard ALT end (T4a,
-  T4b, T10, T15, T15s). All 1,122,223 trace checks run pass (37,393 to
-  37,408 per run; the whole-channel check of T13b, about 15 min of ProB
-  CPU, was run on 4 configurations); all 514 stable-failure checks pass
-  (19 to 21 per run with switch events, at 8 stable points). Mutants:
-  per run 21 trace mutants (10 swaps, 3 dropped RendezvousDone, 2 changed
-  guards, 5 changed get identities, 1 early Resume) and, with switch
-  events, 8 removed offers (one per stable point): all fail as they must
-  except 3 swaps, which swap events the model allows in either order
-  (alt_one_winner: AltSelected and the writer's Resume; Part 5G: a blocking
-  writer's Resume and another writer's BufferedPut; Part 5: a PutFromISR
-  and a stale Resume). The demo's 6 mutants fail. Coverage: 91.8 % of the
-  CSP4CMSIS events per run lie in a checked projection or select (0.04 %
-  before the per-select cut and the parameterised models): RendezvousDone
-  99.8 %, AltSelected 100 %, buffered 96.2 %, waits and resumes 87.0 %; the largest unchecked groups are T15's channels and
-  T12's waits. Fairness (check_fair_select.py): fair_select.cpp 16
-  fairSelect()s, 15 with both guards ready throughout, 0 violations, all
-  30; T12 0 violations (no select with another guard ready throughout),
-  the demo's merger 0 (1 such select). ProB CPU: about 3.4 h in all (8 jobs).
+- Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the committed models
+  of docs/formal with their parameters; 2026-10-26), all 30 and the demo:
+  per run 68 of 74 Alternatives match (36,390 select()s, each checked on its
+  own: T1, T12, T13, T15 and the rest; 10,087 of them, the ALT writers of T1b
+  and T13b and one select of T2, are outside the partner abstraction), 22 of
+  27 buffered channels and the 5 plain rendezvous channels (these totals
+  include throttled_drop.cpp); the demo's merger (62/63 selects),
+  sensor_samples and merger_to_consumer. Not matched: timeouts above 15
+  ticks (T11, T15s, T22), two selects that record only AltGuard, and
+  channels with two ALT ends or a multi-guard ALT end (T4a, T4b, T10, T15,
+  T15s). All 1,122,784 trace checks pass (37,416 to 37,430 per run) and all
+  640 stable-failure checks (25 per run on Corstone-300, 24 on MPS2
+  Cortex-M4; none with ST's FreeRTOS, which has no switch events). Mutants:
+  per run 22 trace mutants (10 swaps, 3 dropped RendezvousDone, 2 changed
+  guards, 6 changed get identities, 1 early Resume) and, with switch events,
+  one removed offer per stable point (10 on Corstone-300, 9 on MPS2): all
+  fail as they must except 3 swaps, which swap events the model allows in
+  either order (alt_one_winner: AltSelected and the writer's Resume; Part
+  5G: a blocking writer's Resume and another writer's BufferedPut; Part 5: a
+  PutFromISR and a stale Resume). In all 820 of 910 mutants caught; the 90
+  others are these 3 swaps in each run. The demo's 6 mutants fail. Coverage:
+  91.8 % of the CSP4CMSIS events per run lie in a checked projection or
+  select (0.04 % before the per-select cut and the parameterised models):
+  RendezvousDone 99.8 %, AltSelected 100 %, buffered 96.2 %, waits and
+  resumes 87.0 %; the largest unchecked groups are T15's channels. Fairness
+  (check_fair_select.py): fair_select.cpp 16 fairSelect()s, 15 with both
+  guards ready throughout, 0 violations, all 30; T12 0 violations (no select
+  with another guard ready throughout), the demo's merger 0 (1 such select).
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.
