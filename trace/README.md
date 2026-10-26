@@ -378,7 +378,12 @@ model is normalised once), split when it fails.
   none): in a cgroup of its own (`systemd-run --user --scope`, no swap),
   where it is killed at the limit, or else with `RLIMIT_AS`, where an
   allocation fails. Either way the run is UNKNOWN with the reason in the
-  report, never an empty or missing result.
+  report, never an empty or missing result. Such a run (a batch is not
+  split) is rerun once, after all others, with 3 x its limit (at most 85 %
+  of the memory) and as many runs at once as fit in 85 % of the memory. One
+  still UNKNOWN then stays UNKNOWN; its checks keep both attempts
+  (`prob.attempts` in `report.json`), and `report.json`'s `prob` counts the
+  runs, the retries and those still UNKNOWN.
 - **Coverage.** The share of the recorded CSP events (RTOS events
   excluded) inside a checked projection or select, per kind.
 

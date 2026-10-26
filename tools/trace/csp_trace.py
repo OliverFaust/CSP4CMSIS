@@ -1282,14 +1282,35 @@ def key_of(chk, models):
     return hashlib.sha256((src + '\0' + csp_text(chk)).encode()).hexdigest()[:20]
 
 
-def default_mem_gb(jobs):
-    """85 % of the machine's memory shared by the parallel probcli runs; None
-    (no limit) where /proc/meminfo is missing."""
+def usable_mem_gb():
+    """85 % of the machine's memory (GB); None where /proc/meminfo is missing."""
     try:
         kb = int(re.search(r'MemTotal:\s+(\d+)', open('/proc/meminfo').read()).group(1))
     except (OSError, AttributeError):
         return None
-    return round(kb / 1024 / 1024 * 0.85 / max(jobs, 1), 1)
+    return kb / 1024 / 1024 * 0.85
+
+
+def default_mem_gb(jobs):
+    """85 % of the machine's memory shared by the parallel probcli runs; None
+    (no limit) where /proc/meminfo is missing."""
+    gb = usable_mem_gb()
+    return round(gb / max(jobs, 1), 1) if gb else None
+
+
+RETRY_FACTOR = 3                    # a run stopped at the memory limit is rerun once with this many times the limit
+
+
+def retry_plan(mem_gb, jobs, usable=None):
+    """(limit, parallel runs) of the retries: RETRY_FACTOR x mem_gb (at most
+    85 % of the memory), with as many runs at once as fit in 85 % of the
+    memory (at least one, at most jobs)."""
+    usable = usable_mem_gb() if usable is None else usable
+    gb = mem_gb * RETRY_FACTOR
+    if not usable:
+        return gb, max(1, jobs // RETRY_FACTOR)
+    gb = round(min(gb, usable), 1)
+    return gb, max(1, min(jobs, int(usable // gb)))
 
 
 def cgroup_works():
@@ -1312,15 +1333,16 @@ def prob_command(args, mem_gb, cgroup):
     return args, lambda: resource.setrlimit(resource.RLIMIT_AS, (b, b))
 
 
-def run_prob(model, text, assertion, models):
+def run_prob(model, text, assertion, models, mem_gb=None):
     global CGROUP
-    if MEM_GB and CGROUP is None:
+    mem_gb = MEM_GB if mem_gb is None else mem_gb
+    if mem_gb and CGROUP is None:
         CGROUP = cgroup_works()
     d = tempfile.mkdtemp()
     try:
         shutil.copy(os.path.join(models.dir, model + '.csp'), d)
         open(os.path.join(d, 'check.csp'), 'w').write(text)
-        argv, pre = prob_command([PROB, 'check.csp', '-csp_assertion', assertion, '-c'], MEM_GB, CGROUP)
+        argv, pre = prob_command([PROB, 'check.csp', '-csp_assertion', assertion, '-c'], mem_gb, CGROUP)
         try:
             p = subprocess.run(argv, cwd=d, preexec_fn=pre, capture_output=True, text=True, timeout=TIMEOUT)
             txt = p.stdout + p.stderr
@@ -1328,7 +1350,7 @@ def run_prob(model, text, assertion, models):
             return {'result': 'UNKNOWN', 'why': 'probcli did not finish within %d s' % TIMEOUT}
     finally:
         shutil.rmtree(d, ignore_errors=True)
-    return prob_result(txt, p.returncode, MEM_GB)
+    return prob_result(txt, p.returncode, mem_gb)
 
 
 def prob_result(txt, status=0, mem_gb=None):
@@ -1339,6 +1361,7 @@ def prob_result(txt, status=0, mem_gb=None):
     mutant is caught only by FAIL."""
     lines = txt.splitlines()
     lim = ' (limit %s GB)' % mem_gb if mem_gb else ''
+    mem = status in (-9, 137) or bool(re.search(MEMERR, txt))
     if status in (-9, 137):
         res, why = 'UNKNOWN', 'probcli was killed (SIGKILL): out of memory' + lim
     elif re.search(MEMERR, txt):
@@ -1357,6 +1380,8 @@ def prob_result(txt, status=0, mem_gb=None):
     out = {'result': res, 'cpu_ms': int(cpu.group(1)) if cpu else None, 'states': int(st.group(1)) if st else None}
     if ce and res == 'FAIL':
         out['counterexample'] = ce.group(1)[:400]
+    if mem:
+        out['memory'] = True
     if why:
         out['why'] = why
         out['errors'] = [l for l in lines if l.startswith('!')][:6]
@@ -1369,7 +1394,10 @@ BATCH_EVENTS = 40000                # a batch of more recorded events is split (
 def prove(dirs, models, jobs, cache, skip=None):
     """Check the assertions of all report.json in dirs: trace checks batched
     per configuration (one ProB run each; a failing batch is split), the
-    others one by one; results cached by check."""
+    others one by one; results cached by check. A run stopped at the memory
+    limit is not split: it is rerun once, after all others, with
+    RETRY_FACTOR x the limit and fewer runs at once (retry_plan); still
+    UNKNOWN then, it stays UNKNOWN, and its checks keep both attempts."""
     reports = {d: json.load(open(os.path.join(d, 'report.json'))) for d in dirs}
     allc = [c for r in reports.values() for c in r['checks']]
     for c in allc:
@@ -1404,32 +1432,60 @@ def prove(dirs, models, jobs, cache, skip=None):
             cur.append(c)
             n += c['length']
         split.append(cur)
-    runs = []
+    runs, retry, first = [], [], {}
 
-    def run_batch(cs):
+    def attempt(r, mem, n):
+        return {'mem_gb': mem, 'batch': n, **{k: r[k] for k in ('result', 'why', 'cpu_ms', 'states') if k in r}}
+
+    def done(cs, r, mem, again):
+        """True: r is final for cs; False: cs waits for the retry."""
+        if r.get('memory') and not again and MEM_GB:
+            retry.append(cs)
+            for c in cs:
+                first[c['key']] = attempt(r, mem, len(cs))
+            return False
+        if again or len(cs) == 1 or r['result'] == 'PASS':
+            for c in cs:
+                results[c['key']] = dict(r, batch=len(cs), **({'attempts': [first[c['key']], attempt(r, mem, len(cs))]}
+                                                              if c['key'] in first else {}))
+        return True
+
+    def run_batch(cs, mem=None, again=False):
         text = csp_text(cs[0], [c['rec'] for c in cs])
-        r = run_prob(cs[0]['model'], text, cs[0]['assert'], models)
+        r = run_prob(cs[0]['model'], text, cs[0]['assert'], models, mem)
         runs.append({'model': cs[0]['model'], 'config': cs[0]['config'], 'traces': len(cs),
                      'events': sum(c['length'] for c in cs), **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')},
-                     **({'why': r['why']} if 'why' in r else {})})
-        if r['result'] == 'PASS' or len(cs) == 1:
-            for c in cs:
-                results[c['key']] = dict(r, batch=len(cs))
+                     'mem_gb': mem or MEM_GB, **({'retry': True} if again else {}), **({'why': r['why']} if 'why' in r else {})})
+        if not done(cs, r, mem or MEM_GB, again) or r['result'] == 'PASS' or len(cs) == 1:
             return
+        if again and r.get('memory'):                # the retry ran out of memory too: UNKNOWN, not split
+            return
+        if again:                                    # a FAIL or ProB's UNKNOWN in the retry: split as in the first pass
+            for c in cs:
+                results.pop(c['key'], None)
         half = len(cs) // 2
-        run_batch(cs[:half])
-        run_batch(cs[half:])
+        run_batch(cs[:half], mem, again)
+        run_batch(cs[half:], mem, again)
 
-    def run_single(c):
-        r = run_prob(c['model'], csp_text(c), c['assert'], models)
+    def run_single(c, mem=None, again=False):
+        r = run_prob(c['model'], csp_text(c), c['assert'], models, mem)
         runs.append({'model': c['model'], 'config': c['config'], 'traces': 1, 'events': c['length'],
                      'kind': c.get('mutation') or c['kind'], **{k: r.get(k) for k in ('result', 'cpu_ms', 'states')},
-                     **({'why': r['why']} if 'why' in r else {})})
-        results[c['key']] = r
+                     'mem_gb': mem or MEM_GB, **({'retry': True} if again else {}), **({'why': r['why']} if 'why' in r else {})})
+        done([c], r, mem or MEM_GB, again)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
         list(ex.map(run_batch, split))
         list(ex.map(run_single, singles))
+    stats = {'runs': len(runs), 'mem_gb': MEM_GB, 'retried': len(retry), 'unknown_after_retry': 0}
+    if retry:
+        gb, rj = retry_plan(MEM_GB, jobs)
+        stats.update(retry_mem_gb=gb, retry_jobs=rj)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=rj) as ex:
+            list(ex.map(lambda cs: run_batch(cs, gb, True) if cs[0]['kind'] == 'trace' and not cs[0].get('mutation')
+                        else run_single(cs[0], gb, True), retry))
+        stats['runs'] = len(runs)
+        stats['unknown_after_retry'] = sum(1 for cs in retry if any(results[c['key']]['result'] == 'UNKNOWN' for c in cs))
     if cache:
         for k, r in results.items():
             if not r.get('cached') and r.get('result') in ('PASS', 'FAIL'):
@@ -1442,6 +1498,7 @@ def prove(dirs, models, jobs, cache, skip=None):
                 c['caught'] = c['verdict'] == 'FAIL'
         rep['verdicts'] = {'%s %s' % k: n for k, n in collections.Counter(
             (c.get('mutation') or c['kind'], c['verdict']) for c in rep['checks']).items()}
+        rep['prob'] = stats
         json.dump(rep, open(os.path.join(d, 'report.json'), 'w'), indent=1)
     return runs
 
@@ -1470,9 +1527,14 @@ def main():
         runs = prove(a.prove, models, a.jobs, a.cache, a.skip)
         json.dump(runs, open(os.path.join(os.path.dirname(os.path.abspath(a.prove[0])), 'prob_runs.json'), 'w'), indent=1)
         n = collections.Counter(r['result'] for r in runs)
+        rt = [r for r in runs if r.get('retry')]
         print('%d ProB runs (%s), %.1f s CPU; memory limit per run: %s' % (
             len(runs), dict(n), sum((r.get('cpu_ms') or 0) for r in runs) / 1000,
             '%s GB (%s)' % (MEM_GB, 'cgroup' if CGROUP else 'RLIMIT_AS') if MEM_GB else 'none'))
+        if rt:
+            st = json.load(open(os.path.join(a.prove[0], 'report.json')))['prob']
+            print('%d runs stopped at the memory limit, rerun at %s GB (%d at once): %d still UNKNOWN' % (
+                st['retried'], st['retry_mem_gb'], st['retry_jobs'], st['unknown_after_retry']))
         return
     if not (a.events and a.out):
         ap.error('EVENTS and --out are required (or --prove)')

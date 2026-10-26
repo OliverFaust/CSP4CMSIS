@@ -349,6 +349,8 @@ class Construction(unittest.TestCase):
         self.assertEqual(argv, ['probcli', 'x.csp'])
         self.assertIsNotNone(pre)                                           # RLIMIT_AS in the child
         self.assertEqual(T.prob_command(['probcli'], None, True), (['probcli'], None))
+        self.assertTrue(killed['memory'] and nomem['memory'])
+        self.assertNotIn('memory', silent)                                 # no sign of memory: not retried
 
     def test_mutation_tie_break(self):
         # two candidate selects on projections with equal row spans: the one whose
@@ -385,6 +387,47 @@ class Construction(unittest.TestCase):
         self.assertEqual([c['verdict'] for c in out], ['UNKNOWN'] * 3)
         self.assertIs(out[2]['caught'], False)                              # a mutant is caught only by FAIL
         self.assertEqual(os.listdir(cache), [])                              # UNKNOWN is not cached
+
+    def test_prove_retries_memory_kills(self):
+        # a run killed at the memory limit is rerun once with 3x the limit; one
+        # that is killed again stays UNKNOWN with both attempts in its result
+        # (three systems: three batches)
+        d = tempfile.mkdtemp()
+        base = {'model': T.ATD, 'decls': ['M_P = STOP'], 'assert': 'M_P [T= REC_P', 'rows': [0], 'length': 1,
+                'projection': 'alt0', 'kind': 'trace'}
+        checks = [dict(base, config='SYS(OK, <2>, 0, STALE, 0)', rec=['a_block.2'],
+                       decls=['M_P = STOP', '-- 2']),       # fits at 3x
+                  dict(base, config='SYS(OK, <3>, 0, STALE, 0)', rec=['a_block.3'],
+                       decls=['M_P = STOP', '-- 3']),       # never fits
+                  dict(base, config='SYS(OK, <4>, 0, STALE, 0)', rec=['a_block.4'],
+                       decls=['M_P = STOP', '-- 4'])]       # fits at once
+        T.json.dump({'checks': checks}, open(os.path.join(d, 'report.json'), 'w'))
+        calls = []
+
+        def stub(model, text, assertion, models, mem=None):
+            mem = mem or T.MEM_GB
+            calls.append(('a_block.4' in text, 'a_block.3' in text, mem))
+            need = 4.0 if 'a_block.2' in text else 100.0 if 'a_block.3' in text else 1.0
+            return T.prob_result(self.PROB_OK if need <= mem else '', 0 if need <= mem else -9, mem)
+        run, mem, usable = T.run_prob, T.MEM_GB, T.usable_mem_gb
+        T.run_prob, T.MEM_GB, T.usable_mem_gb = stub, 2.0, lambda: 16.0
+        try:
+            runs = T.prove([d], M, 8, None)
+        finally:
+            T.run_prob, T.MEM_GB, T.usable_mem_gb = run, mem, usable
+        rep = T.json.load(open(os.path.join(d, 'report.json')))
+        out = rep['checks']
+        self.assertEqual([c['verdict'] for c in out], ['PASS', 'UNKNOWN', 'PASS'])
+        self.assertEqual(sorted(m for _, _, m in calls), [2.0, 2.0, 2.0, 6.0, 6.0])   # no third attempt
+        self.assertEqual([a['mem_gb'] for a in out[0]['prob']['attempts']], [2.0, 6.0])
+        self.assertEqual([a['result'] for a in out[1]['prob']['attempts']], ['UNKNOWN', 'UNKNOWN'])
+        self.assertIn('6.0 GB', out[1]['prob']['why'])
+        self.assertNotIn('attempts', out[2]['prob'])
+        self.assertEqual(rep['prob'], {'runs': 5, 'mem_gb': 2.0, 'retried': 2, 'unknown_after_retry': 1,
+                                       'retry_mem_gb': 6.0, 'retry_jobs': 2})
+        self.assertEqual(sum(1 for r in runs if r.get('retry')), 2)
+        self.assertEqual(T.retry_plan(6.5, 8, 52.0), (19.5, 2))           # 3x the limit, as many at once as fit
+        self.assertEqual(T.retry_plan(26.0, 2, 52.0), (52.0, 1))          # never above 85 % of the memory
 
     def test_alt_guard_mutation_wraps(self):
         r = Rows().guards(P1, 'A', ('input', 'c'), ('timeout', 2))
