@@ -611,33 +611,34 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   the removed offers).
 - Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the committed models
   of docs/formal with their parameters; 2026-10-26), all 30 and the demo
-  (two runs):
-  per run 68 of 74 Alternatives match (36,390 select()s, each checked on its
-  own: T1, T12, T13, T15 and the rest; 10,087 of them, the ALT writers of T1b
-  and T13b and one select of T2, are outside the partner abstraction), 22 of
-  27 buffered channels and the 5 plain rendezvous channels (these totals
-  include throttled_drop.cpp); the demo's merger (62/63 selects),
-  sensor_samples and merger_to_consumer. Not matched: timeouts above 15
-  ticks (T11, T15s, T22), two selects that record only AltGuard, and
-  channels with two ALT ends or a multi-guard ALT end (T4a, T4b, T10, T15,
-  T15s). All 1,122,784 trace checks pass (37,416 to 37,430 per run) and all
-  640 stable-failure checks (25 per run on Corstone-300, 24 on MPS2
-  Cortex-M4; none with ST's FreeRTOS, which has no switch events). Mutants:
-  per run 22 trace mutants (10 swaps, 3 dropped RendezvousDone, 2 changed
-  guards, 6 changed get identities, 1 early Resume) and, with switch events,
-  one removed offer per stable point (10 on Corstone-300, 9 on MPS2): all
-  fail as they must except 3 swaps, which swap events the model allows in
-  either order (alt_one_winner: AltSelected and the writer's Resume; Part
-  5G: a blocking writer's Resume and another writer's BufferedPut; Part 5: a
-  PutFromISR and a stale Resume). In all 820 of 910 mutants caught; the 90
-  others are these 3 swaps in each run. The demo's 6 mutants fail. Coverage:
-  91.8 % of the CSP4CMSIS events per run lie in a checked projection or
-  select (0.04 % before the per-select cut and the parameterised models):
-  RendezvousDone 99.8 %, AltSelected 100 %, buffered 96.2 %, waits and
-  resumes 87.0 %; the largest unchecked groups are T15's channels. Fairness
-  (check_fair_select.py): fair_select.cpp 16 fairSelect()s, 15 with both
-  guards ready throughout, 0 violations, all 30; T12 0 violations (no select
-  with another guard ready throughout), the demo's merger 0 (1 such select).
+  (two runs): per run 68 of 74 Alternatives match (36,390 select()s, each
+  checked on its own: T1, T12, T13, T15 and the rest; 10,087 of them, the
+  ALT writers of T1b and T13b and one select of T2, are outside the partner
+  abstraction), 22 of 27 buffered channels and the 5 plain rendezvous
+  channels (these totals include throttled_drop.cpp); the demo's merger
+  (62/63 selects), sensor_samples and merger_to_consumer. Not matched:
+  timeouts above 15 ticks (T11, T15s, T22), two selects that record only
+  AltGuard, and channels with two ALT ends or a multi-guard ALT end (T4a,
+  T4b, T10, T15, T15s). All 1,122,784 trace checks of the 30 runs pass
+  (37,416 to 37,430 per run) and all 640 stable-failure checks (25 per run
+  on Corstone-300, 24 on MPS2 Cortex-M4; none with ST's FreeRTOS, which has
+  no switch events). Mutants: per run 22 trace mutants (10 swaps, 3 dropped
+  RendezvousDone, 2 changed guards, 6 changed get identities, 1 early
+  Resume) and, with switch events, one removed offer per stable point (10 on
+  Corstone-300, 9 on MPS2): all fail as they must except 3 swaps, which swap
+  events the model allows in either order (alt_one_winner: AltSelected and
+  the writer's Resume; Part 5G: a blocking writer's Resume and another
+  writer's BufferedPut; Part 5: a PutFromISR and a stale Resume). In all 820
+  of 910 mutants caught; the 90 others are these 3 swaps in each run. The
+  demo (two runs): 65 and 64 trace checks pass, its 6 mutants fail in each,
+  coverage 76.4 %. Coverage of the suite runs: 91.8 % of the CSP4CMSIS
+  events per run lie in a checked projection or select (0.04 % before the
+  per-select cut and the parameterised models): RendezvousDone 99.8 %,
+  AltSelected 100 %, buffered 96.2 %, waits and resumes 87.0 %; the largest
+  unchecked groups are T15's channels. Fairness (check_fair_select.py):
+  fair_select.cpp 16 fairSelect()s, 15 with both guards ready throughout, 0
+  violations, all 30; T12 0 violations (no select with another guard ready
+  throughout), the demo's merger 0 (1 such select).
 - Perfetto: test T12 (Corstone-300, RTX5 GCC -O2 and FreeRTOS AC6 -O2; MPS2
   Cortex-M4, ST's FreeRTOS GCC -O2) and a whole run (RTX5 GCC -O2: 80 MB)
   pass check_perfetto.py and load in ui.perfetto.dev in seconds.

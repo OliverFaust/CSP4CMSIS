@@ -126,11 +126,13 @@ Summary (2026-10-26; the FVP harness is not public and its logs are not publishe
   REPLACED=4 (PASS=37 in the heap-free builds).
 - **Tracing on** (Event Recorder 1.6.0, Semihosting variant): the same test results in all 30; every
   trace test and content check passes (`trace/README.md`, "Results").
-- **Conformance** (all 30 and the demo network): 1,122,784 trace checks and 640 stable-failure checks,
-  all PASS; **coverage 91.8 %** of the recorded CSP events in a checked projection; **mutants: 820 of
-  910 caught** (per run 29 of 32 on Corstone-300, 28 of 31 on MPS2 Cortex-M4, 19 of 22 with ST's
-  FreeRTOS); the 90 others are the 3 known uncaught swaps in each run (below). The demo's 6 of 6.
-  Fairness: 0 violations.
+- **Conformance, the 30 suite runs:** 1,122,784 trace checks and 640 stable-failure checks, all PASS;
+  **coverage 91.8 %** of the recorded CSP events in a checked projection; **mutants: 820 of 910
+  caught** (per run 29 of 32 on Corstone-300, 28 of 31 on MPS2 Cortex-M4, 19 of 22 with ST's
+  FreeRTOS); the 90 others are the 3 known uncaught swaps in each run (below). Fairness: 0 violations.
+- **Conformance, the demo network** (`tests/trace/demo_network.cpp`, two runs: Corstone-300 RTX5 GCC
+  `-O2` and FreeRTOS Arm Compiler 6 `-O2`): 65 and 64 trace checks, all PASS; coverage 76.4 %; 6 of 6
+  mutants caught in each; fairness: 0 violations.
 - **Models:** 213 assertions, 175 PASS / 38 FAIL as expected.
 - **Host tests:** the decoder, conformance and csp_trace tests (56), and the ALT selection test
   (5.9 million cases).
