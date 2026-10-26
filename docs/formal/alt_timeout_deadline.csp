@@ -26,7 +26,9 @@
 --     priority order, else a new round with the same t0.
 -- Abstractions: a channel guard is reduced to "partner offered / not yet
 -- taken" (claims and the transfer are in alt_owrv_extended.csp); the tick
--- counter wraps modulo N = 8 instead of 2^32; delays 0..3. Not modelled:
+-- counter wraps modulo N = 8 instead of 2^32; delays 0..3. SYSN takes the
+-- modulus md (up to NMAX = 32), delays up to DMAX = 15 and up to CMAX = 3
+-- channel guards (GC, GC+1, GC+2), each with its own partner. Not modelled:
 -- the delay clamp to 0xFFFFFFFE ticks (TimeoutGuard's constructor) and
 -- fairSelect() (a rotated guard order; the deadline logic is the same).
 --
@@ -62,9 +64,10 @@
 --                                             e and b are not recorded)
 --   tick counts of AltDeadline/Resume      -> tick (one per increment between
 --                                             two recorded tick counts)
---   RendezvousDone/BufferedGet by the ALT  -> a_take (channel guard selected)
+--   RendezvousDone/BufferedGet/BufferedPut of channel guard k by the ALT
+--                                          -> a_take.k (channel guard selected)
 -- Hidden for conformance (H): a_begin, a_now, a_clr, a_enc, a_disc, stale,
--- p_off (the partner's offer is not recorded as an event of its own: its
+-- p_off.k (the partner's offer is not recorded as an event of its own: its
 -- WaitChannel comes from another thread), bound, late, idle.
 -- Gaps: the select()'s start tick t0 is not recorded (only the time left
 -- per wait), so e in a_sel.g.e.b and "late" cannot be checked from a trace;
@@ -72,26 +75,33 @@
 -- records only AltGuard and AltSelected.
 -- =============================================================================
 
-N = 8                     -- tick counter modulo (code: 2^32)
-TT = {0..N-1}
-el(x, t0) = (x - t0 + N) % N
+N = 8                     -- tick counter modulo of SYS (code: 2^32)
+NMAX = 32                 -- largest tick counter modulo of SYSN (channel types)
+DMAX = 15                 -- longest timeout guard (ticks) of SYSN
+CMAX = 3                  -- most channel guards in one Alternative (SYSN)
+TT = {0..NMAX-1}
+el(md, x, t0) = (x - t0 + md) % md
 
--- a guard: 0..3 = timeout guard with that duration (ticks), GC = channel guard
--- (integers rather than a datatype: ProB 1.16.1 fails to match dur(GT.d) on
--- a value taken from a sequence)
-GC = 9
-GS = union({0..3}, {GC})
+-- a guard: 0..DMAX = timeout guard with that duration (ticks), GC + i =
+-- channel guard i (integers rather than a datatype: ProB 1.16.1 fails to
+-- match dur(GT.d) on a value taken from a sequence). SYS's guard lists use
+-- delays 0..3 and one channel guard, GC.
+GC = 99
+CH = {0..CMAX-1}
+GS = union({0..DMAX}, {GC + i | i <- CH})
 dur(g) = g
-isT(g) = g != GC
+isT(g) = g < GC
+chn(g) = g - GC
+chans(gl) = {chn(g) | g <- set(gl), not isT(g)}
 
 datatype DESIGN = OK | M2 | M3 | T2L | T2H
 -- M3: elapsed = now - t0 without the modular difference (wrap-around bug)
-elv(v, x, t0) = if v == M3 then x - t0 else el(x, t0)
+elv(md, v, x, t0) = if v == M3 then x - t0 else el(md, x, t0)
 NOST = 0
 STALE = 1
 
--- earliest deadline among the timeout guards in a list (99 = none)
-dmin(<>) = 99
+-- earliest deadline among the timeout guards in a list (999 = none)
+dmin(<>) = 999
 dmin(<g>^r) = if isT(g) and dur(g) < dmin(r) then dur(g) else dmin(r)
 
 -- remaining ticks to the earliest deadline of the enabled timeout guards
@@ -103,74 +113,76 @@ mrem(<g>^r, e) = let a = (if isT(g) then dur(g) - e else -1)
 
 -- -----------------------------------------------------------------------------
 -- Shared state (timer-free designs OK, M2)
---   now  tick count; act: ALT inside select(); aw: ALT blocked; wr: ticks left
---   in the wait (-1 forever); tk: tick already used in this run segment;
---   sk: stale flag allowed; flg: ALT's thread flag; off: partner offered;
---   reg: channel guard registered; cons: offer taken
+--   md tick counter modulo; now  tick count; act: ALT inside select(); aw:
+--   ALT blocked; wr: ticks left in the wait (-1 forever); tk: tick already
+--   used in this run segment; sk: stale flag allowed; flg: ALT's thread
+--   flag; per channel guard i: off (partner offered), reg (registered),
+--   cons (offer taken), as sets of i
 -- -----------------------------------------------------------------------------
 channel a_begin, a_now : TT
-channel a_clr, a_take, tick, stale, p_off, idle, bound, late
-channel a_enc, a_disc : Bool
-channel a_block : { -1..N}
+channel a_clr, tick, stale, idle, bound, late
+channel a_take, p_off : CH
+channel a_enc, a_disc : CH.Bool
+channel a_block : { -1..NMAX}
 channel a_wake : Bool                    -- true = timed out, false = flag
 channel a_sel : GS.TT.Bool               -- selected guard, elapsed, valid?
 
-ST(now, act, aw, wr, tk, sk, flg, off, reg, cons) =
+ST(md, now, act, aw, wr, tk, sk, flg, off, reg, cons) =
      (act and ((aw and not (flg or wr == 0)) or not tk)) & tick ->
-        ST((now + 1) % N, act, aw, if aw and wr > 0 then wr - 1 else wr, true, true, flg, off, reg, cons)
-  [] (act and sk) & stale -> ST(now, act, aw, wr, tk, false, true, off, reg, cons)
-  [] (not off) & p_off -> ST(now, act, aw, wr, tk, sk, flg or reg, true, reg, cons)
-  [] a_begin!now -> ST(now, true, aw, wr, false, sk, flg, off, reg, cons)
-  [] a_now!now -> ST(now, act, aw, wr, tk, sk, flg, off, reg, cons)
-  [] a_clr -> ST(now, act, aw, wr, false, sk, false, off, reg, cons)
-  [] a_enc!(off and not cons) -> ST(now, act, aw, wr, tk, sk, flg, off, true, cons)
-  [] a_disc!(off and not cons) -> ST(now, act, aw, wr, tk, sk, flg, off, false, cons)
-  [] a_take -> ST(now, act, aw, wr, tk, sk, flg, off, reg, true)
-  [] a_block?r -> ST(now, act, true, r, tk, sk, flg, off, reg, cons)
-  [] (aw and flg) & a_wake.false -> ST(now, act, false, wr, false, sk, false, off, reg, cons)
-  [] (aw and wr == 0) & a_wake.true -> ST(now, act, false, wr, false, sk, flg, off, reg, cons)
-  [] a_sel?_ -> ST(now, false, aw, wr, tk, sk, flg, off, reg, cons)
+        ST(md, (now + 1) % md, act, aw, if aw and wr > 0 then wr - 1 else wr, true, true, flg, off, reg, cons)
+  [] (act and sk) & stale -> ST(md, now, act, aw, wr, tk, false, true, off, reg, cons)
+  [] ([] i : diff(CH, off) @ p_off.i -> ST(md, now, act, aw, wr, tk, sk, flg or member(i, reg), union(off, {i}), reg, cons))
+  [] a_begin!now -> ST(md, now, true, aw, wr, false, sk, flg, off, reg, cons)
+  [] a_now!now -> ST(md, now, act, aw, wr, tk, sk, flg, off, reg, cons)
+  [] a_clr -> ST(md, now, act, aw, wr, false, sk, false, off, reg, cons)
+  [] ([] i : CH @ a_enc.i!(member(i, off) and not member(i, cons)) -> ST(md, now, act, aw, wr, tk, sk, flg, off, union(reg, {i}), cons))
+  [] ([] i : CH @ a_disc.i!(member(i, off) and not member(i, cons)) -> ST(md, now, act, aw, wr, tk, sk, flg, off, diff(reg, {i}), cons))
+  [] ([] i : CH @ a_take.i -> ST(md, now, act, aw, wr, tk, sk, flg, off, reg, union(cons, {i})))
+  [] a_block?r -> ST(md, now, act, true, r, tk, sk, flg, off, reg, cons)
+  [] (aw and flg) & a_wake.false -> ST(md, now, act, false, wr, false, sk, false, off, reg, cons)
+  [] (aw and wr == 0) & a_wake.true -> ST(md, now, act, false, wr, false, sk, flg, off, reg, cons)
+  [] a_sel?_ -> ST(md, now, false, aw, wr, tk, sk, flg, off, reg, cons)
 
-STI = |~| x : TT @ ST(x, false, false, -1, false, false, false, false, false, false)
+STI(md) = |~| x : {0..md-1} @ ST(md, x, false, false, -1, false, false, false, {}, {}, {})
 
 -- -----------------------------------------------------------------------------
 -- The ALT's thread: one select() over the guard list gl (priority order)
 -- maxr: round bound (0 = unbounded)
 -- -----------------------------------------------------------------------------
-ALT(v, gl, maxr) = a_begin?t0 -> RND(v, gl, maxr, t0, 0)
+ALT(md, v, gl, maxr) = a_begin?t0 -> RND(md, v, gl, maxr, t0, 0)
 
-RND(v, gl, maxr, t0, n) =
+RND(md, v, gl, maxr, t0, n) =
   if maxr > 0 and n >= maxr then bound -> STOP
-  else if v == M2 then a_now?t -> a_clr -> EN(v, gl, maxr, t, n, gl, <>)
-  else a_clr -> EN(v, gl, maxr, t0, n, gl, <>)
+  else if v == M2 then a_now?t -> a_clr -> EN(md, v, gl, maxr, t, n, gl, <>)
+  else a_clr -> EN(md, v, gl, maxr, t0, n, gl, <>)
 
 -- Phase 1: enable in order, stop at the first ready guard
-EN(v, gl, maxr, t0, n, rest, enl) =
-  if null(rest) then BLK(v, gl, maxr, t0, n, enl)
+EN(md, v, gl, maxr, t0, n, rest, enl) =
+  if null(rest) then BLK(md, v, gl, maxr, t0, n, enl)
   else let g = head(rest) within
-       if g == GC then a_enc?r -> (if r then DIS(v, gl, maxr, t0, n, enl ^ <g>)
-                                   else EN(v, gl, maxr, t0, n, tail(rest), enl ^ <g>))
-       else a_now?x -> (if elv(v, x, t0) >= dur(g) then DIS(v, gl, maxr, t0, n, enl ^ <g>)
-                        else EN(v, gl, maxr, t0, n, tail(rest), enl ^ <g>))
+       if not isT(g) then a_enc.chn(g)?r -> (if r then DIS(md, v, gl, maxr, t0, n, enl ^ <g>)
+                                              else EN(md, v, gl, maxr, t0, n, tail(rest), enl ^ <g>))
+       else a_now?x -> (if elv(md, v, x, t0) >= dur(g) then DIS(md, v, gl, maxr, t0, n, enl ^ <g>)
+                        else EN(md, v, gl, maxr, t0, n, tail(rest), enl ^ <g>))
 
 -- Phase 2: wait with the remaining time (none left: no wait)
-BLK(v, gl, maxr, t0, n, enl) =
-  a_now?x -> let r = mrem(enl, elv(v, x, t0)) within
-  (if r != -1 and r <= 0 then DIS(v, gl, maxr, t0, n, enl)
-   else a_block!r -> a_wake?_ -> DIS(v, gl, maxr, t0, n, enl))
+BLK(md, v, gl, maxr, t0, n, enl) =
+  a_now?x -> let r = mrem(enl, elv(md, v, x, t0)) within
+  (if r != -1 and r <= 0 then DIS(md, v, gl, maxr, t0, n, enl)
+   else a_block!r -> a_wake?_ -> DIS(md, v, gl, maxr, t0, n, enl))
 
 -- Phase 3: disable (re-verify) every enabled guard; Phase 4: first ready wins
-DIS(v, gl, maxr, t0, n, enl) = DV(v, gl, maxr, t0, n, enl, <>)
-DV(v, gl, maxr, t0, n, rest, rdy) =
-  if null(rest) then PICK(v, gl, maxr, t0, n, rdy)
+DIS(md, v, gl, maxr, t0, n, enl) = DV(md, v, gl, maxr, t0, n, enl, <>)
+DV(md, v, gl, maxr, t0, n, rest, rdy) =
+  if null(rest) then PICK(md, v, gl, maxr, t0, n, rdy)
   else let g = head(rest) within
-       if g == GC then a_disc?r -> DV(v, gl, maxr, t0, n, tail(rest), rdy ^ <(g, r, 0)>)
-       else a_now?x -> DV(v, gl, maxr, t0, n, tail(rest), rdy ^ <(g, elv(v, x, t0) >= dur(g), elv(v, x, t0))>)
+       if not isT(g) then a_disc.chn(g)?r -> DV(md, v, gl, maxr, t0, n, tail(rest), rdy ^ <(g, r, 0)>)
+       else a_now?x -> DV(md, v, gl, maxr, t0, n, tail(rest), rdy ^ <(g, elv(md, v, x, t0) >= dur(g), elv(md, v, x, t0))>)
 
-PICK(v, gl, maxr, t0, n, <>) = RND(v, gl, maxr, t0, nx(maxr, n))  -- stale wakeup: new round
-PICK(v, gl, maxr, t0, n, <(g, r, e)>^rs) =
-  if not r then PICK(v, gl, maxr, t0, n, rs)
-  else if g == GC then a_take -> a_now?x -> SEL(gl, g, elv(v, x, t0), true)
+PICK(md, v, gl, maxr, t0, n, <>) = RND(md, v, gl, maxr, t0, nx(maxr, n))  -- stale wakeup: new round
+PICK(md, v, gl, maxr, t0, n, <(g, r, e)>^rs) =
+  if not r then PICK(md, v, gl, maxr, t0, n, rs)
+  else if not isT(g) then a_take.chn(g) -> a_now?x -> SEL(gl, g, elv(md, v, x, t0), true)
   else SEL(gl, g, e, e >= dur(g))
 
 -- valid: the selected timeout guard had expired. late: a timeout was
@@ -181,20 +193,28 @@ SEL(gl, g, e, ok) = a_sel.g.e.ok -> (if isT(g) and e > (dmin(gl) + 2) then late 
 FIN = idle -> FIN
 nx(maxr, n) = if maxr > 0 then n + 1 else 0     -- no round counter when unbounded (finite state)
 
-PARTNER(0) = SKIP                       -- channel never ready
-PARTNER(1) = p_off -> SKIP              -- offers once, at any time
+-- partner of channel guard i: p = 0 never ready, 1 offers once, at any time
+PARTNER(i, 0) = SKIP
+PARTNER(i, 1) = p_off.i -> SKIP
+PARTNERS(gl, p) = ||| i : chans(gl) @ PARTNER(i, p)
 ADV(s) = if s == STALE then ADVS else SKIP
 ADVS = stale -> ADVS
 
 SHARED = {| a_begin, a_now, a_clr, a_enc, a_disc, a_take, a_block, a_wake, a_sel, tick, stale, p_off |}
 
-SYS(v, gl, p, s, maxr) = ((ALT(v, gl, maxr) ||| PARTNER(p) ||| ADV(s) ||| CLOCK) [| SHARED |] STI)
+-- SYSN: tick counter modulo md (md > the longest timeout guard + 2, so that
+-- no select() sees the elapsed time wrap), timeout guards up to DMAX ticks,
+-- up to CMAX channel guards (GC, GC+1, GC+2), each with its own partner p.
+-- SYS: the original configuration (modulo 8).
+SYSN(md, v, gl, p, s, maxr) = ((ALT(md, v, gl, maxr) ||| PARTNERS(gl, p) ||| ADV(s) ||| CLOCK) [| SHARED |] STI(md))
+SYS(v, gl, p, s, maxr) = SYSN(N, v, gl, p, s, maxr)
 CLOCK = tick -> CLOCK
 
 OBS = {| a_sel, idle, late |}
 -- liveness + safety: the select returns exactly once, with a valid guard
 -- (an expired timeout guard, or the offered channel), never late; then idle.
-SPEC(gl) = |~| x : {a_sel.g.e.true | g <- set(gl), e <- TT} @ x -> IDLE
+SPEC(gl) = |~| x : {a_sel.g.e.true | g <- set(gl), e <- {0..N-1}} @ x -> IDLE
+SPECN(md, gl) = |~| x : {a_sel.g.e.true | g <- set(gl), e <- {0..md-1}} @ x -> IDLE
 IDLE = idle -> IDLE
 
 
@@ -242,7 +262,7 @@ assert STOP [T= SYS(OK, <0>, 0, STALE, 0) \ diff(Events, {| a_block |})
 assert STOP [T= SYS(OK, <GC, 0>, 1, STALE, 0) \ diff(Events, {| a_block |})
 -- a channel that is ready when the select starts wins over a zero timeout
 -- (priority order); observed: after an early offer, a_sel.GC only
-assert (p_off -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC, 0>, 1, NOST, 0) [| {| a_begin, p_off |} |] (p_off -> a_begin?_ -> STOP)) \ diff(Events, {| p_off, a_sel |})
+assert (p_off.0 -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC, 0>, 1, NOST, 0) [| {| a_begin, p_off |} |] (p_off.0 -> a_begin?_ -> STOP)) \ diff(Events, {| p_off, a_sel |})
 
 -- Trace properties the decoder checks (tools/trace/conformance.py). expected: PASS
 -- (t1) a wait with timeout guards waits 1 .. (shortest enabled timeout) ticks:
@@ -263,28 +283,93 @@ TWB(s, r, k) = tick -> TWB(s, r, if k < N then k + 1 else N)
 assert TW(false) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, {| a_block, a_wake, tick |})
 assert TW(true) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, {| a_block, a_wake, tick |})
 
+-- SYSN (parameters: tick counter modulo, delays up to DMAX, up to CMAX
+-- channel guards). expected: PASS
+-- delay 10 (T20/T21/T24), modulo 16
+assert SPECN(16, <GC, 10>) [FD= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff(Events, OBS)
+assert SYSN(16, OK, <GC, 10>, 1, STALE, 0) :[deadlock free [F]]
+assert STOP [T= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff(Events, {a_block.r | r <- { -1..NMAX}, r < 1 or r > 10})
+-- two channel guards (T12, T15, alt_output), each partner offers once.
+-- Without a timeout guard [FD= does not apply: the clock ticks (hidden)
+-- while the ALT waits for a partner that need not come (divergence). Safety
+-- instead: a channel guard is selected only after its partner offered, and
+-- only once.
+OFFS(S) = ([] i : diff(CH, S) @ p_off.i -> OFFS(union(S, {i})))
+       [] ([] i : S @ a_sel.(GC + i)?_?_ -> OFFS2(S))
+OFFS2(S) = [] i : diff(CH, S) @ p_off.i -> OFFS2(union(S, {i}))
+assert OFFS({}) [T= SYSN(8, OK, <GC, GC+1>, 1, STALE, 0) \ diff(Events, {| p_off, a_sel |})
+assert SYSN(8, OK, <GC, GC+1>, 1, STALE, 0) :[deadlock free [F]]
+-- three channel guards and a timeout (the demo's merger)
+assert SPECN(8, <GC, GC+1, GC+2, 2>) [FD= SYSN(8, OK, <GC, GC+1, GC+2, 2>, 1, STALE, 0) \ diff(Events, OBS)
+assert SYSN(8, OK, <GC, GC+1, GC+2, 2>, 1, STALE, 0) :[deadlock free [F]]
+-- the M2 mutation is still found with the parameters (expected: FAIL)
+assert SPECN(16, <10>) [FD= SYSN(16, M2, <10>, 0, STALE, 0) \ diff(Events, OBS)
+
+-- Ranges. ProB does not type-check channel values: an expression that
+-- computes a value outside a channel's declared type still produces the
+-- event. Each value-carrying channel of SigmaObs is checked once: the system
+-- produces only values of the declared type ({| c |} holds exactly those; an
+-- out-of-type event is not in Events, so it stays visible and RANGE refuses
+-- it). expected: PASS
+RANGE(A) = [] e : A @ e -> RANGE(A)
+assert RANGE({| a_block |}) [T= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff(Events, {| a_block |})
+assert RANGE({| a_wake |}) [T= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff(Events, {| a_wake |})
+assert RANGE({| a_sel |}) [T= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff(Events, {| a_sel |})
+assert RANGE({| a_take |}) [T= SYSN(8, OK, <GC, GC+1, GC+2, 2>, 1, STALE, 0) \ diff(Events, {| a_take |})
+-- M3: its elapsed time goes negative after the wrap, so its waits get
+-- longer than any delay (a_block.9 with delay 2); a_block's type holds them
+-- since NMAX (the committed model's {-1..N} did not: a_block.9 was out of type)
+assert RANGE({| a_block |}) [T= SYS(M3, <2>, 0, NOST, 0) \ diff(Events, {| a_block |})
+-- ... but M3 still selects with a negative elapsed time once a channel guard
+-- ends the select after the wrap (a_sel.GC.-4.true: e = now - t0 < 0 is
+-- outside TT). The mutation produces an out-of-range value. expected: FAIL
+assert RANGE({| a_sel |}) [T= SYS(M3, <GC, 2>, 1, NOST, 0) \ diff(Events, {| a_sel |})
+-- at the delay bound DMAX = 15 (md = 32), the longest timeout the trace tool
+-- admits: the timing channels stay in range there too. expected: PASS
+assert RANGE({| a_block |}) [T= SYSN(32, OK, <GC, 15>, 1, STALE, 0) \ diff(Events, {| a_block |})
+assert RANGE({| a_wake |}) [T= SYSN(32, OK, <GC, 15>, 1, STALE, 0) \ diff(Events, {| a_wake |})
+assert RANGE({| a_sel |}) [T= SYSN(32, OK, <GC, 15>, 1, STALE, 0) \ diff(Events, {| a_sel |})
+
 -- =============================================================================
 -- RESULTS (ProB 1.16.1-final 716929f, 2026-10-19; all as expected; each
 -- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
---  #  assertion                                            expected  ProB  states  s    note
---  1  SPEC(<2>) [FD= SYS(M2, <2>, 0, STALE, 0) \ diff(Even FAIL      FAIL    2325    2.8  
---  2  STOP [T= SYS(M2, <2>, 0, STALE, 12) \ diff(Events, { FAIL      FAIL   17852   29.6  
---  3  SPEC(<2>) [FD= SYS(M3, <2>, 0, NOST, 0) \ diff(Event FAIL      FAIL     570    0.9  
---  4  SPEC(<2>) [FD= SYS(M2, <2>, 0, NOST, 0) \ diff(Event PASS      PASS     405    0.5  
---  5  SPEC(<2>) [FD= SYS(OK, <2>, 0, STALE, 0) \ diff(Even PASS      PASS    1637    2.8  
---  6  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 0, STALE, 0) \ d PASS      PASS    2133    3.4  
---  7  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 1, STALE, 0) \ d PASS      PASS    6908   12.1  
---  8  SPEC(<3, 1>) [FD= SYS(OK, <3, 1>, 0, STALE, 0) \ dif PASS      PASS    1157    1.7  
---  9  SPEC(<0>) [FD= SYS(OK, <0>, 0, STALE, 0) \ diff(Even PASS      PASS     333    0.5  
--- 10  SPEC(<GC, 0>) [FD= SYS(OK, <GC, 0>, 1, STALE, 0) \ d PASS      PASS    1540    3.0  
--- 11  SYS(OK, <GC, 2>, 1, STALE, 0) :[deadlock free [F]]   PASS      PASS    6890   10.7  
--- 12  SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, OBS) :[ PASS      PASS    6890   11.7  
--- 13  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS    1140    2.0  
--- 14  STOP [T= SYS(OK, <0>, 0, STALE, 0) \ diff(Events, {| PASS      PASS     324    0.9  
--- 15  STOP [T= SYS(OK, <GC, 0>, 1, STALE, 0) \ diff(Events PASS      PASS    1523    3.4  
--- 16  (p_off -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC, 0> PASS      PASS     230    0.5  
--- 17  STOP [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events PASS      PASS    6891    9.9  
--- 18  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS    1140    1.6  
--- 19  TW(false) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(E PASS      PASS    6907   15.2  
--- 20  TW(true) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Ev FAIL      FAIL     399    0.4  a_block.1, tick, a_wake.false: the tie
+--  #  assertion                                            expected  ProB  states      s    note
+--  1  SPEC(<2>) [FD= SYS(M2, <2>, 0, STALE, 0) \ diff(Even FAIL      FAIL   2325    6.3  
+--  2  STOP [T= SYS(M2, <2>, 0, STALE, 12) \ diff(Events, { FAIL      FAIL  17852   91.5  
+--  3  SPEC(<2>) [FD= SYS(M3, <2>, 0, NOST, 0) \ diff(Event FAIL      FAIL    588    2.0  
+--  4  SPEC(<2>) [FD= SYS(M2, <2>, 0, NOST, 0) \ diff(Event PASS      PASS    405    1.4  
+--  5  SPEC(<2>) [FD= SYS(OK, <2>, 0, STALE, 0) \ diff(Even PASS      PASS   1637    7.5  
+--  6  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 0, STALE, 0) \ d PASS      PASS   2133    6.4  
+--  7  SPEC(<GC, 2>) [FD= SYS(OK, <GC, 2>, 1, STALE, 0) \ d PASS      PASS   6908   18.6  
+--  8  SPEC(<3, 1>) [FD= SYS(OK, <3, 1>, 0, STALE, 0) \ dif PASS      PASS   1157    9.1  
+--  9  SPEC(<0>) [FD= SYS(OK, <0>, 0, STALE, 0) \ diff(Even PASS      PASS    333    3.1  
+-- 10  SPEC(<GC, 0>) [FD= SYS(OK, <GC, 0>, 1, STALE, 0) \ d PASS      PASS   1540    5.7  
+-- 11  SYS(OK, <GC, 2>, 1, STALE, 0) :[deadlock free [F]]   PASS      PASS   6890   15.1  
+-- 12  SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events, OBS) :[ PASS      PASS   6890   17.4  
+-- 13  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS   1140    7.0  
+-- 14  STOP [T= SYS(OK, <0>, 0, STALE, 0) \ diff(Events, {| PASS      PASS    324    2.5  
+-- 15  STOP [T= SYS(OK, <GC, 0>, 1, STALE, 0) \ diff(Events PASS      PASS   1523   13.1  
+-- 16  (p_off.0 -> a_sel.GC?_?_ -> STOP) [T= (SYS(OK, <GC,  PASS      PASS    230    0.9  
+-- 17  STOP [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Events PASS      PASS   6891   45.5  
+-- 18  STOP [T= SYS(OK, <3, 1>, 0, STALE, 0) \ diff(Events, PASS      PASS   1140    7.3  
+-- 19  TW(false) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(E PASS      PASS   6931   38.5  
+-- 20  TW(true) [T= SYS(OK, <GC, 2>, 1, STALE, 0) \ diff(Ev FAIL      FAIL    423    3.1  a_block.1, tick, a_wake.false: the tie
+-- 21  SPECN(16, <GC, 10>) [FD= SYSN(16, OK, <GC, 10>, 1, S PASS      PASS  68836  227.5  
+-- 22  SYSN(16, OK, <GC, 10>, 1, STALE, 0) :[deadlock free  PASS      PASS  68802  177.1  
+-- 23  STOP [T= SYSN(16, OK, <GC, 10>, 1, STALE, 0) \ diff( PASS      PASS  68803  449.6  
+-- 24  OFFS({}) [T= SYSN(8, OK, <GC, GC+1>, 1, STALE, 0) \  PASS      PASS  27344  107.8  
+-- 25  SYSN(8, OK, <GC, GC+1>, 1, STALE, 0) :[deadlock free PASS      PASS  27330   73.2  
+-- 26  SPECN(8, <GC, GC+1, GC+2, 2>) [FD= SYSN(8, OK, <GC,  PASS      PASS  78580  273.1  
+-- 27  SYSN(8, OK, <GC, GC+1, GC+2, 2>, 1, STALE, 0) :[dead PASS      PASS  78546  206.5  
+-- 28  SPECN(16, <10>) [FD= SYSN(16, M2, <10>, 0, STALE, 0) FAIL      FAIL  13413   41.2  the deadline moves with every round
+-- Ranges (2026-10-21: each alone, 6 jobs in parallel, so the times are not comparable):
+-- 29  RANGE({| a_block |}) [T= SYSN(16, OK, <GC, 10>, 1, S PASS      PASS   68804  620.0
+-- 30  RANGE({| a_wake |}) [T= SYSN(16, OK, <GC, 10>, 1, ST PASS      PASS   68804  631.8
+-- 31  RANGE({| a_sel |}) [T= SYSN(16, OK, <GC, 10>, 1, STA PASS      PASS   68804  280.8
+-- 32  RANGE({| a_take |}) [T= SYSN(8, OK, <GC, GC+1, GC+2, PASS      PASS   78548  816.0
+-- 33  RANGE({| a_block |}) [T= SYS(M3, <2>, 0, NOST, 0) \  PASS      PASS     580    3.7
+-- 34  RANGE({| a_sel |}) [T= SYS(M3, <GC, 2>, 1, NOST, 0)  FAIL      FAIL    3138    9.2  M3: a_sel.GC.-4.true, out of TT (intended)
+-- 35  RANGE({| a_block |}) [T= SYSN(32, OK, <GC, 15>, 1, S PASS      PASS  214724 1893.1  (3 jobs in parallel)
+-- 36  RANGE({| a_wake |}) [T= SYSN(32, OK, <GC, 15>, 1, ST PASS      PASS  214724 1597.8  (2 jobs in parallel)
+-- 37  RANGE({| a_sel |}) [T= SYSN(32, OK, <GC, 15>, 1, STA PASS      PASS  214724  835.7  (3 jobs in parallel)
 -- =============================================================================
