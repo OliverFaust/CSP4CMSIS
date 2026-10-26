@@ -23,12 +23,13 @@
     }
   ],
   "events": [
-    {"trace": "AltSelected (guard g) of A / B / W", "model": "x_sel.x.c, a_sel.g, m_wsel.c (the Bool from the RendezvousDone events since the thread's previous AltSelected)"},
+    {"trace": "AltSelected (guard g) of A / B / W", "model": "x_sel.x.c.b, a_sel.g.b.o, m_wsel.c.b (x_sel, m_wsel: b = exactly one communication so far / since the previous select, on c; a_sel: b, o = data on g, on the other guard; computed from the RendezvousDone events since the thread's previous AltSelected)"},
     {"trace": "AltSelected / Resume of a partner", "model": "w_done, m_done (b: a RendezvousDone names it on its channel)"},
     {"trace": "WaitAlt + Resume / ResumeTimeout", "model": "x_towait.x.true + x_wait.x, a_towait.true + a_wait, w_towait.true + w_wait, m_wtowait.true + m_wwait, m_rtowait.c.true + m_rwait.c"},
     {"trace": "PutFromISR", "model": "isr_put"},
     {"trace": "BufferedGet by A", "model": "b_act.true"},
-    {"trace": "WaitChannel(write) of a plain writer / WaitChannel(read) of a plain reader", "model": "p_out / m_pin"}
+    {"trace": "WaitChannel(write) of a plain writer / WaitChannel(read) of a plain reader", "model": "p_out / m_pin"},
+    {"trace": "RendezvousDone", "model": "the decision of the pair: x_en.x.c.2, x_claim.x.c, a_en0.2, w_en.2, m_wen.c.2, m_ren.c.2, m_rclaim.c, or the activate that takes or claims the partner (x_act.x.c.3, a_act0.2/.3, m_wact.c.2/.3, m_ract.c.3); which one is not in the trace (gaps)"}
   ],
   "generator": "matching only: the activate events carry the decision but a RendezvousDone does not say whether the pair was claimed earlier or now (model header, Gaps); not generated until a recorded instance matches",
   "gaps": [

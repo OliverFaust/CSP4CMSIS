@@ -35,8 +35,8 @@
 --   ALT reader or a plain reader; two ALT readers may race to claim it.
 --
 -- Trace conformance (not book-facing). Events a CSP4CMSIS trace supplies:
---   AltSelected (guard g) of A / B / W     -> x_sel.x.c, a_sel.g, m_wsel.c (the
---                                             Bool is computed from the
+--   AltSelected (guard g) of A / B / W     -> x_sel.x.c.b, a_sel.g.b.o, m_wsel.c.b
+--                                             (the Bools are computed from the
 --                                             RendezvousDone events since the
 --                                             thread's previous AltSelected)
 --   AltSelected / Resume of a partner      -> w_done, m_done (b: a RendezvousDone
@@ -53,8 +53,10 @@
 --                                             of a plain reader -> m_pin
 --   RendezvousDone                         -> the decision of a pair: x_en.x.c.2,
 --                                             x_claim, a_en0.2, w_en.2, m_wen.c.2,
---                                             m_ren.c.2, m_rclaim, and the activate
+--                                             m_ren.c.2, m_rclaim, or the activate
 --                                             that takes or claims a partner
+--                                             (x_act.x.c.3, a_act0.2/.3, m_wact.c.2/.3,
+--                                             m_ract.c.3)
 -- Hidden for conformance (H): rounds, enable results 0/1, disables, the
 -- signals, the claims' second word, stale flags, x_xw/w_xw/m_wxw (the
 -- writer's end of the pair wait: RENDEZVOUS_FLAG), idle, bounds.
@@ -97,7 +99,7 @@ channel x_sig : P2                    -- wake the other process (after the secti
 channel x_towait : P2.Bool
 channel x_wait : P2
 channel x_dis : P2.C2.Bool.Bool       -- ready, claimed for this guard
-channel x_act : P2.C2.Bool
+channel x_act : P2.C2.{0, 1, 3}       -- in/outActivate: 0 partner gone, 1 claimed pair, 3 claimed the other ALT now (signal it)
 channel x_xw : P2                     -- writer side: transfer done
 channel x_sel : P2.C2.Bool            -- select() returned c; exactly one communication so far, on c?
 channel x_stale : P2
@@ -125,8 +127,8 @@ STA(v, ra, rb, st, ch, xf, nc, lc, fl) =
                                        !(g2(st, x) == CL and g2(ch, x) == c) ->
         (if x == 0 then STA(v, srg(ra, c, false), rb, st, ch, xf, nc, lc, fl)
          else STA(v, ra, srg(rb, c, false), st, ch, xf, nc, lc, fl)))
-  [] ([] x : P2 @ [] c : C2 @ x_act.x.c!actok(x, c, ra, rb, st, ch) ->
-        (if not actok(x, c, ra, rb, st, ch) then STA(v, ra, rb, st, ch, xf, nc, lc, fl)
+  [] ([] x : P2 @ [] c : C2 @ x_act.x.c!actk(x, c, ra, rb, st, ch) ->
+        (if actk(x, c, ra, rb, st, ch) == 0 then STA(v, ra, rb, st, ch, xf, nc, lc, fl)
          else let st2 = if g2(st, x) == CL and g2(ch, x) == c then st else s2(st, oth(x), CL)
                   ch2 = if g2(st, x) == CL and g2(ch, x) == c then ch else s2(ch, oth(x), c)
               within
@@ -141,8 +143,8 @@ otherreg(x, c, ra, rb) = if x == 0 then rg(rb, c) else rg(ra, c)
 enres(v, x, c, ra, rb, st) =
   if otherreg(x, c, ra, rb) and g2(st, x) == EN and claimable(g2(st, oth(x)))
   then (if v == TOCTOU then 3 else 2) else 0
-actok(x, c, ra, rb, st, ch) = (g2(st, x) == CL and g2(ch, x) == c)
-                              or (otherreg(x, c, ra, rb) and claimable(g2(st, oth(x))))
+actk(x, c, ra, rb, st, ch) = if g2(st, x) == CL and g2(ch, x) == c then 1
+                             else if otherreg(x, c, ra, rb) and claimable(g2(st, oth(x))) then 3 else 0
 
 FINX(x) = x_idle.x -> FINX(x)
 
@@ -167,10 +169,12 @@ PDEC(v, x, g1, gb, n, r1, m1, r2, m2) =
   else if r1 then PACT(v, x, g1, gb, n, g1) else if r2 then PACT(v, x, g1, gb, n, gb)
   else PX(v, x, g1, gb, n)                                         -- stale: new round
 PACT(v, x, g1, gb, n, c) =
-  x_act.x.c?ok ->
-    (if not ok then PX(v, x, g1, gb, n)
-     else if reader(x, c) then x_sig.x -> x_sel.x.c?_ -> FINX(x)     -- released the writer
-     else x_sig.x -> x_xw.x -> x_sel.x.c?_ -> FINX(x))               -- wait for the reader
+  x_act.x.c?k ->
+    (if k == 0 then PX(v, x, g1, gb, n)
+     else if reader(x, c) then XSIG(x, k, x_sel.x.c?_ -> FINX(x))    -- released the writer
+     else XSIG(x, k, x_xw.x -> x_sel.x.c?_ -> FINX(x)))              -- wait for the reader
+-- the signal only for a claim at activate (3.x: wake is set only there, L172-177/L231-236)
+XSIG(x, k, P) = if k == 3 then x_sig.x -> P else P
 
 STALEA(s) = if s then (([] x : P2 @ x_stale.x -> SKIP) [] SKIP) else SKIP
 SA = {| x_rnd, x_en, x_claim, x_sig, x_towait, x_wait, x_dis, x_act, x_xw, x_sel, x_stale |}
@@ -198,7 +202,7 @@ channel a_towait : Bool
 channel a_wait : {0, 1}
 channel a_dis0 : Bool.Bool            -- rendezvous disable: ready, claimed
 channel b_dis : Bool                  -- buffered disable: unregister, token count > 0
-channel a_act0 : Bool
+channel a_act0 : {0..3}               -- inActivate: 0 none, 1 claimed pair, 2 took the plain writer, 3 claimed the ALT writer now (signal it)
 channel b_act : Bool                  -- osSemaphoreAcquire(items, 0) + pop
 channel a_sel : {0, 1}.Bool.Bool      -- select() returned g; data of g? data of the other?
 channel p_out : Bool                  -- plain writer: pending (+ signal if A registered)
@@ -235,7 +239,7 @@ STB(ast, wst, rreg, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW) =
   [] a_dis0!(pend or (wreg and claimable(wst)))!(ast == CL) ->
        STB(ast, wst, false, wreg, pend, rel, xf, breg, tok, cnt, d, dl, fA, fW)
   [] b_dis!(tok > 0) -> STB(ast, wst, rreg, wreg, pend, rel, xf, false, tok, cnt, d, dl, fA, fW)
-  [] a_act0!(ast == CL or pend or (wreg and claimable(wst))) ->
+  [] a_act0!(if ast == CL then 1 else if pend then 2 else if wreg and claimable(wst) then 3 else 0) ->
        (if ast == CL or (not pend and wreg and claimable(wst))
         then STB(ast, CL, rreg, false, pend, rel, true, breg, tok, cnt, s2(d, 0, true), true, fA, fW)
         else if pend then STB(ast, wst, rreg, wreg, false, true, xf, breg, tok, cnt, s2(d, 0, true), true, fA, fW)
@@ -281,7 +285,8 @@ ABR(n, c) =
 ABDIS(n, c, en1) =
   a_dis0?r0?m0 -> (if en1 then b_dis?r1 -> ABDEC(n, c, r0, m0, r1) else ABDEC(n, c, r0, m0, false))
 ABDEC(n, c, r0, m0, r1) =
-  if m0 or r0 then a_act0?ok -> (if ok then a_sigW -> a_sel.0?_?_ -> AB(n - 1, c) else ABR(n, c))
+  if m0 or r0 then a_act0?k -> (if k == 3 then a_sigW -> a_sel.0?_?_ -> AB(n - 1, c)
+                               else if k != 0 then a_sel.0?_?_ -> AB(n - 1, c) else ABR(n, c))
   else if r1 then b_act?ok -> (if ok then a_sel.1?_?_ -> AB(n - 1, c) else ABR(n, c))
   else ABR(n, c)
 
@@ -529,32 +534,75 @@ assert SPECC [FD= SYSC(RTOCTOU, AR, AR, false) \ diff(Events, OBSC)
 -- audit. expected: PASS
 assert STOP [T= SYSC(OK, AR, AR, true) \ diff(Events, FREEC)
 
+-- Ranges. ProB does not type-check channel values: an expression that
+-- computes a value outside a channel's declared type still produces the
+-- event. Each value-carrying channel of SigmaObs is checked once: the system
+-- produces only values of the declared type ({| c |} holds exactly those; an
+-- out-of-type event is not in Events, so it stays visible and RANGE refuses
+-- it). expected: PASS
+RANGE(A) = [] e : A @ e -> RANGE(A)
+assert RANGE({| x_sel |}) [T= SYSA(OK, 1, true) \ diff(Events, {| x_sel |})
+assert RANGE({| x_towait |}) [T= SYSA(OK, 1, true) \ diff(Events, {| x_towait |})
+assert RANGE({| x_wait |}) [T= SYSA(OK, 1, true) \ diff(Events, {| x_wait |})
+assert RANGE({| a_sel |}) [T= SYSB(AW, true) \ diff(Events, {| a_sel |})
+assert RANGE({| a_towait |}) [T= SYSB(AW, true) \ diff(Events, {| a_towait |})
+assert RANGE({| a_wait |}) [T= SYSB(AW, true) \ diff(Events, {| a_wait |})
+assert RANGE({| w_done |}) [T= SYSB(AW, true) \ diff(Events, {| w_done |})
+assert RANGE({| w_towait |}) [T= SYSB(AW, true) \ diff(Events, {| w_towait |})
+assert RANGE({| b_act |}) [T= SYSB(AW, true) \ diff(Events, {| b_act |})
+assert RANGE({| p_out |}) [T= SYSB(PW, true) \ diff(Events, {| p_out |})
+assert RANGE({| m_wsel |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_wsel |})
+assert RANGE({| m_done |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_done |})
+assert RANGE({| m_wtowait |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_wtowait |})
+assert RANGE({| m_rtowait |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_rtowait |})
+assert RANGE({| m_rwait |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_rwait |})
+assert RANGE({| m_pin |}) [T= SYSC(OK, AR, PR, true) \ diff(Events, {| m_pin |})
+
 -- =============================================================================
--- RESULTS (ProB 1.16.1-final 716929f, 2026-10-19; all as expected; each
--- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
---  #  assertion                                            expected  ProB  states  s    note
---  1  SPECA [FD= SYSA(OK, 1, true) \ diff(Events, OBSA)    PASS      PASS     851    7.7  
---  2  SPECA [FD= SYSA(OK, 2, true) \ diff(Events, OBSA)    PASS      PASS    1221    6.8  
---  3  SYSA(OK, 1, true) :[deadlock free [F]]               PASS      PASS     843    5.0  
---  4  SYSA(OK, 2, true) :[deadlock free [F]]               PASS      PASS    1213    7.6  
---  5  STOP [T= SYSA(OK, 1, true) \ diff(Events, {bound_a}) PASS      PASS     844    4.4  
---  6  STOP [T= SYSA(OK, 2, true) \ diff(Events, {bound_a}) PASS      PASS    1214    6.4  
---  7  SPECA [FD= SYSA(TOCTOU, 2, false) \ diff(Events, OBS FAIL      FAIL     699    3.9  
---  8  SPECA [FD= SYSA(TOCTOU, 1, false) \ diff(Events, OBS PASS      PASS     180    0.9  
---  9  STOP [T= SYSA(OK, 2, true) \ diff(Events, FREEA)     PASS      PASS    1214    5.3  
--- 10  SPECB [FD= SYSB(PW, true) \ diff(Events, OBSB)       PASS      PASS    1721   10.4  
--- 11  SPECB [FD= SYSB(AW, true) \ diff(Events, OBSB)       PASS      PASS    3697   25.3  
--- 12  SYSB(PW, true) :[deadlock free [F]]                  PASS      PASS    1696   12.2  
--- 13  SYSB(AW, true) :[deadlock free [F]]                  PASS      PASS    3672   26.3  
--- 14  STOP [T= SYSB(AW, true) \ diff(Events, {bound_b})    PASS      PASS    3673   25.0  
--- 15  STOP [T= SYSB(AW, true) \ diff(Events, FREEB)        PASS      PASS    3673   21.1  
--- 16  SPECC [FD= SYSC(OK, AR, AR, true) \ diff(Events, OBS PASS      PASS   10729  112.0  
--- 17  SPECC [FD= SYSC(OK, AR, PR, true) \ diff(Events, OBS PASS      PASS    6406   66.6  
--- 18  SPECC [FD= SYSC(OK, PR, PR, true) \ diff(Events, OBS PASS      PASS    3186   29.8  
--- 19  SYSC(OK, AR, AR, true) :[deadlock free [F]]          PASS      PASS   10639  104.0  
--- 20  SYSC(OK, AR, PR, true) :[deadlock free [F]]          PASS      PASS    6316   58.0  
--- 21  STOP [T= SYSC(OK, AR, AR, true) \ diff(Events, {boun PASS      PASS   10640  112.6  
--- 22  STOP [T= SYSC(OK, AR, PR, true) \ diff(Events, {boun PASS      PASS    6317   59.3  
--- 23  SPECC [FD= SYSC(RTOCTOU, AR, AR, false) \ diff(Event FAIL      FAIL    4498   28.3  m_done.1.true, m_wsel.1.true, m_done.2.true, then refuses m_wsel.2.true
--- 24  STOP [T= SYSC(OK, AR, AR, true) \ diff(Events, FREEC PASS      PASS   10640  117.5  
+-- RESULTS (ProB 1.16.1-final 716929f, 2026-10-26, after the activates of Parts A
+-- and B signal only on a claim at activate; all as expected; each assertion
+-- checked alone with -csp_assertion, 8 at a time on 22 cores; states = ProB
+-- coverage STATES, s = CPU seconds)
+--  #  assertion                                            expected  ProB  states      s    note
+--  1  SPECA [FD= SYSA(OK, 1, true) \ diff(Events, OBSA)    PASS      PASS    648    4.8  
+--  2  SPECA [FD= SYSA(OK, 2, true) \ diff(Events, OBSA)    PASS      PASS    965    7.9  
+--  3  SYSA(OK, 1, true) :[deadlock free [F]]               PASS      PASS    640    4.4  
+--  4  SYSA(OK, 2, true) :[deadlock free [F]]               PASS      PASS    957    7.8  
+--  5  STOP [T= SYSA(OK, 1, true) \ diff(Events, {bound_a}) PASS      PASS    641    3.7  
+--  6  STOP [T= SYSA(OK, 2, true) \ diff(Events, {bound_a}) PASS      PASS    958    7.6  
+--  7  SPECA [FD= SYSA(TOCTOU, 2, false) \ diff(Events, OBS FAIL      FAIL    535    4.5  
+--  8  SPECA [FD= SYSA(TOCTOU, 1, false) \ diff(Events, OBS PASS      PASS    136    1.1  
+--  9  STOP [T= SYSA(OK, 2, true) \ diff(Events, FREEA)     PASS      PASS    958    9.6  
+-- 10  SPECB [FD= SYSB(PW, true) \ diff(Events, OBSB)       PASS      PASS   1793   13.1  
+-- 11  SPECB [FD= SYSB(AW, true) \ diff(Events, OBSB)       PASS      PASS   3705   22.2  
+-- 12  SYSB(PW, true) :[deadlock free [F]]                  PASS      PASS   1768   14.4  
+-- 13  SYSB(AW, true) :[deadlock free [F]]                  PASS      PASS   3680   20.0  
+-- 14  STOP [T= SYSB(AW, true) \ diff(Events, {bound_b})    PASS      PASS   3681   20.6  
+-- 15  STOP [T= SYSB(AW, true) \ diff(Events, FREEB)        PASS      PASS   3681   20.1  
+-- 16  SPECC [FD= SYSC(OK, AR, AR, true) \ diff(Events, OBS PASS      PASS  10729  118.1  
+-- 17  SPECC [FD= SYSC(OK, AR, PR, true) \ diff(Events, OBS PASS      PASS   6406   56.9  
+-- 18  SPECC [FD= SYSC(OK, PR, PR, true) \ diff(Events, OBS PASS      PASS   3186   25.5  
+-- 19  SYSC(OK, AR, AR, true) :[deadlock free [F]]          PASS      PASS  10639  107.7  
+-- 20  SYSC(OK, AR, PR, true) :[deadlock free [F]]          PASS      PASS   6316   52.9  
+-- 21  STOP [T= SYSC(OK, AR, AR, true) \ diff(Events, {boun PASS      PASS  10640  103.2  
+-- 22  STOP [T= SYSC(OK, AR, PR, true) \ diff(Events, {boun PASS      PASS   6317   53.3  
+-- 23  SPECC [FD= SYSC(RTOCTOU, AR, AR, false) \ diff(Event FAIL      FAIL   4498   24.2  m_done.1.true, m_wsel.1.true, m_done.2.true, then refuses m_wsel.2.true
+-- 24  STOP [T= SYSC(OK, AR, AR, true) \ diff(Events, FREEC PASS      PASS  10640  101.1  
+-- Ranges:
+-- 25  RANGE({| x_sel |}) [T= SYSA(OK, 1, true) \ diff(Even PASS      PASS     642    3.1
+-- 26  RANGE({| x_towait |}) [T= SYSA(OK, 1, true) \ diff(E PASS      PASS     642    4.2
+-- 27  RANGE({| x_wait |}) [T= SYSA(OK, 1, true) \ diff(Eve PASS      PASS     642    3.4
+-- 28  RANGE({| a_sel |}) [T= SYSB(AW, true) \ diff(Events, PASS      PASS    3682   27.7
+-- 29  RANGE({| a_towait |}) [T= SYSB(AW, true) \ diff(Even PASS      PASS    3682   27.3
+-- 30  RANGE({| a_wait |}) [T= SYSB(AW, true) \ diff(Events PASS      PASS    3682   24.3
+-- 31  RANGE({| w_done |}) [T= SYSB(AW, true) \ diff(Events PASS      PASS    3682   23.3
+-- 32  RANGE({| w_towait |}) [T= SYSB(AW, true) \ diff(Even PASS      PASS    3682   26.9
+-- 33  RANGE({| b_act |}) [T= SYSB(AW, true) \ diff(Events, PASS      PASS    3682   19.2
+-- 34  RANGE({| p_out |}) [T= SYSB(PW, true) \ diff(Events, PASS      PASS    1770   10.9
+-- 35  RANGE({| m_wsel |}) [T= SYSC(OK, AR, PR, true) \ dif PASS      PASS    6318   58.8
+-- 36  RANGE({| m_done |}) [T= SYSC(OK, AR, PR, true) \ dif PASS      PASS    6318   59.4
+-- 37  RANGE({| m_wtowait |}) [T= SYSC(OK, AR, PR, true) \  PASS      PASS    6318   55.0
+-- 38  RANGE({| m_rtowait |}) [T= SYSC(OK, AR, PR, true) \  PASS      PASS    6318   58.5
+-- 39  RANGE({| m_rwait |}) [T= SYSC(OK, AR, PR, true) \ di PASS      PASS    6318   49.6
+-- 40  RANGE({| m_pin |}) [T= SYSC(OK, AR, PR, true) \ diff PASS      PASS    6318   55.2
 -- =============================================================================
