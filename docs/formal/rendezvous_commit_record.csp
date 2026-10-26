@@ -304,6 +304,16 @@ assert STOP [T= SYS(CUR, AW, PW, true) \ diff(Events, FREE)
 assert STOP [T= SYS(CLAIM, AW, AW, true) \ diff(Events, FREE)
 assert STOP [T= SYS(CUR, PW, SW, true) \ diff(Events, FREE)
 
+-- Ranges. ProB does not type-check channel values: an expression that
+-- computes a value outside a channel's declared type still produces the
+-- event. Each value-carrying channel of SigmaObs is checked once: the system
+-- produces only values of the declared type ({| c |} holds exactly those; an
+-- out-of-type event is not in Events, so it stays visible and RANGE refuses
+-- it). expected: PASS
+RANGE(A) = [] e : A @ e -> RANGE(A)
+assert RANGE({| a_sel |}) [T= SYS(CLAIM, AW, AW, true) \ diff(Events, {| a_sel |})
+assert RANGE({| w_done |}) [T= SYS(CLAIM, AW, AW, true) \ diff(Events, {| w_done |})
+
 -- =============================================================================
 -- RESULTS (ProB 1.16.1, 2026-09-26; all as expected)
 --  #  scenario / assertion                       expected  ProB  counterexample (visible events)
@@ -341,6 +351,9 @@ assert STOP [T= SYS(CUR, PW, SW, true) \ diff(Events, FREE)
 -- 22  CLAIM deadlock free                        PASS      PASS
 --  alphabet audit
 -- 23-25                                          PASS      PASS
+-- Ranges (2026-10-21: each alone, 6 jobs in parallel, so the times are not comparable):
+-- 26  RANGE({| a_sel |}) [T= SYS(CLAIM, AW, AW, true) \ di PASS      PASS   29274  215.7
+-- 27  RANGE({| w_done |}) [T= SYS(CLAIM, AW, AW, true) \ d PASS      PASS   29274  224.7
 --
 -- NOT covered: ISR partners, ALT writers with more than one guard (the
 -- claim then also has to cover the writer's own ALT), more than two
