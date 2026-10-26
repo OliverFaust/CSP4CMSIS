@@ -12,6 +12,9 @@
 --   Part 2   KeepNewest (SYS_KN_NEW = 3.x; SYS_KN_OLD = v1.0.0, positive control)
 --   Part 2b  KeepOldest / DroppedNew (3.x)
 --   Part 3   Block bounded buffer with the items/spaces tokens (3.x)
+--   Parts 2N, 2bN, 3N, 5G  the same with parameters (capacity, roles, from
+--            empty, writers writing forever): trace conformance of
+--            recorded channels of other capacities and roles
 --   Part 5   the 3.x Block channel with its ALT guards and put identities:
 --            ALT reader against an interrupt (putFromISR as an environment
 --            event), ALT writer against a blocking reader, ALT reader and
@@ -46,8 +49,8 @@
 -- Trace conformance (not book-facing). Events a CSP4CMSIS trace supplies
 -- (csp4cmsis_trace.h); identities come from decode.py's slot replay, which
 -- matches each BufferedGet to the write whose slot it reads:
---   BufferedPut (index n)        -> bin.(n mod K) (Part 3), kput.0.(n mod K) (Part 2b),
---                                   put5.(n mod K) (Part 5), t_new (Part 2)
+--   BufferedPut (index n)        -> bin.(n mod K) (Parts 3, 3N), kput.0.(n mod K) (Parts 2b, 2bN),
+--                                   put5.(n mod K) (Parts 5, 5G), t_new (Parts 2, 2N)
 --   PutFromISR (index n)         -> isr_put.(n mod K) (Part 5), kput.1.(n mod K) (Part 2b),
 --                                   isr_new (Part 2)
 --   OverwroteOldest (index n)    -> t_new / isr_new (Part 2; by context)
@@ -55,7 +58,7 @@
 --   BufferedGet (its write's identity t) -> bout.t, rd.t, get5.t
 --   AltSelected (the input guard) and its BufferedGet -> done_alt (Part 1c)
 --   BufferedGet by a blocking reader -> done_blk (Part 1c)
---   WaitBufferedEmpty/Full + Resume  -> acq_item / acq_space, b_acq (blocking side)
+--   WaitBufferedEmpty/Full + Resume  -> acq_item / acq_space, b_acq / b_wacq (blocking side)
 --   WaitAlt + Resume                 -> wait_flag, wait_r, wait_w (ALT side)
 -- Hidden for conformance (H): the critical sections and RTOS calls that a
 -- trace does not record (registration, token count reads, token acquire
@@ -65,7 +68,8 @@
 -- Gaps: identities in a trace exist only after the decoder's slot replay
 -- (whose correctness is the decoder's ring-slot check); token counts are
 -- not recorded, so readiness (C) cannot be checked from a trace; the
--- model's capacities are 1 and 2, traces have any capacity.
+-- trace tool uses the parameterised parts up to capacity 4, the largest
+-- whose range assertions are checked (the types, IdsX, would allow 6).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -295,6 +299,8 @@ assert SYS_M2 :[deadlock free [F]]
 NB = 2
 KB = NB + 2
 Ids = {0..KB-1}
+KMAX = 8                         -- identity type of the parameterised systems (fits capacity <= 6; used up to 4)
+IdsX = {0..KMAX-1}
 
 -- s: identities in the buffer; n: next write identity
 knwrite(s, v) = if #s < NB then s ^ <v> else tail(s) ^ <v>
@@ -305,7 +311,7 @@ channel t_put2 : Bool           -- v1.0.0 task: second osMessageQueuePut(.., 0),
 channel isr_old                 -- v1.0.0 ISR putFromISR (its 2 steps are atomic vs. the task)
 channel t_new, isr_new          -- 3.x: one critical section each (overwrite in place)
 channel wdone
-channel rd : Ids
+channel rd : IdsX
 channel drained
 
 KNSTATE(s, n) =
@@ -352,7 +358,7 @@ assert KN_SPEC [FD= SYS_KN_NEW \ diff(Events, KN_OBS)
 --           this part states KeepOldest's semantics with put identities
 --           rather than checking a protocol.
 -- -----------------------------------------------------------------------------
-channel kput, kdrop : {0, 1}.Ids
+channel kput, kdrop : {0, 1}.IdsX
 
 KOSTATE(s, n) =
      ([] w : {0, 1} @ (#s < NB & kput.w!n -> KOSTATE(s ^ <n>, (n + 1) % KB))
@@ -387,7 +393,7 @@ NC = 1
 KC = NC + 2
 IdsC = {0..KC-1}
 
-channel bin, bout : IdsC
+channel bin, bout : IdsX
 channel acq_space, rel_space, acq_item, rel_item
 
 -- state: buffer contents s (identities), next identity n, items tokens it, spaces tokens sp
@@ -438,13 +444,14 @@ N5 = 2
 K5 = N5 + 2
 Ids5 = {0..K5-1}
 
-channel put5, get5 : Ids5             -- the push / pop critical section (observable)
-channel isr_put : Ids5                -- putFromISR: acquire(spaces, 0) + push + release(items) + snapshot + signal
+channel put5, get5 : IdsX             -- the push / pop critical section (observable)
+channel isr_put : IdsX                -- putFromISR: acquire(spaces, 0) + push + release(items) + snapshot + signal
 channel isr_full                      -- putFromISR on a full Block channel: returns false, no write
 channel r_reg, r_unreg, w_reg, w_unreg
 channel r_cnt, w_cnt : Bool           -- C: items > 0 / spaces > 0
 channel r_acq, w_acq : Bool           -- acquire(items / spaces, 0)
 channel b_acq                         -- blocking reader: acquire(items, forever)
+channel b_wacq                        -- blocking writer: acquire(spaces, forever) (SYS5G)
 channel rel_i, rel_s                  -- release(items) / release(spaces)
 channel snap_r, snap_w : Bool         -- S: snapshot of the ALT reader / ALT writer registration
 channel sig_r, sig_w                  -- G
@@ -548,47 +555,217 @@ assert BUF5(<>, 0) [FD= SYS5RW(true) \ diff(Events, OBS5)
 
 
 -- -----------------------------------------------------------------------------
+-- Parameterised configurations (trace conformance of recorded channels of
+-- other capacities and roles). K = c + 2 identities for capacity c (the
+-- trace tool: c <= 4, the capacities the range assertions cover).
+-- A writer count w >= 0 writes w times; w = -1 writes forever (any number of
+-- recorded writes: the state does not grow with them).
+-- -----------------------------------------------------------------------------
+WR_N(w, P) = if w == 0 then SKIP else P ; WR_N(if w > 0 then w - 1 else w, P)
+
+-- Part 2N -- KeepNewest, capacity c, from empty: a task writer (tw writes)
+-- and an ISR writer (iw writes), each write one critical section (offer());
+-- a reader that may take at any time.
+KNSTATEN(c, s, n) =
+     t_new   -> KNSTATEN(c, if #s < c then s ^ <n> else tail(s) ^ <n>, (n + 1) % (c + 2))
+  [] isr_new -> KNSTATEN(c, if #s < c then s ^ <n> else tail(s) ^ <n>, (n + 1) % (c + 2))
+  [] not null(s) & rd!head(s) -> KNSTATEN(c, tail(s), n)
+RDF = rd?_ -> RDF
+SKN = {| t_new, isr_new, rd |}
+SYS_KNE(c, tw, iw) = (WR_N(tw, t_new -> SKIP) ||| WR_N(iw, isr_new -> SKIP) ||| RDF) [| SKN |] KNSTATEN(c, <>, 0)
+-- KeepNewest as a buffer over identities: a write into a full buffer evicts
+-- the oldest
+KNSPEC(c, s, n) = (t_new -> KNSPEC(c, kn(c, s, n), (n + 1) % (c + 2)))
+               [] (isr_new -> KNSPEC(c, kn(c, s, n), (n + 1) % (c + 2)))
+               [] (not null(s) & rd!head(s) -> KNSPEC(c, tail(s), n))
+kn(c, s, n) = if #s < c then s ^ <n> else tail(s) ^ <n>
+
+-- Part 2bN -- KeepOldest, capacity c, from empty: tw task writes, iw ISR
+-- writes, a reader at any time.
+KOSTATEN(c, s, n) =
+     ([] w : {0, 1} @ (#s < c & kput.w!n -> KOSTATEN(c, s ^ <n>, (n + 1) % (c + 2)))
+                   [] (#s == c & kdrop.w!n -> KOSTATEN(c, s, (n + 1) % (c + 2))))
+  [] not null(s) & rd!head(s) -> KOSTATEN(c, tail(s), n)
+SYS_KOE(c, tw, iw) = (WR_N(tw, kput.0?_ -> SKIP [] kdrop.0?_ -> SKIP) ||| WR_N(iw, kput.1?_ -> SKIP [] kdrop.1?_ -> SKIP)
+                      ||| RDF) [| SKO |] KOSTATEN(c, <>, 0)
+
+-- KeepOldest as a buffer over identities: stores while not full, drops
+-- (and numbers) when full
+KOSPECN(c, s, n) = ([] w : {0, 1} @ (if #s < c then kput.w!n -> KOSPECN(c, s ^ <n>, (n + 1) % (c + 2))
+                                     else kdrop.w!n -> KOSPECN(c, s, (n + 1) % (c + 2))))
+                [] (not null(s) & rd!head(s) -> KOSPECN(c, tail(s), n))
+
+-- Part 3N -- Block, capacity c, nw blocking writers writing forever, one
+-- blocking reader, items/spaces tokens.
+BSTATEN(c, s, n, it, sp) =
+     sp > 0 & acq_space            -> BSTATEN(c, s, n, it, sp - 1)
+  [] rel_space                     -> BSTATEN(c, s, n, it, sp + 1)
+  [] it > 0 & acq_item             -> BSTATEN(c, s, n, it - 1, sp)
+  [] rel_item                      -> BSTATEN(c, s, n, it + 1, sp)
+  [] #s < c & bin!n                -> BSTATEN(c, s ^ <n>, (n + 1) % (c + 2), it, sp)
+  [] not null(s) & bout!head(s)    -> BSTATEN(c, tail(s), n, it, sp)
+WRITERF = acq_space -> bin?_ -> rel_item -> WRITERF
+SYS_BUFN(c, nw) = ((||| i : {1..nw} @ WRITERF) ||| READER3) [| SB |] BSTATEN(c, <>, 0, 0, c)
+BUFFN(c, s, n) = (#s < c & bin!n -> BUFFN(c, s ^ <n>, (n + 1) % (c + 2))) [] (not null(s) & bout!head(s) -> BUFFN(c, tail(s), n))
+
+-- Part 5G -- the Block channel of Part 5 with capacity c and any of: an ALT
+-- reader (ra), an ALT writer (wa), wb blocking writers, rb blocking readers,
+-- an interrupt writer (wi). Blocking writer: acquire(spaces, forever)
+-- (b_wacq), then pushWithToken.
+ST5N(c, s, n, it, sp, rg, wg, fr, fw) =
+     put5!n                    -> (if #s < c then ST5N(c, s ^ <n>, (n + 1) % (c + 2), it, sp, rg, wg, fr, fw) else err5 -> STOP)
+  [] not null(s) & get5!head(s) -> ST5N(c, tail(s), n, it, sp, rg, wg, fr, fw)
+  [] null(s) & get5?_          -> err5 -> STOP
+  [] sp > 0 & isr_put!n        -> (if #s < c then ST5N(c, s ^ <n>, (n + 1) % (c + 2), it + 1, sp - 1, rg, wg, fr or rg, fw)
+                                   else err5 -> STOP)
+  [] sp == 0 & isr_full        -> ST5N(c, s, n, it, sp, rg, wg, fr, fw)
+  [] r_reg   -> ST5N(c, s, n, it, sp, true, wg, fr, fw)
+  [] r_unreg -> ST5N(c, s, n, it, sp, false, wg, fr, fw)
+  [] w_reg   -> ST5N(c, s, n, it, sp, rg, true, fr, fw)
+  [] w_unreg -> ST5N(c, s, n, it, sp, rg, false, fr, fw)
+  [] r_cnt!(it > 0) -> ST5N(c, s, n, it, sp, rg, wg, fr, fw)
+  [] w_cnt!(sp > 0) -> ST5N(c, s, n, it, sp, rg, wg, fr, fw)
+  [] r_acq!(it > 0) -> ST5N(c, s, n, if it > 0 then it - 1 else it, sp, rg, wg, fr, fw)
+  [] w_acq!(sp > 0) -> ST5N(c, s, n, it, if sp > 0 then sp - 1 else sp, rg, wg, fr, fw)
+  [] it > 0 & b_acq -> ST5N(c, s, n, it - 1, sp, rg, wg, fr, fw)
+  [] sp > 0 & b_wacq -> ST5N(c, s, n, it, sp - 1, rg, wg, fr, fw)
+  [] rel_i -> ST5N(c, s, n, it + 1, sp, rg, wg, fr, fw)
+  [] rel_s -> ST5N(c, s, n, it, sp + 1, rg, wg, fr, fw)
+  [] snap_r!rg -> ST5N(c, s, n, it, sp, rg, wg, fr, fw)
+  [] snap_w!wg -> ST5N(c, s, n, it, sp, rg, wg, fr, fw)
+  [] sig_r -> ST5N(c, s, n, it, sp, rg, wg, true, fw)
+  [] sig_w -> ST5N(c, s, n, it, sp, rg, wg, fr, true)
+  [] clr_r -> ST5N(c, s, n, it, sp, rg, wg, false, fw)
+  [] clr_w -> ST5N(c, s, n, it, sp, rg, wg, fr, false)
+  [] fr & wait_r -> ST5N(c, s, n, it, sp, rg, wg, false, fw)
+  [] fw & wait_w -> ST5N(c, s, n, it, sp, rg, wg, fr, false)
+  [] stale_r -> ST5N(c, s, n, it, sp, rg, wg, true, fw)
+  [] stale_w -> ST5N(c, s, n, it, sp, rg, wg, fr, true)
+BW5 = b_wacq -> PUSHT ; BW5
+S5G = union(S5, {b_wacq})
+SYS5G(c, ra, wa, wb, rb, wi, m1) =
+  ((if ra then AR5(m1) else SKIP) ||| (if wa then AW5 else SKIP) ||| (||| i : {1..wb} @ BW5)
+   ||| (||| i : {1..rb} @ BR5) ||| (if wi then ISR5 else SKIP) ||| STALE5) [| S5G |]
+  ST5N(c, <>, 0, 0, c, false, false, false, false)
+-- the bounded FIFO over identities; any write may be a task write (put5) or
+-- an ISR write (isr_put); isr_full may happen at any time (token window)
+BUF5G(c, s, n) = (#s < c & put5!n -> BUF5G(c, s ^ <n>, (n + 1) % (c + 2)))
+              [] (#s < c & isr_put!n -> BUF5G(c, s ^ <n>, (n + 1) % (c + 2)))
+              [] (isr_full -> BUF5G(c, s, n))
+              [] (not null(s) & get5!head(s) -> BUF5G(c, tail(s), n))
+OBS5G = {| put5, get5, isr_put, isr_full |}
+
+-- -----------------------------------------------------------------------------
 -- Trace conformance: the events a trace supplies (renamed as in the header)
 -- and the events hidden for a conformance check.
 -- -----------------------------------------------------------------------------
 SigmaObs = {| done, done_alt, done_blk, wait_flag, rd, kput, kdrop, t_new, isr_new,
-              bin, bout, acq_space, acq_item, put5, get5, isr_put, b_acq, wait_r, wait_w |}
+              bin, bout, acq_space, acq_item, put5, get5, isr_put, b_acq, b_wacq, wait_r, wait_w |}
 H = diff(Events, SigmaObs)
 
 
+-- Parameterised configurations. expected: PASS
+-- Part 2N: KeepNewest from empty, task and ISR writing forever
+assert KNSPEC(2, <>, 0) [T= SYS_KNE(2, -1, -1) \ diff(Events, SKN)
+assert KNSPEC(1, <>, 0) [T= SYS_KNE(1, -1, -1) \ diff(Events, SKN)
+-- Part 2bN: KeepOldest from empty
+assert KOSPECN(2, <>, 0) [T= SYS_KOE(2, -1, -1) \ diff(Events, SKO)
+assert SYS_KOE(2, -1, -1) :[deadlock free [F]]
+-- Part 3N: capacity 2 with three writers (T8), capacity 3 with one (ring_wrap)
+assert BUFFN(2, <>, 0) [T= SYS_BUFN(2, 3) \ {| acq_space, rel_space, acq_item, rel_item |}
+assert BUFFN(3, <>, 0) [T= SYS_BUFN(3, 1) \ {| acq_space, rel_space, acq_item, rel_item |}
+assert SYS_BUFN(2, 3) :[deadlock free [F]]
+-- Part 5G: blocking writer + ALT reader, capacity 1 (T9, T13) and 4 (T0, T1a)
+assert BUF5G(1, <>, 0) [T= SYS5G(1, true, false, 1, 0, false, false) \ diff(Events, OBS5G)
+assert SYS5G(1, true, false, 1, 0, false, false) :[deadlock free [F]]
+assert BUF5G(4, <>, 0) [T= SYS5G(4, true, false, 1, 0, false, false) \ diff(Events, OBS5G)
+-- ALT writer + blocking writer, two blocking readers, capacity 1 (T1b, T13b)
+assert BUF5G(1, <>, 0) [T= SYS5G(1, false, true, 1, 2, false, false) \ diff(Events, OBS5G)
+assert SYS5G(1, false, true, 1, 2, false, false) :[deadlock free [F]]
+-- ISR + blocking reader, capacity 4 (env_samples)
+assert BUF5G(4, <>, 0) [T= SYS5G(4, false, false, 0, 1, true, false) \ diff(Events, OBS5G)
+-- the m1 mutation is still found with a blocking writer. expected: FAIL
+assert SYS5G(1, true, false, 1, 0, false, true) :[deadlock free [F]]
+
+-- Ranges. ProB does not type-check channel values: an expression that
+-- computes a value outside a channel's declared type still produces the
+-- event. Each value-carrying channel of SigmaObs is checked once: the system
+-- produces only values of the declared type ({| c |} holds exactly those; an
+-- out-of-type event is not in Events, so it stays visible and RANGE refuses
+-- it). The buffered parts are checked at capacity 4, the largest recorded
+-- and the largest the trace tool admits (SYS_KNE also at 6; capacity 6 of
+-- the other parts does not finish in ProB); write identities are numbered
+-- mod c + 2 <= 8 = |IdsX|.
+-- expected: PASS
+RANGE(A) = [] e : A @ e -> RANGE(A)
+assert RANGE({| rd |}) [T= SYS_KNE(6, -1, -1) \ diff(Events, {| rd |})
+assert RANGE({| kput |}) [T= SYS_KOE(4, -1, -1) \ diff(Events, {| kput |})
+assert RANGE({| kdrop |}) [T= SYS_KOE(4, -1, -1) \ diff(Events, {| kdrop |})
+assert RANGE({| bin |}) [T= SYS_BUFN(4, 3) \ diff(Events, {| bin |})
+assert RANGE({| bout |}) [T= SYS_BUFN(4, 3) \ diff(Events, {| bout |})
+assert RANGE({| put5 |}) [T= SYS5G(4, true, false, 1, 0, false, false) \ diff(Events, {| put5 |})
+assert RANGE({| get5 |}) [T= SYS5G(4, true, false, 1, 0, false, false) \ diff(Events, {| get5 |})
+assert RANGE({| isr_put |}) [T= SYS5G(4, false, false, 0, 1, true, false) \ diff(Events, {| isr_put |})
+
 -- =============================================================================
--- RESULTS (ProB 1.16.1-final 716929f, 2026-10-19; all as expected; each
--- assertion checked alone with -csp_assertion; states = ProB coverage STATES)
---  #  assertion                                            expected  ProB  states  s    note
---  1  SYS_OLD :[deadlock free [F]]                         FAIL      FAIL      11    0.2  
+
+-- RESULTS (ProB 1.16.1-final 716929f; first run 2026-10-19, re-measured
+-- 2026-10-21 with the same verdicts and states; all as expected; each
+-- assertion checked alone with -csp_assertion, one at a time (alongside up
+-- to five review-only runs on 22 cores); states = ProB coverage STATES)
+--  #  assertion                                            expected  ProB  states      s    note
+--  1  SYS_OLD :[deadlock free [F]]                         FAIL      FAIL      11    0.1  
 --  2  DELIVERED [FD= SYS_OLD \ diff(Events, {done, idle})  FAIL      FAIL      27    0.2  
 --  3  DELIVERED [FD= SYS_DRAFT \ diff(Events, {done, idle} FAIL      FAIL      71    0.3  
---  4  SYS_NEW :[deadlock free [F]]                         PASS      PASS      74    0.1  
---  5  DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})  PASS      PASS      76    0.4  
---  6  STOP [T= SYS_NEW \ diff(Events, {error})             PASS      PASS      75    0.5  
+--  4  SYS_NEW :[deadlock free [F]]                         PASS      PASS      74    0.2  
+--  5  DELIVERED [FD= SYS_NEW \ diff(Events, {done, idle})  PASS      PASS      76    0.3  
+--  6  STOP [T= SYS_NEW \ diff(Events, {error})             PASS      PASS      75    0.3  
 --  7  SYS_C :[deadlock free [F]]                           PASS      PASS     124    0.3  
 --  8  DELIVERED_C [FD= SYS_C \ diff(Events, {done_alt, idl PASS      PASS     126    0.3  
---  9  STOP [T= SYS_C \ diff(Events, {error})               PASS      PASS     125    0.6  
--- 10  SYS_C2 :[deadlock free [F]]                          PASS      PASS    1025    1.9  
--- 11  BOTH [FD= SYS_C2 \ diff(Events, {done_alt, done_blk, PASS      PASS    1029    3.2  
--- 12  STOP [T= SYS_C2 \ diff(Events, {error})              PASS      PASS    1026    2.5  
+--  9  STOP [T= SYS_C \ diff(Events, {error})               PASS      PASS     125    0.4  
+-- 10  SYS_C2 :[deadlock free [F]]                          PASS      PASS    1025    1.8  
+-- 11  BOTH [FD= SYS_C2 \ diff(Events, {done_alt, done_blk, PASS      PASS    1029    2.6  
+-- 12  STOP [T= SYS_C2 \ diff(Events, {error})              PASS      PASS    1026    2.4  
 -- 13  SYS_M1 :[deadlock free [F]]                          FAIL      FAIL      69    0.2  
--- 14  SYS_M2 :[deadlock free [F]]                          FAIL      FAIL      54    0.3  
+-- 14  SYS_M2 :[deadlock free [F]]                          FAIL      FAIL      54    0.2  
 -- 15  KN_SPEC [T= SYS_KN_OLD \ diff(Events, KN_OBS)        FAIL      FAIL      42    0.2  rd.1 (the task's write lost)
--- 16  KN_SPEC [T= SYS_KN_NEW \ diff(Events, KN_OBS)        PASS      PASS      25    0.1  
+-- 16  KN_SPEC [T= SYS_KN_NEW \ diff(Events, KN_OBS)        PASS      PASS      25    0.2  
 -- 17  KN_SPEC [FD= SYS_KN_NEW \ diff(Events, KN_OBS)       PASS      PASS      25    0.1  
 -- 18  KOSPEC(<>, 0, {0, 1}, 2) [FD= SYS_KO(<>) \ diff(Even PASS      PASS      17    0.1  
--- 19  KOSPEC(<0>, 1, {0, 1}, 2) [FD= SYS_KO(<0>) \ diff(Ev PASS      PASS      27    0.2  
+-- 19  KOSPEC(<0>, 1, {0, 1}, 2) [FD= SYS_KO(<0>) \ diff(Ev PASS      PASS      27    0.1  
 -- 20  KOSPEC(<0,1>, 2, {0, 1}, 2) [FD= SYS_KO(<0,1>) \ dif PASS      PASS      43    0.2  
--- 21  BUFF(<>, 0) [T= SYS_BUF \ {| acq_space, rel_space, a PASS      PASS      41    0.2  
--- 22  BUF5I(<>, 0) [FD= SYS5R(false) \ diff(Events, OBS5R) PASS      PASS     720    5.0  
--- 23  BUF5IF(<>, 0) [T= SYS5R(false) \ diff(Events, OBS5R) FAIL      FAIL     246    1.1  get5.t then isr_full with a free slot
+-- 21  BUFF(<>, 0) [T= SYS_BUF \ {| acq_space, rel_space, a PASS      PASS      41    0.1  
+-- 22  BUF5I(<>, 0) [FD= SYS5R(false) \ diff(Events, OBS5R) PASS      PASS     720    5.6  
+-- 23  BUF5IF(<>, 0) [T= SYS5R(false) \ diff(Events, OBS5R) FAIL      FAIL     246    1.6  get5.t then isr_full with a free slot
 -- 24  STOP [T= SYS5R(false) \ diff(Events, {err5})         PASS      PASS     692    4.5  
--- 25  BUF5(<>, 0) [FD= SYS5W \ diff(Events, OBS5)          PASS      PASS    3484   15.3  
--- 26  STOP [T= SYS5W \ diff(Events, {err5})                PASS      PASS    3472   14.7  
--- 27  BUF5(<>, 0) [FD= SYS5RW(false) \ diff(Events, OBS5)  PASS      PASS    9740   44.6  
--- 28  SYS5RW(false) :[deadlock free [F]]                   PASS      PASS    9727   41.8  
--- 29  STOP [T= SYS5RW(false) \ diff(Events, {err5})        PASS      PASS    9728   51.5  
--- 30  BUF5I(<>, 0) [FD= SYS5R(true) \ diff(Events, OBS5R)  FAIL      FAIL     189    1.3  full, the reader waits: refuses get5
--- 31  BUF5(<>, 0) [FD= SYS5RW(true) \ diff(Events, OBS5)   FAIL      FAIL     617    2.2  one element, the reader waits: refuses get5.0
+-- 25  BUF5(<>, 0) [FD= SYS5W \ diff(Events, OBS5)          PASS      PASS    3484   18.3  
+-- 26  STOP [T= SYS5W \ diff(Events, {err5})                PASS      PASS    3472   13.6  
+-- 27  BUF5(<>, 0) [FD= SYS5RW(false) \ diff(Events, OBS5)  PASS      PASS    9740   46.9  
+-- 28  SYS5RW(false) :[deadlock free [F]]                   PASS      PASS    9727   49.5  
+-- 29  STOP [T= SYS5RW(false) \ diff(Events, {err5})        PASS      PASS    9728   41.5  
+-- 30  BUF5I(<>, 0) [FD= SYS5R(true) \ diff(Events, OBS5R)  FAIL      FAIL     189    1.1  full, the reader waits: refuses get5
+-- 31  BUF5(<>, 0) [FD= SYS5RW(true) \ diff(Events, OBS5)   FAIL      FAIL     617    3.0  one element, the reader waits: refuses get5.0
+-- 32  KNSPEC(2, <>, 0) [T= SYS_KNE(2, -1, -1) \ diff(Event PASS      PASS      27    0.1  
+-- 33  KNSPEC(1, <>, 0) [T= SYS_KNE(1, -1, -1) \ diff(Event PASS      PASS      15    0.1  
+-- 34  KOSPECN(2, <>, 0) [T= SYS_KOE(2, -1, -1) \ diff(Even PASS      PASS     171    0.3  
+-- 35  SYS_KOE(2, -1, -1) :[deadlock free [F]]              PASS      PASS      86    0.2  
+-- 36  BUFFN(2, <>, 0) [T= SYS_BUFN(2, 3) \ {| acq_space, r PASS      PASS     135    0.2  
+-- 37  BUFFN(3, <>, 0) [T= SYS_BUFN(3, 1) \ {| acq_space, r PASS      PASS     143    0.2  
+-- 38  SYS_BUFN(2, 3) :[deadlock free [F]]                  PASS      PASS     122    0.2  
+-- 39  BUF5G(1, <>, 0) [T= SYS5G(1, true, false, 1, 0, fals PASS      PASS    1358    7.6  
+-- 40  SYS5G(1, true, false, 1, 0, false, false) :[deadlock PASS      PASS    1351    7.2  
+-- 41  BUF5G(4, <>, 0) [T= SYS5G(4, true, false, 1, 0, fals PASS      PASS   10253   69.4  
+-- 42  BUF5G(1, <>, 0) [T= SYS5G(1, false, true, 1, 2, fals PASS      PASS   45548  549.9  
+-- 43  SYS5G(1, false, true, 1, 2, false, false) :[deadlock PASS      PASS   45541  520.4  
+-- 44  BUF5G(4, <>, 0) [T= SYS5G(4, false, false, 0, 1, tru PASS      PASS     581    5.3  
+-- 45  SYS5G(1, true, false, 1, 0, false, true) :[deadlock  FAIL      FAIL     148    0.7  lost wakeup with a blocking writer
+-- Ranges:
+-- 46  RANGE({| rd |}) [T= SYS_KNE(6, -1, -1) \ diff(Events PASS      PASS      60    0.2
+-- 47  RANGE({| kput |}) [T= SYS_KOE(4, -1, -1) \ diff(Even PASS      PASS    9334   18.7
+-- 48  RANGE({| kdrop |}) [T= SYS_KOE(4, -1, -1) \ diff(Eve PASS      PASS    9334   21.9
+-- 49  RANGE({| bin |}) [T= SYS_BUFN(4, 3) \ diff(Events, { PASS      PASS     760    1.3
+-- 50  RANGE({| bout |}) [T= SYS_BUFN(4, 3) \ diff(Events,  PASS      PASS     760    1.2
+-- 51  RANGE({| put5 |}) [T= SYS5G(4, true, false, 1, 0, fa PASS      PASS   10224   54.1
+-- 52  RANGE({| get5 |}) [T= SYS5G(4, true, false, 1, 0, fa PASS      PASS   10224   76.6
+-- 53  RANGE({| isr_put |}) [T= SYS5G(4, false, false, 0, 1 PASS      PASS     552    5.3
 -- =============================================================================

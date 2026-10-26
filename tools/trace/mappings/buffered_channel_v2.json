@@ -1,90 +1,250 @@
 {
   "model": "docs/formal/buffered_channel_v2.csp",
   "source": "the model header (Trace conformance) and its SigmaObs/H definitions",
-  "sigma_obs": ["done", "done_alt", "done_blk", "wait_flag", "rd", "kput", "kdrop", "t_new", "isr_new",
-                "bin", "bout", "acq_space", "acq_item", "put5", "get5", "isr_put", "b_acq", "wait_r", "wait_w"],
+  "sigma_obs": [
+    "done",
+    "done_alt",
+    "done_blk",
+    "wait_flag",
+    "rd",
+    "kput",
+    "kdrop",
+    "t_new",
+    "isr_new",
+    "bin",
+    "bout",
+    "acq_space",
+    "acq_item",
+    "put5",
+    "get5",
+    "isr_put",
+    "b_acq",
+    "b_wacq",
+    "wait_r",
+    "wait_w"
+  ],
   "hidden": "H = diff(Events, SigmaObs): critical sections and RTOS calls a trace does not record (registration, token count reads, timeout-0 acquires, releases, snapshots, signals, flag clears), stale flags, error, err5, idle, drained, isr_full",
   "projection": "one buffered channel: its BufferedPut/PutFromISR/OverwroteOldest/DroppedNew/BufferedGet, the WaitBufferedFull/WaitBufferedEmpty naming it with their Resume, and the WaitAlt/Resume/AltSelected of single-guard Alternatives on it",
   "identities": "write index n: every BufferedPut, PutFromISR, OverwroteOldest and DroppedNew of the channel in record order, from 0; a BufferedGet carries the index of the write that last wrote the slot it read (the decoder's slot replay); events use index mod K, K = capacity + 2 of the model configuration",
-  "policy": "Block if a WaitBufferedFull names the channel (only Block's output() records it); KeepNewest if an OverwroteOldest does; KeepOldest if a DroppedNew does; otherwise unknown (output guards exist for every policy)",
+  "policy": "from the buffered events' policy field (count << 16 | policy << 14 | capacity)",
   "roles": {
     "blocking writer": "BufferedPut after WaitBufferedFull + Resume of the same thread",
     "ALT writer": "BufferedPut in a select() window of a thread whose Alternative has an output guard on the channel",
     "offer": "BufferedPut of a task outside both (KeepNewest/KeepOldest output())",
     "ISR writer": "PutFromISR (context irq N)",
     "blocking reader": "BufferedGet after WaitBufferedEmpty + Resume of the same thread",
-    "ALT reader": "BufferedGet in a select() window of a thread whose Alternative has an input guard on the channel"
+    "ALT reader": "BufferedGet in a select() window of a thread whose Alternative has an input guard on the channel; the Alternative objects of one thread on the channel are one ALT end (used one after the other)"
   },
   "configurations": [
     {
       "name": "Part 1c SYS_C",
       "system": "SYS_C",
-      "sigma": ["done_alt", "done_blk", "wait_flag"],
-      "requires": ["one write, by a task", "one ALT reader: an Alternative with this one input guard, one select(), selecting it", "no other reader", "no OverwroteOldest/DroppedNew", "capacity >= 1 (the model's capacity 2 never binds with one write)"]
+      "sigma": [
+        "done_alt",
+        "done_blk",
+        "wait_flag"
+      ],
+      "requires": [
+        "one write, by a task",
+        "one ALT reader: an Alternative with this one input guard, one select(), selecting it",
+        "no other reader",
+        "no OverwroteOldest/DroppedNew",
+        "capacity >= 1 (the model's capacity 2 never binds with one write)"
+      ]
     },
     {
       "name": "Part 1c SYS_C2",
       "system": "SYS_C2",
-      "sigma": ["done_alt", "done_blk", "wait_flag"],
-      "requires": ["two writes, by one task", "one ALT reader as for SYS_C and one blocking reader with one get", "no OverwroteOldest/DroppedNew", "capacity >= 1 (a smaller capacity only delays the writer, whose events are hidden)"]
-    },
-    {
-      "name": "Part 2 SYS_KN_NEW",
-      "system": "SYS_KN_NEW",
-      "sigma": ["t_new", "isr_new", "rd"],
-      "requires": ["KeepNewest, capacity 2", "the first two writes are BufferedPut with no get before them: they are the model's initial state <0, 1> (not events)", "then at most one task write and one ISR write", "gets: the reader drains after both writes"]
-    },
-    {
-      "name": "Part 2b SYS_KO",
-      "system": "SYS_KO(<>)",
-      "sigma": ["kput", "kdrop", "rd"],
-      "requires": ["KeepOldest, capacity 2", "at most one task write and one ISR write", "at most two gets"]
+      "sigma": [
+        "done_alt",
+        "done_blk",
+        "wait_flag"
+      ],
+      "requires": [
+        "two writes, by one task",
+        "one ALT reader as for SYS_C and one blocking reader with one get",
+        "no OverwroteOldest/DroppedNew",
+        "capacity >= 1 (a smaller capacity only delays the writer, whose events are hidden)"
+      ]
     },
     {
       "name": "Part 3 SYS_BUF",
       "system": "SYS_BUF",
-      "sigma": ["bin", "bout", "acq_space", "acq_item"],
-      "requires": ["Block, capacity 1", "every write a blocking put; at most two writer threads with at most two writes each", "every get a blocking get, by one thread", "no ISR writes; ALT guards on the channel that transfer nothing are outside the model's alphabet"]
+      "sigma": [
+        "bin",
+        "bout",
+        "acq_space",
+        "acq_item"
+      ],
+      "requires": [
+        "Block, capacity 1",
+        "every write a blocking put; at most two writer threads with at most two writes each",
+        "every get a blocking get, by one thread",
+        "no ISR writes; ALT guards on the channel that transfer nothing are outside the model's alphabet"
+      ]
     },
     {
       "name": "Part 5 SYS5R",
       "system": "SYS5R(false)",
-      "sigma": ["get5", "isr_put", "wait_r"],
-      "requires": ["Block, capacity 2", "readers: one ALT reader, an Alternative with this one input guard (any number of selects)", "writers: ISRs only", "at most one stale wakeup (STALE5)"]
+      "sigma": [
+        "get5",
+        "isr_put",
+        "wait_r"
+      ],
+      "requires": [
+        "Block, capacity 2",
+        "readers: one ALT reader, an Alternative with this one input guard (any number of selects)",
+        "writers: ISRs only",
+        "at most one stale wakeup (STALE5)"
+      ]
     },
     {
       "name": "Part 5 SYS5W",
       "system": "SYS5W",
-      "sigma": ["put5", "get5", "b_acq", "wait_w"],
-      "requires": ["Block, capacity 2", "writers: one ALT writer with this one output guard", "readers: one blocking reader", "at most one stale wakeup"]
+      "sigma": [
+        "put5",
+        "get5",
+        "b_acq",
+        "wait_w"
+      ],
+      "requires": [
+        "Block, capacity 2",
+        "writers: one ALT writer with this one output guard",
+        "readers: one blocking reader",
+        "at most one stale wakeup"
+      ]
     },
     {
       "name": "Part 5 SYS5RW",
       "system": "SYS5RW(false)",
-      "sigma": ["put5", "get5", "wait_r", "wait_w"],
-      "requires": ["Block, capacity 2", "one ALT reader and one ALT writer, each an Alternative with this one guard", "at most one stale wakeup"]
+      "sigma": [
+        "put5",
+        "get5",
+        "wait_r",
+        "wait_w"
+      ],
+      "requires": [
+        "Block, capacity 2",
+        "one ALT reader and one ALT writer, each an Alternative with this one guard",
+        "at most one stale wakeup"
+      ]
+    },
+    {
+      "name": "Part 2N SYS_KNE",
+      "system": "SYS_KNE(c, -1, -1)",
+      "sigma": [
+        "t_new",
+        "isr_new",
+        "rd"
+      ],
+      "requires": [
+        "KeepNewest, capacity c <= 4 (the largest capacity whose ranges are checked; larger: not matched)",
+        "any task and ISR writes (-1: writing forever), any readers"
+      ]
+    },
+    {
+      "name": "Part 2bN SYS_KOE",
+      "system": "SYS_KOE(c, -1, -1)",
+      "sigma": [
+        "kput",
+        "kdrop",
+        "rd"
+      ],
+      "requires": [
+        "KeepOldest, capacity c <= 4 (the largest capacity whose ranges are checked; larger: not matched)",
+        "any task and ISR writes, any readers"
+      ]
+    },
+    {
+      "name": "Part 3N SYS_BUFN",
+      "system": "SYS_BUFN(c, nw)",
+      "sigma": [
+        "bin",
+        "bout",
+        "acq_space",
+        "acq_item"
+      ],
+      "requires": [
+        "Block, capacity c <= 4 (the largest capacity whose ranges are checked; larger: not matched)",
+        "nw blocking writer threads (writing forever), one blocking reader thread"
+      ]
+    },
+    {
+      "name": "Part 5G SYS5G",
+      "system": "SYS5G(c, ra, wa, wb, rb, wi, false)",
+      "sigma": [
+        "put5",
+        "get5",
+        "isr_put",
+        "b_acq",
+        "b_wacq",
+        "wait_r",
+        "wait_w"
+      ],
+      "requires": [
+        "Block, capacity c <= 4 (the largest capacity whose ranges are checked; larger: not matched)",
+        "ra/wa: an ALT reader/writer end (one-guard Alternatives of one thread)",
+        "wb/rb: up to 2 blocking writer/reader threads",
+        "wi: interrupt writes",
+        "at least one ALT end or interrupt writes (else Part 3N)"
+      ]
     }
   ],
   "events": [
-    {"trace": "BufferedPut (write n)", "model": "bin.n (Part 3), kput.0.n (Part 2b), put5.n (Part 5), t_new (Part 2)"},
-    {"trace": "PutFromISR (write n)", "model": "isr_put.n (Part 5), kput.1.n (Part 2b), isr_new (Part 2)"},
-    {"trace": "OverwroteOldest (write n)", "model": "t_new / isr_new by context (Part 2)"},
-    {"trace": "DroppedNew (write n)", "model": "kdrop.w.n (Part 2b; w: task 0, ISR 1)"},
-    {"trace": "BufferedGet (identity t)", "model": "bout.t (Part 3), rd.t (Parts 2, 2b), get5.t (Part 5)"},
-    {"trace": "AltSelected of the ALT reader (with its BufferedGet)", "model": "done_alt (Part 1c)"},
-    {"trace": "BufferedGet of a blocking reader", "model": "done_blk (Part 1c)"},
-    {"trace": "Resume after WaitBufferedFull", "model": "acq_space (Part 3)"},
-    {"trace": "Resume after WaitBufferedEmpty", "model": "acq_item (Part 3), b_acq (Part 5)"},
-    {"trace": "Resume after WaitAlt of the ALT reader / writer", "model": "wait_flag (Part 1c), wait_r / wait_w (Part 5)"}
+    {
+      "trace": "BufferedPut (write n)",
+      "model": "bin.n (Parts 3, 3N), kput.0.n (Parts 2b, 2bN), put5.n (Parts 5, 5G), t_new (Parts 2, 2N)"
+    },
+    {
+      "trace": "PutFromISR (write n)",
+      "model": "isr_put.n (Parts 5, 5G), kput.1.n (Parts 2b, 2bN), isr_new (Parts 2, 2N)"
+    },
+    {
+      "trace": "OverwroteOldest (write n)",
+      "model": "t_new / isr_new by context (Parts 2, 2N)"
+    },
+    {
+      "trace": "DroppedNew (write n)",
+      "model": "kdrop.w.n (Parts 2b, 2bN; w: task 0, ISR 1)"
+    },
+    {
+      "trace": "BufferedGet (identity t)",
+      "model": "bout.t (Parts 3, 3N), rd.t (Parts 2, 2b, 2N, 2bN), get5.t (Parts 5, 5G)"
+    },
+    {
+      "trace": "AltSelected of the ALT reader (with its BufferedGet)",
+      "model": "done_alt (Part 1c)"
+    },
+    {
+      "trace": "BufferedGet of a blocking reader",
+      "model": "done_blk (Part 1c)"
+    },
+    {
+      "trace": "Resume after WaitBufferedFull",
+      "model": "acq_space (Parts 3, 3N)"
+    },
+    {
+      "trace": "Resume after WaitBufferedEmpty",
+      "model": "acq_item (Parts 3, 3N), b_acq (Parts 5, 5G)"
+    },
+    {
+      "trace": "Resume after WaitAlt of the ALT reader / writer",
+      "model": "wait_flag (Part 1c), wait_r / wait_w (Parts 5, 5G)"
+    },
+    {
+      "trace": "Resume after WaitBufferedFull of a blocking writer",
+      "model": "b_wacq (Part 5G)"
+    }
   ],
   "stable_failures": {
-    "applies": "only when every thread of the projection waits on an offer of the projection at the stable point (the model's processes are the channel's only users)",
+    "applies": "only when every thread using the channel (its blocking ends and ALT ends) waits on it at the stable point",
     "awaited_environment": "isr_put.*, if the channel is interrupt-fed and a read waits on it"
   },
   "gaps": [
     "identities exist only after the decoder's slot replay (checked by its ring-slot check)",
     "token counts are not recorded: readiness (C) cannot be checked",
     "isr_full (putFromISR returning false on a full Block channel) records nothing",
-    "the model's capacities are 1 and 2"
+    "the fixed parts have capacity 1 or 2; the parameterised parts are matched up to capacity 4, the largest whose range assertions are checked",
+    "Parts 2 (SYS_KN_NEW, starts full) and 2b (SYS_KO) are not used for conformance: Parts 2N and 2bN cover KeepNewest and KeepOldest from empty"
   ]
 }
