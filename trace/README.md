@@ -610,7 +610,8 @@ Event Recorder 1.6.0, Semihosting variant, DWT cycle counter time stamps.
   mutants fail (a swap, a dropped RendezvousDone, a changed get identity,
   the removed offers).
 - Conformance (tools/trace/csp_trace.py, ProB 1.16.1, the committed models
-  of docs/formal with their parameters; 2026-10-26), all 30 and the demo:
+  of docs/formal with their parameters; 2026-10-26), all 30 and the demo
+  (two runs):
   per run 68 of 74 Alternatives match (36,390 select()s, each checked on its
   own: T1, T12, T13, T15 and the rest; 10,087 of them, the ALT writers of T1b
   and T13b and one select of T2, are outside the partner abstraction), 22 of
