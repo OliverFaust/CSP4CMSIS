@@ -350,6 +350,23 @@ class Construction(unittest.TestCase):
         self.assertIsNotNone(pre)                                           # RLIMIT_AS in the child
         self.assertEqual(T.prob_command(['probcli'], None, True), (['probcli'], None))
 
+    def test_mutation_tie_break(self):
+        # two candidate selects on projections with equal row spans: the one whose
+        # rows start earlier is tried first, wherever it is in the list
+        spans = {'alt3': (100, 140, None), 'alt1': (10, 50, None), 'alt7': (5, 60, None), 'alt9': None}
+        late = {'projection': 'alt3', 'rows': [120, 131]}
+        early = {'projection': 'alt1', 'rows': [12, 30]}
+        wide = {'projection': 'alt7', 'rows': [6]}
+        gone = {'projection': 'alt9', 'rows': [1]}
+        for cs in ([late, early, wide, gone], [early, late, gone, wide]):
+            self.assertEqual([c['projection'] for c in T.ranked_checks(cs, spans.get)], ['alt1', 'alt3', 'alt7'])
+        # same span and same first row (two selects of one Alternative share
+        # its projection): the place in the list decides; the dicts are never compared
+        a = {'projection': 'alt1', 'rows': [12, 20]}
+        b = {'projection': 'alt1', 'rows': [12, 25]}
+        self.assertIs(T.ranked_checks([a, b], spans.get)[0], a)
+        self.assertIs(T.ranked_checks([b, a], spans.get)[0], b)
+
     def test_prove_never_passes_or_catches_on_unknown(self):
         d, cache = tempfile.mkdtemp(), tempfile.mkdtemp()
         base = {'model': T.ATD, 'config': 'SYS(OK, <2>, 0, STALE, 0)', 'decls': ['M_P = STOP'],

@@ -1126,11 +1126,24 @@ def sub_trace(tr, lo, hi):
     return rows
 
 
+def ranked_checks(cs, span):
+    """The checks cs of one family in the order mutants() tries them: the
+    smallest row span of the projection first (span(pid) = (first row, last
+    row, ...) or None: not tried); equal spans: the check with the earliest
+    row, then its place in cs. No two checks tie, so the order is the same
+    in every run."""
+    ranked = [(s[1] - s[0], min(c['rows'], default=-1), j, c)
+              for j, c in enumerate(cs) for s in [span(c['projection'])] if s]
+    ranked.sort(key=lambda x: x[:3])
+    return [x[3] for x in ranked]
+
+
 def mutants(tr, models, base):
     """One trace mutant per (mutation, model configuration family), on the
     checked projection with the smallest row span where it applies and
-    changes the trace. The mutant is built from that span of rows alone (and
-    used only if the span reproduces the original check)."""
+    changes the trace (equal spans: the check with the earliest row, so the
+    choice is the same in every run). The mutant is built from that span of
+    rows alone (and used only if the span reproduces the original check)."""
     out = []
     fam = collections.OrderedDict()
     for c in base:
@@ -1138,18 +1151,16 @@ def mutants(tr, models, base):
             key = c['model'] if c['model'] != BUF else ' '.join(c['config'].split(' ')[:2])
             fam.setdefault(key, []).append(c)
     spans = {}
+
+    def span(pid):
+        if pid not in spans:
+            pr = projection_rows(tr, pid)
+            spans[pid] = (pr[0], pr[-1], pr) if pr else None
+        return spans[pid]
+
     for kind in MUTATIONS:
         for model, cs in fam.items():
-            ranked = []
-            for c in cs:
-                pid = c['projection']
-                if pid not in spans:
-                    pr = projection_rows(tr, pid)
-                    spans[pid] = (pr[0], pr[-1], pr) if pr else None
-                if spans[pid]:
-                    ranked.append((spans[pid][1] - spans[pid][0], id(c), c))
-            ranked.sort(key=lambda x: (x[0], x[1]))
-            for _, _, c in ranked[:20]:
+            for c in ranked_checks(cs, span)[:20]:
                 pid = c['projection']
                 lo, hi, prow = spans[pid]
                 own = sorted(set(c['rows']) | set(c.get('aux', ())))      # the check's own rows (its select)
