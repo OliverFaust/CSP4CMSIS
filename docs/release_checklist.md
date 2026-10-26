@@ -6,8 +6,11 @@ The steps used for 2.0.0, in order. Nothing is published before the "publish" st
 
 1. `main` contains everything for the release; the working tree is clean.
 2. Version: the first `<release version="X.Y.Z" date="YYYY-MM-DD">` in `OliverFaust.CSP4CMSIS.pdsc`,
-   the component `Cversion`, the README install command, `docs/CHANGES_*.md` and the website patch
-   (`docs/website/`) all name X.Y.Z. Set the release date to the planned release day.
+   the component `Cversion`, the README install command and `docs/CHANGES_*.md` all name X.Y.Z. Set
+   the release date to the planned release day. Website (the API reference page `CSP4CMSIS/api.md` in
+   oliverfaust.github.io): it is edited in the website repository directly, and only when the API page
+   changes; a release without API changes adds one history bullet. Keep that change as a patch,
+   `docs/website/vX.Y.Z.patch` (`--- a/CSP4CMSIS/api.md`), committed before the tag.
 3. Tests: the regression suite on the Corstone-300 and MPS2 Cortex-M4 FVPs
    (`tests/fvp_sse300/README.md`); hardware runs if library code changed.
 
@@ -42,4 +45,5 @@ The steps used for 2.0.0, in order. Nothing is published before the "publish" st
 
 ## After the release
 
-14. Apply the website patch (`docs/website/`) to oliverfaust.github.io and push it.
+14. Apply `docs/website/vX.Y.Z.patch` in the website repository (`patch -p1`), commit and push it there:
+    a separate push, after the release.
