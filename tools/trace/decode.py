@@ -69,6 +69,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.dont_write_bytecode = True    # no __pycache__ next to the tools
 import conformance  # noqa: E402
+import scvd_eval  # noqa: E402
 CSP_SCVD = os.path.normpath(os.path.join(HERE, '..', '..', 'trace', 'CSP4CMSIS.scvd'))
 CSP_COMPONENT = 0x50
 
@@ -599,6 +600,9 @@ def main():
     ap.add_argument('--stable', help='stable points: CSV (.csv) or JSON file')
     ap.add_argument('--idle', help='comma-separated names of the idle thread(s) (default: symbol contains "idle")')
     ap.add_argument('--eventlist', default=os.environ.get('EVENTLIST', 'eventlist'))
+    ap.add_argument('--no-eventlist', action='store_true',
+                    help='name the events and format their values from the .scvd files (scvd_eval.py) '
+                         'instead of running eventlist')
     ap.add_argument('--nm', default=os.environ.get('NM', 'arm-none-eabi-nm'))
     args = ap.parse_args()
     if not (args.output or args.perfetto or args.summary or args.checks or args.stable):
@@ -654,7 +658,10 @@ def main():
 
     tail = [0]
     records = read_log(args.log, tail)
-    events = run_eventlist(eventlist, args.elf, scvd, args.log)
+    if args.no_eventlist:
+        events = scvd_eval.events(scvd, read_log(args.log, [0]))
+    else:
+        events = run_eventlist(eventlist, args.elf, scvd, args.log)
 
     out = None
     if args.output:
