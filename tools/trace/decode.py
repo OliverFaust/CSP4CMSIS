@@ -48,8 +48,9 @@ else JSON); the Perfetto trace gets a "stable points" track. The idle thread
 is the one whose control block's symbol contains "idle" (RTX5
 os_idle_thread_cb, FreeRTOS xIdleTaskTCB), or --idle NAME.
 
---summary writes counts per event, whether the time stamps are monotonic and
-the results of these checks.
+--summary writes counts per event, whether the time stamps are monotonic,
+the results of these checks and ring2log.py's "ring: ..." notes (records
+overwritten, dropped or torn, data events truncated at 64 bytes).
 """
 import argparse
 import bisect
@@ -674,6 +675,7 @@ def main():
     counts = collections.Counter()
     decreases, last_ts, n, first_time, last_time = 0, None, 0, None, None
     pending_start = None      # thread of the last ProcessStart (its ProcessName follows)
+    ring_notes = []           # ring2log.py's "ring: ..." notes (time, text)
     switch_seen = False
     for ev in events:
         rec = next(records, None)
@@ -726,6 +728,8 @@ def main():
                     names.process[pending_start] = text
             elif comp_no not in comps or comp_no == 0xFF or not value.strip() or value.startswith('data='):
                 value = 'text=' + text            # a data record no .scvd describes
+                if comp_no == 0xFF and text.startswith('ring: '):
+                    ring_notes.append((float(ev['time']), text))   # ring2log.py: lost, torn or truncated records
         if comp_no == CSP_COMPONENT and msg == PROCESS_START and vals:
             pending_start = vals[0]
         t = float(ev['time'])
@@ -806,6 +810,10 @@ def main():
                        d.get('resume', 0), d.get('resume_before', 0), d.get('resume_at', 0), d.get('resume_after', 0)))
             f.write('stable points: %d %s%s\n' % (results['stable_points'], json.dumps(results['stable_classes']),
                                                  '; ' + results['stable_note'] if results['stable_note'] else ''))
+            truncated = sum(1 for _, text in ring_notes if text.startswith('ring: truncated'))
+            f.write('ring notes: %d (%d truncated data events)\n' % (len(ring_notes), truncated))
+            for t, text in ring_notes:
+                f.write('  %.8f  %s\n' % (t, text))
 
 
 if __name__ == '__main__':

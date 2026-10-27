@@ -31,7 +31,9 @@ Marked in the output as Event Recorder data records 0xFF0E ("ring: ..."),
 and in the report: records lost to overwriting (write count - capacity) or
 dropped (policy 1), records whose seq is not their write index (torn: the
 target was stopped while writing the slot), continuation records whose
-first record was lost, and heartbeat intervals that are not about 1 s.
+first record was lost, heartbeat intervals that are not about 1 s, and
+data events the backend cut at 64 bytes (its truncation record 0x5106,
+a = the event's id, b = its full length, replaced by "ring: truncated").
 """
 import argparse
 import struct
@@ -44,6 +46,8 @@ VAL4_NEXT, DATA_NEXT = 0x0001, 0xFF01
 DATA_IDS = {0x5002, 0x5103}            # ProcessName, TaskName: EventRecordData events
 CLOCK_IDS = {0x5100, 0x5101}           # heartbeat and clock records: a = SystemCoreClock
 HEARTBEAT = 0x5100
+TRUNCATED = 0x5106                     # a: id of the data event just written, b: its full length
+MAX_DATA = 64                          # bytes the backend keeps of a data event
 CSP_COMPONENT = 0x50
 NO_CONTEXT = {0x02, 0x10}              # CSP events whose first value is not a context
 MARK = 0xFF0E
@@ -142,6 +146,7 @@ def main():
             f.write(log_record(TYPE_DATA, MARK, 0, False, text.encode()))
         torn_set = set(torn)
         last_k = first - 1
+        truncated = 0
         for k, ts, rid, typ, payload in out:
             gap = [t for t in range(last_k + 1, k) if t in torn_set]
             if gap:
@@ -149,6 +154,13 @@ def main():
                                    ('ring: %d torn record(s) dropped (write index %d..%d)'
                                     % (len(gap), gap[0], gap[-1])).encode()))
             last_k = k
+            if rid == TRUNCATED:
+                eid, length = struct.unpack('<II', payload)
+                truncated += 1
+                f.write(log_record(TYPE_DATA, MARK, ts, False,
+                                   ('ring: truncated: data event 0x%04X, %d of %d bytes recorded'
+                                    % (eid, MAX_DATA, length)).encode()))
+                continue
             irq = (rid >> 8) == CSP_COMPONENT and (rid & 0xFF) not in NO_CONTEXT and typ != TYPE_DATA \
                 and struct.unpack_from('<I', payload)[0] & 0x80000000
             f.write(log_record(typ, rid, ts, irq, payload))
@@ -164,6 +176,7 @@ def main():
         'heartbeats: %d (%s); intervals not about 1 s: %s'
         % (len(beats), 'beats %d..%d' % (beats[0][0], beats[-1][0]) if beats else 'none',
            ', '.join('%d->%d %.3f s' % b for b in bad_beats) or 'none'),
+        'data events truncated at %d bytes: %d' % (MAX_DATA, truncated),
     ]
     text = '\n'.join(lines) + '\n'
     if args.report:
