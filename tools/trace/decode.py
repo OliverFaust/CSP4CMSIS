@@ -7,6 +7,10 @@ a Perfetto (Chrome Trace Event JSON) trace.
 
 Runs eventlist with the RTOS's .scvd file(s) and trace/CSP4CMSIS.scvd and
 reads the log itself (eventlist prints neither event IDs nor all values).
+eventlist (CMSIS-Toolbox, version 1.2) is taken from --eventlist, else the
+environment variable EVENTLIST, else the PATH. --no-eventlist is a fallback
+for FreeRTOS traces only: scvd_eval.py formats the values from the .scvd
+files itself and does not support every .scvd feature (RTX5.scvd fails).
 
 CSV (-o): one row per event: time, component, event, thread, value.
 - time: seconds (timer count / EVENT_TIMESTAMP_FREQ). With --model-time the
@@ -600,16 +604,20 @@ def main():
     ap.add_argument('--checks', help='JSON file: ring-slot, ALT-offer and stable-point results')
     ap.add_argument('--stable', help='stable points: CSV (.csv) or JSON file')
     ap.add_argument('--idle', help='comma-separated names of the idle thread(s) (default: symbol contains "idle")')
-    ap.add_argument('--eventlist', default=os.environ.get('EVENTLIST', 'eventlist'))
+    ap.add_argument('--eventlist', default=os.environ.get('EVENTLIST', 'eventlist'),
+                    help='the eventlist executable (default: $EVENTLIST, else eventlist on the PATH)')
     ap.add_argument('--no-eventlist', action='store_true',
-                    help='name the events and format their values from the .scvd files (scvd_eval.py) '
-                         'instead of running eventlist')
+                    help='fallback, FreeRTOS traces only: name the events and format their values from the '
+                         '.scvd files (scvd_eval.py) instead of running eventlist')
     ap.add_argument('--nm', default=os.environ.get('NM', 'arm-none-eabi-nm'))
     args = ap.parse_args()
     if not (args.output or args.perfetto or args.summary or args.checks or args.stable):
         ap.error('nothing to write: give -o, --perfetto, --summary, --checks and/or --stable')
 
     eventlist = shutil.which(args.eventlist) or args.eventlist
+    if not args.no_eventlist and not os.access(eventlist, os.X_OK):
+        sys.exit('eventlist not found (%s): give --eventlist PATH or set EVENTLIST (CMSIS-Toolbox eventlist 1.2); '
+                 '--no-eventlist is a FreeRTOS-only fallback' % args.eventlist)
     scvd = args.scvd + [CSP_SCVD]
     comps = component_names(scvd)
     syms = Symbols(args.elf, args.nm)
@@ -726,6 +734,8 @@ def main():
                 value = 'name=' + text            # eventlist 1.2.0 prints %t of a data record as empty
                 if pending_start is not None:
                     names.process[pending_start] = text
+            elif comp_no in comps and comp_no != 0xFF and re.search(r'\w=$', value):
+                value += text                     # the same for other data records (e.g. the ring's TaskName)
             elif comp_no not in comps or comp_no == 0xFF or not value.strip() or value.startswith('data='):
                 value = 'text=' + text            # a data record no .scvd describes
                 if comp_no == 0xFF and text.startswith('ring: '):

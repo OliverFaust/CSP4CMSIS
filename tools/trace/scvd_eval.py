@@ -7,6 +7,15 @@ time (seconds: time stamp / the frequency of Event Recorder's init record
 %d is decimal, %x and %S hexadecimal (0x%08X: decode.py resolves %S
 addresses to symbols itself), %t the text of the expression (data records:
 their text). Expressions: C operators on val1..val4, numbers and strings.
+
+A fallback for decode.py --no-eventlist, for FreeRTOS traces only
+(trace/CSP4CMSIS.scvd, CMSIS-FreeRTOS's FreeRTOS.scvd, the ring backend's
+trace/FreeRTOS_ring.scvd). Not supported: typedefs, enumerations (%E, as in
+RTX5.scvd), %I/%J/%M/%N/%T and value tables; eventlist is the default.
+Differences from eventlist in the output: hexadecimal is upper case and
+zero-padded to 8 digits, times are not rounded to eventlist's precision
+(they can differ by one in the last printed digit), and Event Recorder's
+own records (0xFF00...) get no event name.
 """
 import re
 import xml.etree.ElementTree as ET

@@ -3,6 +3,9 @@
 variant), the input of decode.py.
 
     ring2log.py ring.bin -o events.log [--report report.txt]
+    decode.py -a app.elf -I trace/FreeRTOS_ring.scvd events.log -o events.csv ...
+
+(decode.py runs eventlist: see its --eventlist and EVENTLIST; README.md.)
 
 ring.bin: the debugger's "dump binary memory" of struct csp_trace_ring: a
 32-byte header followed by `capacity` records of 16 bytes.
