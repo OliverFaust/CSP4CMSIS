@@ -100,7 +100,8 @@ def read_rows(path):
         if r['event'] == 'AltSelected' and 'alt' not in d:
             sys.exit('%s: AltSelected without alt=: a trace recorded before the AltSelected/AltGuard/policy '
                      'payloads (csp4cmsis_trace.h); re-record it' % path)
-        rows.append(Row(len(rows), float(r['model_time_s']), r['event'], tid(r['thread']) or r['thread'], d))
+        t = r['model_time_s'] if 'model_time_s' in r else r['time_s']   # decode.py -o with/without --model-time
+        rows.append(Row(len(rows), float(t), r['event'], tid(r['thread']) or r['thread'], d))
     return rows
 
 
