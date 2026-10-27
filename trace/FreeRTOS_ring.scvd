@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FreeRTOS kernel events of the RAM trace ring backend (component 0x51):
+     the FreeRTOSConfig.h trace hooks and the tick hook of an application's
+     ring backend (e.g. the STM32N6570-DK port's Src/csp_trace_ring.c).
+     Property names and value keys follow CMSIS-FreeRTOS's FreeRTOS.scvd
+     where decode.py reads them (TaskSwitchedIn/Out, pxCurrentTCB). -->
+<component_viewer schemaVersion="1.2.0" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="Component_Viewer.xsd">
+  <component name="FreeRTOS ring" shortname="RTOS" version="1.0.0"/>
+  <events>
+    <group name="FreeRTOS ring">
+      <component name="FreeRTOS ring events" brief="RTOS" no="0x51" prefix="CSP_TRACE_RTOS_" info="FreeRTOS kernel events of the RAM trace ring"/>
+    </group>
+    <event id="0x5100 + 0x00" level="Op" property="Heartbeat" value="clock_hz=%d[val1], beat=%d[val2]" info="Once per second (tick hook): SystemCoreClock and the heartbeat count."/>
+    <event id="0x5100 + 0x01" level="Op" property="ClockUpdate" value="clock_hz=%d[val1]" info="SystemCoreClock changed (seen at the next tick)."/>
+    <event id="0x5100 + 0x02" level="Op" property="TaskCreate" value="pxNewTCB=%x[val1], priority=%d[val2]" info="A task was created (traceTASK_CREATE)."/>
+    <event id="0x5100 + 0x03" level="Op" property="TaskName" value="name=%t[val1]" info="Name of the task just created (data record)."/>
+    <event id="0x5100 + 0x04" level="Op" property="TaskSwitchedIn" value="pxCurrentTCB=%x[val1]" info="traceTASK_SWITCHED_IN."/>
+    <event id="0x5100 + 0x05" level="Op" property="TaskSwitchedOut" value="pxCurrentTCB=%x[val1]" info="traceTASK_SWITCHED_OUT."/>
+  </events>
+</component_viewer>
