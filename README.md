@@ -1,3 +1,5 @@
+Unreleased development branch, not a release; the current release is v3.1.0.
+
 # CSP4CMSIS
 
 A CSP (Communicating Sequential Processes)-style concurrency library, which offers 

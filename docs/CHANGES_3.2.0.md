@@ -1,3 +1,5 @@
+Unreleased development branch, not a release; the current release is v3.1.0.
+
 # CSP4CMSIS 3.2.0: changes
 
 Minor release. **Tracing, a Perfetto view and conformance checking; no behaviour change, no API change:**
