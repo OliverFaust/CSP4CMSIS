@@ -2,6 +2,7 @@
 """Conformance of a recorded CSP4CMSIS trace against docs/formal/*.csp.
 
     csp_trace.py EVENTS.csv[.xz] --out DIR [--stable STABLE.csv] [--mutate] [--models DIR]
+                 [--isr-writers FILE] [--isr-writer CHANNEL=N ...]
     csp_trace.py --prove DIR [DIR ...] [--jobs N] [--cache DIR] [--models DIR] [--prob-mem GB]
 
 EVENTS.csv: tools/trace/decode.py -o; STABLE.csv: decode.py --stable. The
@@ -25,7 +26,12 @@ choice), and writes the verdicts back.
    X = its observable events except the environment events the point
    awaits; MODEL \\ H composed with an environment that performs t, then a
    marker, then offers only X (escapes before the marker) must deadlock
-   right after the marker.
+   right after the marker. KeepNewest/KeepOldest channels (Parts 2N/2bN):
+   the model has no task writer there (every task end waits) and as many
+   interrupt writers as the run's input gives (--isr-writers FILE,
+   --isr-writer CHANNEL=N; not listed: 0): none, or one writing forever,
+   whose puts the point then awaits from the environment. The source is
+   reported with each check and in report.json ("isr_writers").
 5. Mutations (--mutate): one fault per model on copies of the decoded rows
    (swap, drop-rv, alt-guard, get-id, resume), and per stable point one
    offer removed. Each must fail.
@@ -43,6 +49,8 @@ MEM_GB = None                       # probcli's memory limit (GB), set by main()
 CGROUP = None                       # systemd-run --scope usable? (checked once, when a limit is set)
 MEMERR = r'Cannot allocate memory|insufficient memory|[Rr]esource error[^\n]*memory|[Oo]ut of (global )?memory|memory exhausted'
 CHUNK = 250                         # events per CSPm definition of a recorded trace
+ISR_WRITERS = {}                    # channel -> ISR writers (--isr-writers, --isr-writer); not listed: 0
+ISR_SOURCE = 'default 0'            # where ISR_WRITERS came from (reported with every check that uses it)
 
 ATD, BUF, OWR, RVP = 'alt_timeout_deadline', 'buffered_channel_v2', 'alt_one_winner', 'rendezvous_plain'
 BUF_EVENTS = ('BufferedPut', 'PutFromISR', 'BufferedGet', 'DroppedNew', 'OverwroteOldest')
@@ -899,6 +907,15 @@ def atd_failures(tr, c, pt):
     return failure_check(ATD, sysx, atd_decls(sysx, True), obsr, x, prefix, not has_t)
 
 
+def isr_writers(name):
+    """(ISR writers of a channel, source): ISR_WRITERS by its full name, else
+    by its name without the scope (after the last '::'); not listed: 0."""
+    for key in (name, short(name), short(name).split('::')[-1]):
+        if key in ISR_WRITERS:
+            return ISR_WRITERS[key], ISR_SOURCE
+    return 0, 'default 0' if ISR_SOURCE == 'default 0' else '%s (not listed: 0)' % ISR_SOURCE
+
+
 def buf_failures(tr, c, pt, orig):
     """orig: the point as recorded (which users wait decides whether the
     check applies); pt: the point checked (an offer removed: mutation)."""
@@ -916,22 +933,32 @@ def buf_failures(tr, c, pt, orig):
         if not any(chan_in(o, ch.name) for o in offers_of(orig, n)):
             return None                   # a user of the channel is not waiting on it: outside the model
         waiting[n] = offers_of(pt, n)
+    reads = any(o.endswith('?') and chan_in(o, ch.name) for offs in waiting.values() for o in offs)
+    isr_seen = bool(ch.writers) and any(x['isr'] for x in ch.writers.values())
+    kw = {}
     if cfg.startswith(('Part 2N', 'Part 2bN')):
         # every task end waits on the channel here, and a task's put to a
         # KeepNewest/KeepOldest channel never waits: the model gets no task
-        # writer (tw = 0); the interrupt's writes stay unbounded
-        cfg = re.sub(r'\((\d+), -1, -1\)$', r'(\1, 0, -1)', cfg)
+        # writer (tw = 0). The interrupt writers come from the run's input
+        # (isr_writers), not from the trace: none (iw = 0) or writing
+        # forever (iw = -1).
+        n, src = isr_writers(ch.name)
+        cfg = re.sub(r'\((\d+), -1, -1\)$', r'(\1, 0, %d)' % (-1 if n else 0), cfg)
+        isr_fed = reads and n > 0
+        kw = {'isr_writers': n, 'isr_writers_source': src}
+        if isr_seen and not n:
+            kw['isr_writers_note'] = 'the trace has interrupt writes to this channel, the input gives 0 ISR writers'
+    else:
+        # an interrupt-fed channel that a read waits on: the interrupt's puts
+        # are awaited from the environment, not refused (Part 5 isr_put,
+        # Parts 3N/5G)
+        isr_fed = reads and isr_seen
     sysx, sigma, cap = buf_cfg(cfg)
-    reads = any(o.endswith('?') and chan_in(o, ch.name) for offs in waiting.values() for o in offs)
-    # an interrupt-fed channel that a read waits on: the interrupt's puts are
-    # awaited from the environment, not refused (Part 5 isr_put, Part 2
-    # isr_new, Parts 2b/2bN kput.1 and kdrop.1)
-    isr_fed = reads and ch.writers and any(x['isr'] for x in ch.writers.values())
     x = [o for o in sigma if not (isr_fed and o in ('isr_put', 'isr_new'))]
     if isr_fed:
         x = [o + '.0' if o in ('kput', 'kdrop') else o for o in x]
     prefix = [e for i, e in pairs if i is not None and tr.rows[i].t <= pt['start']]
-    return failure_check(BUF, cfg, buf_decls(cfg), sigma, x, prefix, False)
+    return failure_check(BUF, cfg, buf_decls(cfg), sigma, x, prefix, False, **kw)
 
 
 def rvp_failures(tr, c, pt):
@@ -1505,6 +1532,10 @@ def prove(dirs, models, jobs, cache, skip=None):
 
 
 # ------------------------------------------------------------------- main
+def tr_name(projections, pid):
+    return next((p['name'] for p in projections if p['id'] == pid), pid)
+
+
 def main():
     global MEM_GB
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
@@ -1520,7 +1551,27 @@ def main():
                     help='--prove: memory limit of each probcli run (default PROB_MEM_GB, else 85%% of the memory / '
                          '--jobs; 0: none); a run stopped at the limit is UNKNOWN')
     ap.add_argument('--skip', help='--prove: leave the checks of configurations matching this regex unchecked')
+    ap.add_argument('--isr-writers', metavar='FILE',
+                    help='JSON {channel: number of interrupt writers} for the stable-failure checks of KeepNewest/'
+                         'KeepOldest channels (Parts 2N/2bN); channel: its symbol or the name after the last "::"; '
+                         'channels not listed: 0')
+    ap.add_argument('--isr-writer', action='append', default=[], metavar='CHANNEL=N',
+                    help='the same for one channel (repeatable; after --isr-writers)')
     a = ap.parse_args()
+    global ISR_SOURCE
+    srcs = []
+    if a.isr_writers:
+        ISR_WRITERS.update({k: int(v) for k, v in json.load(open(a.isr_writers)).items()})
+        srcs.append('file %s' % a.isr_writers)
+    for kv in a.isr_writer:
+        k, _, v = kv.rpartition('=')
+        if not k or not v.isdigit():
+            ap.error('--isr-writer %r: give CHANNEL=N' % kv)
+        ISR_WRITERS[k] = int(v)
+    if a.isr_writer:
+        srcs.append('--isr-writer')
+    if srcs:
+        ISR_SOURCE = ' + '.join(srcs)
     models = Models(a.models)
     if a.prove:
         MEM_GB = (a.prob_mem if a.prob_mem is not None else
@@ -1562,11 +1613,18 @@ def main():
             for k, v in p['match'].items():
                 f.write('    %-44s %s\n' % (k, v))
     json.dump({'events_file': os.path.basename(a.events), 'models': a.models, 'projections': projections,
+               'isr_writers': {'source': ISR_SOURCE, 'channels': ISR_WRITERS},
                'checks': checks, 'coverage': cov, 'uncovered': uncovered_groups(tr, checks)},
               open(os.path.join(a.out, 'report.json'), 'w'), indent=1)
     n = collections.Counter((c.get('mutation') or c['kind']) for c in checks)
     print('%s: %d projections, %d checks %s, coverage %.1f %%' % (os.path.basename(a.events), len(projections), len(checks),
                                                                   dict(n), 100 * cov['total']['share']))
+    used = {}
+    for c in checks:
+        if 'isr_writers' in c:
+            used[tr_name(projections, c['projection'])] = (c['isr_writers'], c['isr_writers_source'], c.get('isr_writers_note'))
+    for name, (k, src, note) in sorted(used.items()):
+        print('ISR writers of %s (stable failures): %d, from %s%s' % (name, k, src, '; ' + note if note else ''))
 
 
 if __name__ == '__main__':
