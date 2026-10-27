@@ -1,11 +1,18 @@
 #ifndef CSP4CMSIS_TRACE_H
 #define CSP4CMSIS_TRACE_H
 
-// Event tracing to CMSIS-View Event Recorder (opt-in).
+// Event tracing (opt-in), to CMSIS-View Event Recorder or a RAM ring.
 //
 // Without CSP4CMSIS_TRACE (the default) every hook expands to nothing: its
-// arguments are not evaluated, EventRecorder.h is not included, and the
+// arguments are not evaluated, no backend header is included, and the
 // generated code is that of a build without this header.
+//
+// Backend: Event Recorder (the default: EventRecorder.h), or with
+// CSP4CMSIS_TRACE_BACKEND_RING the RAM ring of csp_trace_ring.h and
+// src/csp_trace_ring.c, which implement the same calls (EventID(),
+// EventRecord2/4/Data()); the board provides the ring's memory and hooks
+// (csp_trace_ring.h). Define the backend switch, like CSP4CMSIS_TRACE, for
+// the whole project.
 //
 // With CSP4CMSIS_TRACE (define it for the whole project: channel templates
 // are compiled in application files) the library records the events below
@@ -121,7 +128,11 @@
   #include <string.h>
   #include "cmsis_os2.h"
   #include "csp_critical.h"       // device header: __get_IPSR()
-  #include "EventRecorder.h"
+  #if defined(CSP4CMSIS_TRACE_BACKEND_RING)
+    #include "csp_trace_ring.h"
+  #else
+    #include "EventRecorder.h"
+  #endif
 
   // EventID() does not parenthesise its arguments.
   #define CSP4CMSIS_TRACE_ID(msg) \

@@ -140,6 +140,7 @@
         <file category="other" name="csp4cmsis/inc/csp/csp_version.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp4cmsis.h"/>
         <file category="other" name="csp4cmsis/inc/csp/csp4cmsis_trace.h"/>
+        <file category="other" name="csp4cmsis/inc/csp/csp_trace_ring.h"/>
 
         <!-- Sources -->
         <file category="source" name="csp4cmsis/src/alt_channel_sync.cpp"/>
@@ -154,6 +155,9 @@
         <file category="source" name="csp4cmsis/src/channel_sync.cpp"/>
         <file category="source" name="csp4cmsis/src/csp_wrapper.cpp"/>
         <file category="source" name="csp4cmsis/src/glue.cpp"/>
+        <!-- RAM ring trace backend: empty unless CSP4CMSIS_TRACE and
+             CSP4CMSIS_TRACE_BACKEND_RING are defined (csp_trace_ring.h). -->
+        <file category="source" name="csp4cmsis/src/csp_trace_ring.c"/>
 
         <!-- Documentation -->
         <file category="doc" name="Documentation/CSP4CMSIS_Configuration.md"/>

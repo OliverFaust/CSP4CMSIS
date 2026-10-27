@@ -15,6 +15,14 @@ Decoding and checking CSP4CMSIS traces (`CSP4CMSIS_TRACE`).
 format), the same input as an FVP trace, so the rest of the path is the
 FVP's.
 
+The ring is the library's second trace backend: define
+`CSP4CMSIS_TRACE_BACKEND_RING` with `CSP4CMSIS_TRACE` (Event Recorder
+stays the default). `csp4cmsis/src/csp_trace_ring.c` writes the records;
+the board defines the ring in a NOLOAD, non-cacheable section, calls
+`csp_trace_ring_init()` before the first event and `csp_trace_ring_tick()`
+from the tick hook, and installs the thread hooks
+(`csp4cmsis/inc/csp/csp_trace_ring.h`).
+
 ## eventlist
 
 `decode.py` runs eventlist (CMSIS-Toolbox, version 1.2) to name events and
