@@ -35,7 +35,8 @@ def chan(r, name):
 
 
 def us(r):
-    return float(r['model_time_s']) * 1e6
+    # decode.py -o with --model-time (simulators) or without (hardware), as csp_trace.py reads it
+    return float(r['model_time_s'] if 'model_time_s' in r else r['time_s']) * 1e6
 
 
 ev = [r for r in rows if r['event'] in ('PutFromISR', 'BufferedPut', 'DroppedNew', 'BufferedGet') and chan(r, CH)]
