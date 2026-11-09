@@ -169,6 +169,7 @@ int Alternative::priSelect() {
 #if defined(CSP4CMSIS_TRACE)
     traceGuards();
 #endif
+    retargetGuards();
     return (int)internal_alt.select(internal_guards, num_guards, 0);
 }
 
@@ -177,6 +178,7 @@ int Alternative::fairSelect() {
 #if defined(CSP4CMSIS_TRACE)
     traceGuards();
 #endif
+    retargetGuards();
 
     size_t actual_index = internal_alt.select(internal_guards, num_guards, fair_select_start_index);
 

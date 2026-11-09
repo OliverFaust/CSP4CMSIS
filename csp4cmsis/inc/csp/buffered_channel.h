@@ -326,6 +326,7 @@ namespace csp::internal {
             channel->popWithToken(dest);
             return true;
         }
+        void retarget(void* t) override { dest = static_cast<T*>(t); }
 #if defined(CSP4CMSIS_TRACE)
         uint32_t traceDescribe(uint32_t& object) const override {
             object = (uint32_t)(uintptr_t)channel;
@@ -363,6 +364,7 @@ namespace csp::internal {
                 return true;
             }
         }
+        void retarget(void* t) override { source = static_cast<const T*>(t); }
 #if defined(CSP4CMSIS_TRACE)
         uint32_t traceDescribe(uint32_t& object) const override {
             object = (uint32_t)(uintptr_t)channel;
