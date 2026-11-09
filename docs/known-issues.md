@@ -1,8 +1,8 @@
 # Known Issues
 
-## One ALT guard slot per channel end: two `Alternative`s on the same end redirect each other's input (2.0.0 and later; open)
+## One ALT guard slot per channel end: two `Alternative`s on the same end redirect each other's input (2.0.0 to 3.1.0; fixed in 3.2.0, `dev/tracing`)
 
-Each `Chanin`/`Chanout` handle owns one `GuardSlot`, and `in | var` (or `out | value`) constructs that
+In 2.0.0 to 3.1.0 (and so in 3.0.1, the version of the book), each `Chanin`/`Chanout` handle owns one `GuardSlot`, and `in | var` (or `out | value`) constructs that
 end's ALT guard in the slot, with `&var` as its target. A second binding of the same end, for a second
 `Alternative`, constructs a new guard in the same slot and overwrites the first (`GuardSlot::emplace()`:
 "the previous occupant is simply overwritten"). The first `Alternative` still holds the slot's address,
@@ -21,14 +21,25 @@ with an `Alternative wait(m_cmd_in | c, timeout)` constructed in a loop, `c` a l
 happened. Whether the symptom shows depends on the stack layout and on which `Alternative` takes the
 command, so one run worked and the next did not.
 
-**Workaround:** bind a channel end to one variable only: every `Alternative` on that end uses the same
-`in | var` target, with a lifetime at least as long as the longest-lived `Alternative` (in `FileSource`,
-`cmd`, declared before both). Rebinding to the same variable is harmless, since the new guard then has
-the same target. Plain `in.read(x)` / `in >> x` do not use the slot and can be mixed freely.
+**Rule for 3.1.0 and earlier (the workaround):** bind a channel end to one variable only: every
+`Alternative` on that end uses the same `in | var` target, with a lifetime at least as long as the
+longest-lived `Alternative` (in `FileSource`, `cmd`, declared before both). Rebinding to the same
+variable is harmless, since the new guard then has the same target. Plain `in.read(x)` / `in >> x` do
+not use the slot and can be mixed freely. Code that follows the rule behaves the same on 3.2.0.
 
-**Possible fixes (not implemented):** a guard per binding (stored in the `ChannelBinding` or the
-`Alternative` instead of the handle), or a fatal error when an end is bound again with a different
-target while an earlier `Alternative` that holds it is still alive.
+**Fixed in 3.2.0** (`dev/tracing`; unreleased): the guard stays in the channel end's slot, and each
+`Alternative` keeps the variable of each of its channel bindings. At the start of every `priSelect()`
+and `fairSelect()` it sets each of its channel guards to its own variable (`Guard::retarget()`), so
+every `Alternative` on an end reads into (writes from) its own variable, whichever binding was made
+last. One process selects at a time, and only the process that owns the end binds it, so no other
+`Alternative` can change the guard during a select. `AltScheduler::select()`, the OWRV protocol, the
+channel cores and the second-process check are unchanged; no channel keeps a pointer to a guard
+object between selects (a registration holds the selecting `AltScheduler`, the guard's flag and the
+target pointer, set in `enable()` and cleared in `disable()`). New in 3.2.0: one channel end bound
+twice in one `Alternative` is a fatal error (both bindings would share one guard). Cost on a 32-bit
+target: `sizeof(Alternative)` 92 -> 156 bytes (one target pointer per guard), about 15 cycles per
+channel guard per select. Regression tests: T32a-T32g (`tests/fvp_sse300`); on 3.1.0 T32a, T32b, T32e
+and T32f fail with this symptom.
 
 ## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fixed in 2.0.1)
 

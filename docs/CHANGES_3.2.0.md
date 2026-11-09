@@ -2,14 +2,63 @@ Unreleased development branch, not a release; the current release is v3.1.0.
 
 # CSP4CMSIS 3.2.0: changes
 
-Minor release. **Tracing, a Perfetto view and conformance checking; no behaviour change, no API change:**
-without `CSP4CMSIS_TRACE` the library compiles to the same code as 3.1.0 (and 3.0.1), and code that
-builds with 3.1.0 builds with 3.2.0 and behaves the same.
+Minor release. **Tracing, a Perfetto view and conformance checking, and one ALT fix; no API change:**
+code that builds with 3.1.0 builds with 3.2.0. It behaves the same, except where it bound one channel
+end in several `Alternative`s with different variables, which 3.1.0 got wrong (below, "ALT: several
+Alternatives on one channel end"). Without `CSP4CMSIS_TRACE` the library compiles to the same code as
+3.1.0 (and 3.0.1) apart from that fix.
 
 ## Library API
 
-Unchanged. The book stays on 3.0.1 (the "book API" of 3.0): everything it uses is the same in 3.2.0. The only header text that changed for users is the comment of `IsrChanout::putFromISR()`
-(below, "Documented behaviour").
+Unchanged, and source-compatible with 3.1.0: `Alternative` is still a class (as a member, an
+`Alternative&` parameter, default-constructed with `addBinding()`, or constructed with its bindings).
+The book stays on 3.0.1 (the "book API" of 3.0): everything it uses is the same in 3.2.0. Header text
+that changed for users: the comments of `Alternative`, `ChannelBinding` and `operator|` (below), and of
+`IsrChanout::putFromISR()` (below, "Documented behaviour").
+
+## ALT: several Alternatives on one channel end (fix)
+
+**The defect (2.0.0 to 3.1.0, `docs/known-issues.md`).** A channel end (`Chanin`/`Chanout`) has one
+guard, and `in | var` sets its variable. When two `Alternative`s of a process bound one end to
+different variables, the binding made last decided the variable for both: the other `Alternative`
+returned the right index but read into (or wrote from) the wrong variable, possibly a dead loop-local
+one. Seen in the HimaxWE2 `FileSource` process: a `restart` command arrived as `set again 0`.
+
+**The fix.** Each `Alternative` keeps the variable of each of its channel bindings and, at the start
+of every `priSelect()` and `fairSelect()`, sets each channel guard to it (`Guard::retarget()`, in the
+rendezvous and buffered input and output guards). Unchanged: `AltScheduler::select()`, the OWRV
+protocol, the channel cores, and the fatal error for a second process ALTing on an end. No core or
+partner keeps a pointer to a guard object between selects: a registration holds the selecting
+`AltScheduler`, the guard's flag and the target pointer (`RvEnd` in `alt_channel_sync.h`, `AltWake`
+in `buffered_channel.h`), set in `enable()` and cleared in `disable()`; the guard object itself is
+only used by the select that enabled it.
+
+**New fatal error:** one channel end bound twice in one `Alternative` ("channel end bound twice"). Both
+bindings would share the end's one guard; in 3.1.0 the second won.
+
+**What a binding means now** (comments of `Alternative`, `ChannelBinding`, `operator|`): the binding
+belongs to the `Alternative` that takes it; the `Alternative` keeps the variable's address, so the
+variable must live as long as the `Alternative` is used (a loop-local variable is fine for an
+`Alternative` built in the same iteration). Several `Alternative`s of a process may bind one end, with
+the same or with different variables. The 3.1.0 rule (one variable per end) still works.
+
+**Cost** (32-bit targets): `sizeof(Alternative)` 92 -> 156 bytes (a target pointer per guard), so 64
+bytes more stack or static memory per `Alternative`; `Chanin`/`Chanout` unchanged (28 bytes for
+`int`). Per select, about 15 FVP cycles per channel guard, plus about 5 (Corstone-300 FVP, GCC `-O2`, not
+cycle-accurate: 417 -> 437 cycles for one ready guard, 476 -> 722 for sixteen). Code (GCC `-O2`):
+`alternative.cpp` +112 bytes; a process with an `Alternative` of 2 or 3 channel guards +120 to
++208 bytes (`-Os`: +74, +40 to +70).
+
+Two designs that give each `Alternative` its own guard objects were measured and not taken: storage
+for 16 guards in every `Alternative` (412 bytes; +296 to +320 bytes of stack per `Alternative`, which
+overflowed a 1 KB test thread with two of them) and a class template sized by its bindings (88 bytes
+for two bindings, but `Alternative` as a member or an `Alternative&` parameter no longer compiles).
+
+**Tests:** T32a-T32g in `tests/fvp_sse300` (several `Alternative`s on one buffered, rendezvous, output
+and interrupt-fed end; the same variable; one per loop iteration; one end bound twice); T29 now adds
+16 timeout guards and a channel binding (one end 17 times would be "bound twice"). On 3.1.0, T32a, T32b, T32e and T32f fail with the FileSource symptom and T32g finds
+no error. Compile checks: `pos_alternative_patterns.cpp` (the 3.1.0 use patterns, several
+`Alternative`s on one end), `neg_hidden_retarget_guards.cpp`.
 
 ## Tracing (opt-in, `CSP4CMSIS_TRACE`): changes since 3.1.0
 
@@ -138,6 +187,27 @@ Summary (2026-10-26; the FVP harness is not public and its logs are not publishe
 - **Models:** 213 assertions, 175 PASS / 38 FAIL as expected.
 - **Host tests:** the decoder, conformance and csp_trace tests (56), and the ALT selection test
   (5.9 million cases).
+
+**Results with the ALT fix** (2026-11-09, `dev/tracing`; the results above predate it, so the
+"byte-identical to v3.1.0" statement above no longer holds for code that uses an `Alternative`):
+
+- **Corstone-300 FVP, 16 configurations** (FreeRTOS 11.3.0 and RTX5 5.9.1; GCC 14.2.1 and Arm
+  Compiler 6.24; `-O0`, `-O2`, `-Os`, heap-free): PASS=43 FAIL=0 SKIP=0 REPLACED=4 in all 16 (PASS=44
+  in the 4 heap-free builds).
+- **Control, the same suite on v3.1.0** (Corstone-300 FreeRTOS GCC and RTX5 GCC): PASS=38 FAIL=5:
+  T32a, T32b, T32e and T32f fail with the FileSource symptom (the value goes to the other
+  `Alternative`'s variable), T32g finds no error.
+- **Tracing on** (Corstone-300 RTX5 GCC `-O2`, FreeRTOS Arm Compiler 6 `-O2`): the suite passes
+  (43/0); trace checks 37,612 and 37,602 PASS, stable failures 25 of 25 PASS, fairness 0 violations,
+  29 of 32 mutants caught (the 3 known swaps); the demo network passes its checks. The stable-failure
+  checks need the run's interrupt writers (`csp_trace.py --isr-writer throttled_samples=1`):
+  without them the KeepOldest channel of `tests/trace/throttled_drop.cpp` is checked as having none,
+  and one check fails.
+- **Host:** the ALT selection test (5.9 million cases) passes; `select()` is unchanged.
+- **Compile checks** (the suite's flags, GCC and Arm Compiler 6): all pass, including
+  `pos_alternative_patterns.cpp` and `neg_hidden_retarget_guards.cpp`.
+- **API reference examples** (`tests/doc_examples`): all 11 compile with ST's wrapper and as a pack
+  (`-Werror`); `examples/` matches the page with `docs/website/v3.2.0.patch` applied.
 
 ## Known limitations
 

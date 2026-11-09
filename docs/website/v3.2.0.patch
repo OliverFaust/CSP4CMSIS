@@ -1,12 +1,31 @@
 --- a/CSP4CMSIS/api.md
 +++ b/CSP4CMSIS/api.md
-@@ -692,6 +692,11 @@
+@@ -495,8 +495,15 @@ that one.
+   order given; returns its index (0 = first guard).
+ - **`int fairSelect()`:** the same, but starts the search after the previous winner, so a guard that is
+   always ready cannot starve the others.
+-- An `Alternative` keeps references to its guards' variables; keep them alive while it is used. It is
+-  not copyable.
++- **A binding belongs to the `Alternative` that takes it.** The `Alternative` keeps the address of
++  each guard's variable: keep the variable alive while the `Alternative` is used (a loop-local variable
++  is fine for an `Alternative` built in the same loop iteration). Several `Alternative`s of a process
++  may bind the same channel end, with the same or with different variables; each reads into (writes
++  from) its own (3.2.0). Up to 3.1.0 the binding made last decided the variable for all of them, so
++  there bind an end to one variable only
++  ([known issues](https://github.com/OliverFaust/CSP4CMSIS/blob/main/docs/known-issues.md)). One
++  channel end bound twice in one `Alternative` is a fatal error (3.2.0). An `Alternative` is not
++  copyable.
+ 
+ ### `RelTimeoutGuard`
+ 
+@@ -692,6 +699,12 @@ void start_stages(void) {
    below 64 words does not compile. The channel and ALT protocols are unchanged.
  - **3.0.1:** the ALT picks the first ready guard with one `__CLZ` (count leading zeros) of a mask of
    the re-verified guards instead of a loop. No behaviour change, no API change.
 +- **3.1.0 and 3.2.0:** opt-in event tracing to CMSIS-View Event Recorder (`CSP4CMSIS_TRACE`), with a
 +  Perfetto view and conformance checks against the formal models (3.2.0; the trace format is
-+  experimental). No API change: this page applies unchanged
++  experimental). 3.2.0 also fixes several `Alternative`s on one channel end with different variables
++  (section 6). No API change: this page applies unchanged
 +  ([`docs/CHANGES_3.1.0.md`](https://github.com/OliverFaust/CSP4CMSIS/blob/v3.2.0/docs/CHANGES_3.1.0.md),
 +  [`docs/CHANGES_3.2.0.md`](https://github.com/OliverFaust/CSP4CMSIS/blob/v3.2.0/docs/CHANGES_3.2.0.md)).
  
