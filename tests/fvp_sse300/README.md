@@ -160,6 +160,13 @@ the FVPs. Its settings, as far as they affect the results:
 | T29 | a 17th guard in an `Alternative` is a fatal error. FAIL on 2.0.1 (ignored) |
 | T30 | `Seconds()`/`Milliseconds()`: 0 stays 0; otherwise never shorter than requested and at most one tick longer, computed in 64 bits (`ms * freq` above 2³²); saturated at `0xFFFFFFFE`. FAIL on 2.0.1 (rounds down, overflows) |
 | T31 | `SleepFor(Time(5))` sleeps 5..6 ticks, `SleepFor(Time(0))` 0 (2.1.0 API; SKIP before) |
+| T32a | FileSource pattern (docs/known-issues.md): on one Block buffered input end, a poll Alternative built once (`in \| cmd`, zero timeout) and a wait Alternative built per iteration with a loop-local variable (`in \| c`, timeout); each gets its own input. FAIL on 3.1.0 (the poll's input goes to the wait's dead variable) |
+| T32b | as T32a on a rendezvous input end (writer thread). FAIL on 3.1.0 |
+| T32c | three Alternatives on one input end with the same variable (the 3.1.0 workaround): unchanged |
+| T32d | an Alternative built and destroyed per loop iteration with a loop-local variable, after an unused one on the same end |
+| T32e | as T32a on an output end: each Alternative sends its own variable. FAIL on 3.1.0 |
+| T32f | as T32a with an interrupt writer (KeepNewest, `isrWriter()`). FAIL on 3.1.0 |
+| T32g | one channel end bound twice in one Alternative is a fatal error (3.2.0). FAIL on 3.1.0 (no error) |
 | T19 | heap-free build types only: no dynamic RTOS allocation (see "Heap-free proof"); no RESULT line in builds with a heap |
 | T16s | `SignalChannel::putFromISR()` to a receiver blocked in `input()` releases it, or returns false. (Today it returns true and the receiver stays blocked.) |
 | T16n | `KeepNewest` rendezvous (`SamplingChannel`): `output()` while a reader waits in an ALT delivers the value. (Today the reader's `select()` returns the channel with its destination unchanged, and the value is dropped.) |

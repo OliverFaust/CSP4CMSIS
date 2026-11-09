@@ -1501,12 +1501,17 @@ void test_T28() {
            "a failed osThreadNew() in Run() is a fatal error, in both execution modes");
 }
 
-// T29 -- a 17th guard is a fatal error (2.0.x ignored it silently)
+// T29 -- a 17th guard is a fatal error (2.0.x ignored it silently). 17
+// distinct reader ends of one channel (3.2.0: one end bound twice in one
+// Alternative is itself a fatal error, T32g).
 volatile int t29_after = 0;
+csp::Channel<uint32_t>* t29_ch;
+struct T29End { In in; T29End() : in(t29_ch->reader()) {} };
 void t29_alt(void*) {
-    static csp::Channel<uint32_t> ch; In in = ch.reader(); uint32_t v = 0;
+    static csp::Channel<uint32_t> ch; t29_ch = &ch;
+    static T29End ends[17]; uint32_t v = 0;
     csp::Alternative alt;
-    for (int i = 0; i < 17; ++i) alt.addBinding(in | v);
+    for (int i = 0; i < 17; ++i) alt.addBinding(ends[i].in | v);
     t29_after = 1; park();
 }
 void test_T29() {
@@ -1579,6 +1584,228 @@ void test_T30() { result("T30", -1, "time conversion (2.0 API)"); }
 void test_T31() { result("T31", -1, "SleepFor(Time) (2.1.0 API)"); }
 #endif
 
+// ===========================================================================
+// T32 family -- several Alternatives on one channel end (docs/known-issues.md:
+// a channel end has one guard slot, and up to 3.1.0 a second Alternative that
+// bound the end to another variable redirected the first one's input or
+// output). 3.2.0: each Alternative keeps its own targets and sets its guards
+// to them at the start of every select. On 3.1.0, T32a, T32b, T32e and T32f
+// must FAIL (positive controls), and T32g fails (no fatal error there); T32c
+// and T32d pass on both.
+//
+// Pattern of the HimaxWE2 FileSource process: a poll Alternative built once
+// (cmd_in | cmd, zero timeout), and per frame a pace wait built in the loop
+// (cmd_in | c, timeout) with a loop-local c. A command taken by the poll must
+// arrive in cmd.
+// ===========================================================================
+#if BC_LIB3
+constexpr int T32_ROUNDS = 5;
+
+// T32a: buffered input end (FileSource's cmd_chan: one slot, Block).
+void test_T32a() {
+    g_current_test = "T32a";
+    static BlockChan<1> ch; In in(&ch);
+    uint32_t cmd = 0;
+    csp::RelTimeoutGuard skip(csp::Time(0));
+    csp::Alternative poll(in | cmd, skip);
+    int bad = 0, wait_bad = 0;
+    for (int i = 1; i <= T32_ROUNDS; ++i) {
+        {   // pace wait with a loop-local variable: once with a command (taken here), once timing out
+            uint32_t c = 0;
+            csp::RelTimeoutGuard pace(csp::Time(1));
+            csp::Alternative wait(in | c, pace);
+            uint32_t v = 200u + (uint32_t)i; ch.output(&v);
+            if (wait.priSelect() != 0 || c != v) wait_bad++;
+            if (wait.priSelect() != 1) wait_bad++;
+        }
+        uint32_t v = 100u + (uint32_t)i; ch.output(&v);
+        int r = poll.priSelect();
+        if (r != 0 || cmd != v) {
+            if (bad++ == 0) printf("   [T32a] round %d: poll returned %d, cmd=%lu (sent %lu)\r\n", i, r, (unsigned long)cmd, (unsigned long)v);
+        }
+    }
+    drain(ch);
+    printf("   [T32a] %d of %d commands taken by the poll missing from its variable; wait Alternative wrong %d times\r\n",
+           bad, T32_ROUNDS, wait_bad);
+    result("T32a", (bad == 0 && wait_bad == 0) ? 1 : 0,
+           "two Alternatives on one buffered input end, different variables (the second loop-local): each gets its own input");
+}
+
+// T32b: rendezvous input end; a writer thread offers each value.
+csp::Channel<uint32_t>* t32b_ch; ThreadSlot t32b_slot; volatile uint32_t t32b_next = 0;
+void t32b_writer(void*) {
+    Out out = t32b_ch->writer();
+    for (;;) {
+        osThreadFlagsWait(F_START, osFlagsWaitAny, osWaitForever);
+        uint32_t v = t32b_next;
+        out << v;
+    }
+}
+void test_T32b() {
+    g_current_test = "T32b";
+    static csp::Channel<uint32_t> ch; t32b_ch = &ch;
+    osThreadId_t w = spawn(t32b_writer, nullptr, osPriorityNormal, t32b_slot, "T32bW");
+    In in = ch.reader();
+    uint32_t cmd = 0;
+    csp::RelTimeoutGuard skip(csp::Time(0));
+    csp::Alternative poll(in | cmd, skip);
+    int bad = 0, wait_bad = 0;
+    for (int i = 1; i <= T32_ROUNDS; ++i) {
+        {
+            uint32_t c = 0;
+            csp::RelTimeoutGuard pace(csp::Time(2));
+            csp::Alternative wait(in | c, pace);
+            t32b_next = 200u + (uint32_t)i; osThreadFlagsSet(w, F_START);
+            if (wait.priSelect() != 0 || c != 200u + (uint32_t)i) wait_bad++;
+            if (wait.priSelect() != 1) wait_bad++;
+        }
+        t32b_next = 100u + (uint32_t)i; osThreadFlagsSet(w, F_START); osDelay(2);   // writer pending
+        int r = poll.priSelect();
+        if (r != 0 || cmd != 100u + (uint32_t)i) {
+            if (bad++ == 0) printf("   [T32b] round %d: poll returned %d, cmd=%lu (sent %lu)\r\n", i, r, (unsigned long)cmd, (unsigned long)(100u + i));
+            if (r != 0) { uint32_t x; in >> x; }                       // release the writer
+        }
+    }
+    printf("   [T32b] %d of %d commands taken by the poll missing from its variable; wait Alternative wrong %d times\r\n",
+           bad, T32_ROUNDS, wait_bad);
+    result("T32b", (bad == 0 && wait_bad == 0) ? 1 : 0,
+           "two Alternatives on one rendezvous input end, different variables (the second loop-local): each gets its own input");
+}
+
+// T32c: several Alternatives on one end with the same variable (the 3.1.0
+// workaround): unchanged behaviour.
+void test_T32c() {
+    g_current_test = "T32c";
+    static BlockChan<1> ch; In in(&ch);
+    uint32_t cmd = 0;
+    csp::RelTimeoutGuard skip(csp::Time(0)), pace(csp::Time(1));
+    csp::Alternative poll(in | cmd, skip);
+    csp::Alternative wait(in | cmd, pace);
+    csp::Alternative third;
+    third.addBinding(skip); third.addBinding(in | cmd);
+    int bad = 0;
+    for (int i = 1; i <= T32_ROUNDS; ++i) {
+        uint32_t v = 100u + (uint32_t)i;
+        ch.output(&v); if (poll.priSelect() != 0 || cmd != v) bad++;
+        v += 100u; ch.output(&v); if (wait.priSelect() != 0 || cmd != v) bad++;
+        if (wait.priSelect() != 1 || poll.priSelect() != 1 || third.priSelect() != 0) bad++;   // empty: the timeouts
+    }
+    printf("   [T32c] three Alternatives, one variable: %d wrong selections or values\r\n", bad);
+    result("T32c", bad == 0 ? 1 : 0, "several Alternatives on one input end with the same variable");
+}
+
+// T32d: an Alternative built and destroyed in every loop iteration, with a
+// loop-local variable, after an Alternative built once on the same end that
+// is no longer used (stack reuse: the old one's guard must not be touched).
+void test_T32d() {
+    g_current_test = "T32d";
+    static BlockChan<2> ch; In in(&ch);
+    int bad = 0;
+    {   uint32_t old = 0; csp::RelTimeoutGuard skip(csp::Time(0)); csp::Alternative once(in | old, skip); (void)once.priSelect(); }
+    for (int i = 1; i <= 50; ++i) {
+        uint32_t c = 0;
+        csp::RelTimeoutGuard pace(csp::Time(1));
+        csp::Alternative alt(in | c, pace);
+        uint32_t v = (uint32_t)i; ch.output(&v);
+        if (alt.priSelect() != 0 || c != v) bad++;
+        if (alt.priSelect() != 1) bad++;
+    }
+    printf("   [T32d] 50 per-iteration Alternatives: %d wrong\r\n", bad);
+    result("T32d", bad == 0 ? 1 : 0, "an Alternative built and destroyed per loop iteration");
+}
+
+// T32e: output end. An Alternative built once (out | a) and per iteration one
+// with a loop-local b on the same end; each must send its own variable.
+void test_T32e() {
+    g_current_test = "T32e";
+    static BlockChan<1> ch; Out out(&ch);
+    uint32_t a = 0;
+    csp::RelTimeoutGuard skip(csp::Time(0));
+    csp::Alternative sendA(out | a, skip);
+    int bad = 0, b_bad = 0;
+    for (int i = 1; i <= T32_ROUNDS; ++i) {
+        {
+            uint32_t b = 200u + (uint32_t)i;
+            csp::RelTimeoutGuard pace(csp::Time(1));
+            csp::Alternative sendB(out | b, pace);
+            uint32_t x = 0;
+            if (sendB.priSelect() != 0) b_bad++;
+            ch.input(&x); if (x != b) b_bad++;
+            b = 0xDEADu;                                     // what a redirected sendA would send
+        }
+        a = 100u + (uint32_t)i;
+        int r = sendA.priSelect();
+        uint32_t x = 0;
+        if (r == 0) ch.input(&x);
+        if (r != 0 || x != a) {
+            if (bad++ == 0) printf("   [T32e] round %d: sendA returned %d, reader got 0x%lx (a=%lu)\r\n", i, r, (unsigned long)x, (unsigned long)a);
+        }
+    }
+    printf("   [T32e] %d of %d values sent by sendA not its own; sendB wrong %d times\r\n", bad, T32_ROUNDS, b_bad);
+    result("T32e", (bad == 0 && b_bad == 0) ? 1 : 0,
+           "two Alternatives on one output end, different variables (the second loop-local): each sends its own value");
+}
+
+// T32f: ISR writer on a buffered (KeepNewest) channel; reader as in T32a.
+NewestChan<1>* t32f_ch; volatile uint32_t t32f_val = 0;
+void t32f_isr() { isr_put(t32f_ch, t32f_val); }
+void test_T32f() {
+    g_current_test = "T32f";
+    static NewestChan<1> ch; t32f_ch = &ch; In in(&ch);
+    g_isr_op = t32f_isr;
+    uint32_t cmd = 0;
+    csp::RelTimeoutGuard skip(csp::Time(0));
+    csp::Alternative poll(in | cmd, skip);
+    int bad = 0, wait_bad = 0;
+    for (int i = 1; i <= T32_ROUNDS; ++i) {
+        {
+            uint32_t c = 0;
+            csp::RelTimeoutGuard pace(csp::Time(2));
+            csp::Alternative wait(in | c, pace);
+            t32f_val = 200u + (uint32_t)i; isr_fire();
+            if (wait.priSelect() != 0 || c != 200u + (uint32_t)i) wait_bad++;
+            if (wait.priSelect() != 1) wait_bad++;
+        }
+        t32f_val = 100u + (uint32_t)i; isr_fire();
+        int r = poll.priSelect();
+        if (r != 0 || cmd != 100u + (uint32_t)i) {
+            if (bad++ == 0) printf("   [T32f] round %d: poll returned %d, cmd=%lu (sent %lu)\r\n", i, r, (unsigned long)cmd, (unsigned long)(100u + i));
+        }
+    }
+    g_isr_op = nullptr; drain(ch);
+    printf("   [T32f] %d of %d interrupt values taken by the poll missing from its variable; wait Alternative wrong %d times\r\n",
+           bad, T32_ROUNDS, wait_bad);
+    result("T32f", (bad == 0 && wait_bad == 0) ? 1 : 0,
+           "ISR writer, two Alternatives on the reader end with different variables: each gets its own input");
+}
+// T32g: one channel end bound twice in one Alternative is a fatal error
+// (3.2.0; up to 3.1.0 both bindings shared one guard and the second won).
+volatile int t32g_after = 0;
+void t32g_alt(void*) {
+    static BlockChan<1> ch; In in(&ch); uint32_t a = 0, b = 0;
+    csp::Alternative alt(in | a, in | b);
+    t32g_after = 1; park();
+}
+void test_T32g() {
+    g_current_test = "T32g";
+    uint32_t f0 = g_fatal_count;
+    run_victim(t32g_alt, "T32g");
+    const char* m = g_fatal_msg;
+    bool ok = g_fatal_count == f0 + 1 && !t32g_after && m && strstr(m, "bound twice");
+    printf("   [T32g] same end bound twice: fatal %lu (\"%s\"), construction completed %d\r\n",
+           (unsigned long)(g_fatal_count - f0), (g_fatal_count != f0 && m) ? m : "-", t32g_after);
+    result("T32g", ok ? 1 : 0, "a channel end bound twice in one Alternative is a fatal error");
+}
+#else   // 1.x/2.x: guards come from getGuard(), not from bindings
+void test_T32a() { result("T32a", -1, "two Alternatives on one buffered input end (3.0 API)"); }
+void test_T32b() { result("T32b", -1, "two Alternatives on one rendezvous input end (3.0 API)"); }
+void test_T32c() { result("T32c", -1, "several Alternatives, same variable (3.0 API)"); }
+void test_T32d() { result("T32d", -1, "an Alternative per loop iteration (3.0 API)"); }
+void test_T32e() { result("T32e", -1, "two Alternatives on one output end (3.0 API)"); }
+void test_T32f() { result("T32f", -1, "ISR writer, two Alternatives on the reader end (3.0 API)"); }
+void test_T32g() { result("T32g", -1, "one channel end bound twice in one Alternative (3.0 API)"); }
+#endif
+
 // ---------------------------------------------------------------------------
 RunnerSlot runner_slot;
 void runner(void*) {
@@ -1590,7 +1817,8 @@ void runner(void*) {
     test_T11(); test_T12(); test_T14(); test_T15i(); test_T15s(); test_T16s(); test_T16n();
     test_T1a(); test_T1b(); test_T3();  test_T3i(); test_T13(); test_T13b(); test_T15(); test_T16a();
     test_T20(); test_T21(); test_T22(); test_T23(); test_T24();
-    test_T25(); test_T26_T27(); test_T28(); test_T29(); test_T30(); test_T31(); test_T19();
+    test_T25(); test_T26_T27(); test_T28(); test_T29(); test_T30(); test_T31();
+    test_T32a(); test_T32b(); test_T32c(); test_T32d(); test_T32e(); test_T32f(); test_T32g(); test_T19();
     printf("SUMMARY: PASS=%lu FAIL=%lu SKIP=%lu REPLACED=%lu; heap used=%lu B; runner stack min free=%lu B\r\n",
            (unsigned long)g_pass, (unsigned long)g_fail, (unsigned long)g_skip, (unsigned long)g_replaced, (unsigned long)heap_used(),
            (unsigned long)osThreadGetStackSpace(osThreadGetId()));
