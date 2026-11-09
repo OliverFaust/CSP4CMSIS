@@ -1632,7 +1632,7 @@ void test_T32a() {
 }
 
 // T32b: rendezvous input end; a writer thread offers each value.
-csp::Channel<uint32_t>* t32b_ch; ThreadSlot t32b_slot; volatile uint32_t t32b_next = 0;
+csp::Channel<uint32_t>* t32b_ch; ThreadSlotN<128> t32b_slot; volatile uint32_t t32b_next = 0;   // 512 B: the writer only waits and writes
 void t32b_writer(void*) {
     Out out = t32b_ch->writer();
     for (;;) {
