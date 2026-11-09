@@ -23,6 +23,8 @@ guard, and `in | var` sets its variable. When two `Alternative`s of a process bo
 different variables, the binding made last decided the variable for both: the other `Alternative`
 returned the right index but read into (or wrote from) the wrong variable, possibly a dead loop-local
 one. Seen in the HimaxWE2 `FileSource` process: a `restart` command arrived as `set again 0`.
+The behavioural requirement the fix restores is `CMD_SPEC` in `docs/formal/FileSource_commands.csp`
+(Models, below).
 
 **The fix.** Each `Alternative` keeps the variable of each of its channel bindings and, at the start
 of every `priSelect()` and `fairSelect()`, sets each channel guard to it (`Guard::retarget()`, in the
@@ -151,6 +153,12 @@ code are unchanged.
 - **`docs/formal/historical/`**: the 1.x/2.0.0 "trust the wakeup" rendezvous and the 2.0.0 RTOS-timer
   ALT timeouts, moved out of the current models unchanged (`docs/CHANGES_2.0.1.md` cites their
   counterexamples).
+
+- **New: `FileSource_commands.csp`**, the behavioural requirement the ALT fix restores (`CMD_SPEC`:
+  every command accepted is acted on with the value accepted) and the HimaxWE2 FileSource defect
+  against it: with one guard slot per end and two `Alternative`s bound to different variables,
+  `CMD_SPEC [T= SYSTEM_BAD \ Internal` fails with `cmd.Restart, handled.Init`; with one variable
+  (the 3.1.0 rule) it holds. 8 assertions, 7 PASS and the 1 expected FAIL, 2 s.
 
 Totals (ProB 1.16.1): 213 assertions in the six current models, 175 PASS and 38 FAIL, every verdict as
 expected (each FAIL is an intended counterexample, described in its model).

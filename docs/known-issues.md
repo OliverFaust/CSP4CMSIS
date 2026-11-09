@@ -41,6 +41,14 @@ target: `sizeof(Alternative)` 92 -> 156 bytes (one target pointer per guard), ab
 channel guard per select. Regression tests: T32a-T32g (`tests/fvp_sse300`); on 3.1.0 T32a, T32b, T32e
 and T32f fail with this symptom.
 
+**Behavioural requirement** (`docs/formal/FileSource_commands.csp`, ProB 1.16.1): `CMD_SPEC =
+cmd?c -> handled!c -> CMD_SPEC`, every command a process accepts is acted on with the value it
+accepted. FileSource's poll and pace wait, as external choices, meet it. With one slot that follows
+the latest binding (2.0.0 to 3.1.0) and the poll bound once, the wait in every round, it fails with
+the visible trace `cmd.Restart, handled.Init`; with both bound to one variable (the rule above) it
+holds. The fix restores `CMD_SPEC` for any bindings: each `Alternative` reads into its own variable,
+as in the requirements model.
+
 ## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fixed in 2.0.1)
 
 Only applications that put a `RelTimeoutGuard` into an `Alternative` are affected; channels, ALT without
