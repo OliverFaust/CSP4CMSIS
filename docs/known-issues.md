@@ -1,5 +1,35 @@
 # Known Issues
 
+## One ALT guard slot per channel end: two `Alternative`s on the same end redirect each other's input (2.0.0 and later; open)
+
+Each `Chanin`/`Chanout` handle owns one `GuardSlot`, and `in | var` (or `out | value`) constructs that
+end's ALT guard in the slot, with `&var` as its target. A second binding of the same end, for a second
+`Alternative`, constructs a new guard in the same slot and overwrites the first (`GuardSlot::emplace()`:
+"the previous occupant is simply overwritten"). The first `Alternative` still holds the slot's address,
+so it now uses the second guard: when it selects that channel, the value is copied into the second
+`Alternative`'s variable, and its own variable keeps its old contents. `priSelect()` still returns the
+right index, so nothing looks wrong at the call site. If the second variable has gone out of scope, the
+copy writes into dead stack memory. The fatal-error check of 2.0 catches a second *process* ALTing on an
+end, not one process with two `Alternative`s.
+
+**Seen in** the HimaxWE2 `FileSource` process (CSP4CMSIS 3.0.1). It polls `cmd_chan` after each frame
+with `Alternative poll_cmd(m_cmd_in | cmd, skip)`, constructed once, and waits for the pace deadline
+with an `Alternative wait(m_cmd_in | c, timeout)` constructed in a loop, `c` a loop-local
+`command_t`. After the first pace wait, commands taken by `poll_cmd` went to the dead `c`, and
+`poll_cmd`'s `cmd` still held its initial value: a `restart` command was handled as `set again 0`
+(the zero-initialised `command_t`), reported as "again not applicable", and the restart never
+happened. Whether the symptom shows depends on the stack layout and on which `Alternative` takes the
+command, so one run worked and the next did not.
+
+**Workaround:** bind a channel end to one variable only: every `Alternative` on that end uses the same
+`in | var` target, with a lifetime at least as long as the longest-lived `Alternative` (in `FileSource`,
+`cmd`, declared before both). Rebinding to the same variable is harmless, since the new guard then has
+the same target. Plain `in.read(x)` / `in >> x` do not use the slot and can be mixed freely.
+
+**Possible fixes (not implemented):** a guard per binding (stored in the `ChannelBinding` or the
+`Alternative` instead of the handle), or a fatal error when an end is bound again with a different
+target while an earlier `Alternative` that holds it is still alive.
+
 ## `RelTimeoutGuard` (ALT timeouts) on 2.0.0: crash, hang, postponed timeouts, heap use (fixed in 2.0.1)
 
 Only applications that put a `RelTimeoutGuard` into an `Alternative` are affected; channels, ALT without
