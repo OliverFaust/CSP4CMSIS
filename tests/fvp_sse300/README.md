@@ -157,7 +157,7 @@ the FVPs. Its settings, as far as they affect the results:
 | T26 | `Run(…, StaticNetwork, prio)` returns before any (lower-priority) process ran; threads named after `name()`; all three run afterwards |
 | T27 | `forEachProcess` visits the three processes in order; `stackHighWaterMarkWords()` is `CSP_STACK_HWM_UNAVAILABLE` before `Run()`, afterwards between 1 and (stack − 16) words (each process touches 16 words) |
 | T28 | a failed `osThreadNew()` (forced through the interposition, see "T2 method") in `Run()` is a fatal error and `Run()` does not return, in both modes. FAIL on 2.0.1 (prints and continues) |
-| T29 | a 17th guard in an `Alternative` is a fatal error. FAIL on 2.0.1 (ignored) |
+| T29 | a 17th guard in an `Alternative` is a fatal error (16 timeout guards, then a channel binding). FAIL on 2.0.1 (ignored) |
 | T30 | `Seconds()`/`Milliseconds()`: 0 stays 0; otherwise never shorter than requested and at most one tick longer, computed in 64 bits (`ms * freq` above 2³²); saturated at `0xFFFFFFFE`. FAIL on 2.0.1 (rounds down, overflows) |
 | T31 | `SleepFor(Time(5))` sleeps 5..6 ticks, `SleepFor(Time(0))` 0 (2.1.0 API; SKIP before) |
 | T32a | FileSource pattern (docs/known-issues.md): on one Block buffered input end, a poll Alternative built once (`in \| cmd`, zero timeout) and a wait Alternative built per iteration with a loop-local variable (`in \| c`, timeout); each gets its own input. FAIL on 3.1.0 (the poll's input goes to the wait's dead variable) |

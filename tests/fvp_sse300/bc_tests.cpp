@@ -1501,17 +1501,17 @@ void test_T28() {
            "a failed osThreadNew() in Run() is a fatal error, in both execution modes");
 }
 
-// T29 -- a 17th guard is a fatal error (2.0.x ignored it silently). 17
-// distinct reader ends of one channel (3.2.0: one end bound twice in one
-// Alternative is itself a fatal error, T32g).
+// T29 -- a 17th guard is a fatal error (2.0.x ignored it silently). 16
+// timeout guards, then a channel binding as the 17th (3.2.0: one end bound
+// twice in one Alternative is itself a fatal error, T32g).
 volatile int t29_after = 0;
-csp::Channel<uint32_t>* t29_ch;
-struct T29End { In in; T29End() : in(t29_ch->reader()) {} };
+struct T29Timeout { csp::RelTimeoutGuard g{csp::Time(1)}; };
 void t29_alt(void*) {
-    static csp::Channel<uint32_t> ch; t29_ch = &ch;
-    static T29End ends[17]; uint32_t v = 0;
+    static csp::Channel<uint32_t> ch; In in = ch.reader(); uint32_t v = 0;
+    T29Timeout to[16];
     csp::Alternative alt;
-    for (int i = 0; i < 17; ++i) alt.addBinding(ends[i].in | v);
+    for (int i = 0; i < 16; ++i) alt.addBinding(to[i].g);
+    alt.addBinding(in | v);
     t29_after = 1; park();
 }
 void test_T29() {
