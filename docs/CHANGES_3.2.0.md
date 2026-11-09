@@ -207,10 +207,11 @@ Summary (2026-10-26; the FVP harness is not public and its logs are not publishe
   `Alternative`'s variable), T32g finds no error.
 - **Tracing on** (Corstone-300 RTX5 GCC `-O2`, FreeRTOS Arm Compiler 6 `-O2`): the suite passes
   (43/0); trace checks 37,612 and 37,602 PASS, stable failures 25 of 25 PASS, fairness 0 violations,
-  29 of 32 mutants caught (the 3 known swaps); the demo network passes its checks. The stable-failure
-  checks need the run's interrupt writers (`csp_trace.py --isr-writer throttled_samples=1`):
-  without them the KeepOldest channel of `tests/trace/throttled_drop.cpp` is checked as having none,
-  and one check fails.
+  29 of 32 mutants caught (the 3 known swaps); the demo network passes its checks. The `throttled_drop` run
+  (`tests/trace/throttled_drop.cpp`) has an interrupt writer on the KeepOldest channel
+  `throttled_samples`. Any call of `csp_trace.py` for that run must pass
+  `--isr-writer throttled_samples=1`; without it the stable-failures check models the channel as
+  having no interrupt writer and fails.
 - **Host:** the ALT selection test (5.9 million cases) passes; `select()` is unchanged.
 - **Compile checks** (the suite's flags, GCC and Arm Compiler 6): all pass, including
   `pos_alternative_patterns.cpp` and `neg_hidden_retarget_guards.cpp`.
